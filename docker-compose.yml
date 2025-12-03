@@ -1,0 +1,107 @@
+# GOGGA Docker Compose Configuration
+# Local development orchestration
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./gogga-backend
+      dockerfile: Dockerfile
+    container_name: gogga_api
+    ports:
+      - "8000:8000"
+    environment:
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - PAYFAST_MERCHANT_ID=${PAYFAST_MERCHANT_ID}
+      - PAYFAST_MERCHANT_KEY=${PAYFAST_MERCHANT_KEY}
+      - PAYFAST_PASSPHRASE=${PAYFAST_PASSPHRASE}
+      - PAYFAST_ENV=sandbox
+      - DATABASE_URL=postgresql://gogga:gogga@db:5432/gogga_db
+      - ZAR_USD_RATE=${ZAR_USD_RATE:-18.50}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./gogga-backend:/app
+    networks:
+      - gogga_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./gogga-frontend
+      dockerfile: Dockerfile
+    container_name: gogga_ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - gogga_network
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: gogga_db
+    environment:
+      - POSTGRES_USER=gogga
+      - POSTGRES_PASSWORD=gogga
+      - POSTGRES_DB=gogga_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gogga_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gogga"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Optional: Redis for session caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: gogga_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gogga_network
+    restart: unless-stopped
+
+  # CePO: Cerebras Planning Optimization via OptiLLM
+  # Advanced reasoning layer using chain-of-thought planning
+  cepo:
+    image: python:3.12-slim
+    container_name: gogga_cepo
+    ports:
+      - "8080:8080"
+    environment:
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+    command: >
+      bash -c "pip install --quiet optillm &&
+      optillm --base-url https://api.cerebras.ai --approach cepo --port 8080 --host 0.0.0.0"
+    networks:
+      - gogga_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  gogga_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
