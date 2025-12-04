@@ -19,7 +19,7 @@ from cerebras.cloud.sdk import Cerebras
 from app.config import settings
 from app.core.router import (
     tier_router, CognitiveLayer, UserTier,
-    QWEN_THINKING_SETTINGS, QWEN_FAST_SETTINGS, should_use_thinking
+    QWEN_THINKING_SETTINGS, QWEN_FAST_SETTINGS
 )
 from app.services.cost_tracker import track_usage
 from app.core.exceptions import InferenceError
@@ -70,10 +70,8 @@ def parse_thinking_response(content: str) -> tuple[str, str | None]:
     Returns:
         Tuple of (main_response, thinking_block or None)
     """
-    # Find all thinking blocks
-    thinking_matches = THINK_PATTERN.findall(content)
-    
-    if thinking_matches:
+    # Find all thinking blocks using walrus operator
+    if thinking_matches := THINK_PATTERN.findall(content):
         # Combine all thinking blocks if multiple exist
         thinking = "\n\n".join(thinking_matches).strip()
         
@@ -178,19 +176,15 @@ class AIService:
         system_prompt = tier_router.get_system_prompt(CognitiveLayer.FREE_TEXT)
         
         logger.info(
-            "FREE text | user=%s | prompt=%s",
-            user_id,
-            message[:50] + "..." if len(message) > 50 else message
+            f"FREE text | user={user_id} | prompt={message[:50]}..." if len(message) > 50 else f"FREE text | user={user_id} | prompt={message}"
         )
         
-        result = await openrouter_service.chat_free(
+        return await openrouter_service.chat_free(
             message=message,
             system_prompt=system_prompt,
             history=history,
             user_id=user_id
         )
-        
-        return result
     
     @staticmethod
     async def _generate_cerebras(

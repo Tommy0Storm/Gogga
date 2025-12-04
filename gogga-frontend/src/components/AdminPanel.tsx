@@ -7,7 +7,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, X, RefreshCw, Check, AlertCircle, Zap, Brain, Sparkles, Eye, EyeOff } from 'lucide-react';
+import {
+  X,
+  RefreshCw,
+  Check,
+  AlertCircle,
+  Zap,
+  Brain,
+  Sparkles,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
+import { SettingsGearIcon } from './GoggaIcons';
 import type { Tier } from '@/hooks/useRAG';
 
 interface ServiceStatus {
@@ -77,10 +88,14 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
   // Check URL param or localStorage for admin mode
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const isAdmin = urlParams.get('admin') === 'true' || 
-                    localStorage.getItem('gogga_admin') === 'true';
+    const isAdmin =
+      urlParams.get('admin') === 'true' ||
+      localStorage.getItem('gogga_admin') === 'true';
     setShowPanel(isAdmin);
-    onAdminChange?.(isAdmin);
+    // Defer the callback to avoid setState during render
+    if (onAdminChange) {
+      queueMicrotask(() => onAdminChange(isAdmin));
+    }
   }, [onAdminChange]);
 
   // Keyboard shortcuts: Ctrl+Alt+A or Ctrl+Shift+A (Fn key is hardware-level, cannot be detected)
@@ -88,15 +103,19 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
     const handleKeydown = (e: KeyboardEvent) => {
       // Check for Ctrl+Alt+A OR Ctrl+Shift+A
       const isCtrlAltA = e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a';
-      const isCtrlShiftA = e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a';
-      
+      const isCtrlShiftA =
+        e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a';
+
       if (isCtrlAltA || isCtrlShiftA) {
         e.preventDefault();
         e.stopPropagation();
-        setShowPanel(prev => {
+        setShowPanel((prev) => {
           const newValue = !prev;
           localStorage.setItem('gogga_admin', String(newValue));
-          onAdminChange?.(newValue);
+          // Defer the callback to avoid setState during render
+          if (onAdminChange) {
+            queueMicrotask(() => onAdminChange(newValue));
+          }
           console.log('[AdminPanel] Admin mode toggled:', newValue);
           return newValue;
         });
@@ -137,13 +156,15 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
     <>
       {/* Toggle Button */}
       <button
-        onClick={() => setIsOpen(prev => !prev)}
+        onClick={() => setIsOpen((prev) => !prev)}
         className={`fixed bottom-4 right-4 z-50 p-3 rounded-full shadow-lg transition-all ${
-          isOpen ? 'bg-gray-800 text-white' : 'bg-white text-gray-800 border border-gray-300'
+          isOpen
+            ? 'bg-gray-800 text-white'
+            : 'bg-white text-gray-800 border border-gray-300'
         }`}
         aria-label="Toggle admin panel"
       >
-        {isOpen ? <X size={20} /> : <Settings size={20} />}
+        {isOpen ? <X size={20} /> : <SettingsGearIcon size={20} />}
       </button>
 
       {/* Panel */}
@@ -152,10 +173,12 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
           {/* Header */}
           <div className="bg-gray-800 text-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Settings size={16} />
+              <SettingsGearIcon size={16} />
               <span className="font-bold text-sm">Admin Panel</span>
             </div>
-            <span className="text-xs bg-gray-700 px-2 py-0.5 rounded">Dev Mode</span>
+            <span className="text-xs bg-gray-700 px-2 py-0.5 rounded">
+              Dev Mode
+            </span>
           </div>
 
           {/* Tier Selector */}
@@ -193,10 +216,15 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
               <TierIcon size={14} />
               <span className="text-sm font-bold">{TIER_INFO[tier].name}</span>
             </div>
-            <p className="text-xs text-gray-600 mb-2">{TIER_INFO[tier].description}</p>
+            <p className="text-xs text-gray-600 mb-2">
+              {TIER_INFO[tier].description}
+            </p>
             <div className="flex flex-wrap gap-1">
               {TIER_INFO[tier].features.map((f, i) => (
-                <span key={i} className="text-[10px] bg-gray-200 px-2 py-0.5 rounded">
+                <span
+                  key={i}
+                  className="text-[10px] bg-gray-200 px-2 py-0.5 rounded"
+                >
                   {f}
                 </span>
               ))}
@@ -208,7 +236,9 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
                 ) : (
                   <EyeOff size={12} className="text-gray-400" />
                 )}
-                <span className={ragEnabled ? 'text-green-600' : 'text-gray-400'}>
+                <span
+                  className={ragEnabled ? 'text-green-600' : 'text-gray-400'}
+                >
                   RAG: {documentCount} docs indexed
                 </span>
               </div>
@@ -218,13 +248,18 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
           {/* Health Status */}
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-gray-500 uppercase">Service Health</span>
+              <span className="text-xs font-bold text-gray-500 uppercase">
+                Service Health
+              </span>
               <button
                 onClick={fetchHealth}
                 disabled={isLoading}
                 className="p-1 hover:bg-gray-100 rounded transition-colors"
               >
-                <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                <RefreshCw
+                  size={14}
+                  className={isLoading ? 'animate-spin' : ''}
+                />
               </button>
             </div>
 
@@ -234,28 +269,35 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
                 {Object.entries(health.services)
                   .filter(([name]) => TIER_SERVICES[tier].includes(name))
                   .map(([name, svc]) => (
-                  <div key={name} className="flex items-center justify-between text-xs">
-                    <span className="capitalize text-gray-600">{name}</span>
-                    <div className="flex items-center gap-2">
-                      {svc.latency_ms && (
-                        <span className="text-gray-400">{Math.round(svc.latency_ms)}ms</span>
-                      )}
-                      {svc.status === 'healthy' ? (
-                        <Check size={12} className="text-green-500" />
-                      ) : svc.status === 'configured' ? (
-                        <Check size={12} className="text-blue-500" />
-                      ) : (
-                        <AlertCircle size={12} className="text-red-500" />
-                      )}
+                    <div
+                      key={name}
+                      className="flex items-center justify-between text-xs"
+                    >
+                      <span className="capitalize text-gray-600">{name}</span>
+                      <div className="flex items-center gap-2">
+                        {svc.latency_ms && (
+                          <span className="text-gray-400">
+                            {Math.round(svc.latency_ms)}ms
+                          </span>
+                        )}
+                        {svc.status === 'healthy' ? (
+                          <Check size={12} className="text-green-500" />
+                        ) : svc.status === 'configured' ? (
+                          <Check size={12} className="text-blue-500" />
+                        ) : (
+                          <AlertCircle size={12} className="text-red-500" />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                
+                  ))}
+
                 {health.system && (
                   <div className="mt-3 pt-3 border-t border-gray-200">
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>CPU: {health.system.cpu_percent.toFixed(1)}%</span>
-                      <span>Memory: {health.system.memory.percent.toFixed(1)}%</span>
+                      <span>
+                        Memory: {health.system.memory.percent.toFixed(1)}%
+                      </span>
                     </div>
                   </div>
                 )}

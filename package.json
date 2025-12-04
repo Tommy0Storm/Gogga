@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "next": "^16.0.7",
+    "onnxruntime-web": "^1.23.2",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@types/jest": "^30.0.0",
+    "flexsearch": "^0.8.212",
+    "jszip": "^3.10.1",
+    "ts-jest": "^29.4.6"
+  }
+}

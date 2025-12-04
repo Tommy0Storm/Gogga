@@ -6,9 +6,10 @@ WORKDIR /app
 # Set backend URL for Docker networking
 ENV BACKEND_URL=http://backend:8000
 
-# Install dependencies (including devDependencies)
+# Install dependencies
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm install --force && \
+    npm install next@16.0.7 react@19.1.0 react-dom@19.1.0 --force
 
 # Copy source code
 COPY . .

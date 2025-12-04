@@ -96,10 +96,22 @@ export function PromptManager() {
     setIsLoading(true);
     try {
       const res = await fetch('/api/v1/prompts/');
+      if (!res.ok) {
+        console.warn(
+          '[PromptManager] Prompts endpoint not available:',
+          res.status
+        );
+        setPrompts([]);
+        return;
+      }
       const data = await res.json();
       setPrompts(data);
     } catch (err) {
-      console.error('Failed to fetch prompts:', err);
+      console.warn(
+        '[PromptManager] Failed to fetch prompts (endpoint may not exist):',
+        err
+      );
+      setPrompts([]); // Set empty array to prevent repeated fetch attempts
     } finally {
       setIsLoading(false);
     }

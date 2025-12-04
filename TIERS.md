@@ -1,6 +1,6 @@
 # GOGGA Tier System
 
-> **Last Updated:** December 3, 2025
+> **Last Updated:** December 4, 2025
 
 ## Overview
 
@@ -119,10 +119,19 @@ When you request an **analysis**, **report**, or **professional document**, JIVE
 
 ### RAG Features
 
-- Upload PDF, Word, TXT, MD, ODT files
+- Upload PDF, Word, TXT, MD, ODT files (enterprise PDF extraction via unpdf)
 - Max 15MB per document
 - 5 documents per session
+- Basic keyword retrieval for context injection
 - Documents cleared on new session
+
+### JIVE RAG Pipeline
+
+```text
+UPLOAD:   File → extractText() → chunkText() → Dexie (IndexedDB) + FlexSearch Index
+QUERY:    User Query → RagManager.retrieveBasic() → Keyword Match + Recency Scoring → Top 3 Docs
+CONTEXT:  Top Docs → Format for LLM → Inject into Chat Message
+```
 
 ### AI Search (JIVE)
 
@@ -177,7 +186,7 @@ IMAGE:           User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
 
 ### RAG Features
 
-- Upload PDF, Word, TXT, MD, ODT, RTF files
+- Upload PDF, Word, TXT, MD, ODT, RTF files (enterprise PDF extraction via unpdf)
 - Max 15MB per document
 - 10 documents per session (combined upload + selected)
 - **Cross-session document selection**: Browse and select from all previously uploaded documents
@@ -187,12 +196,57 @@ IMAGE:           User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
   - **Analysis**: AI synthesizes and interprets document content
   - **Authoritative**: AI quotes directly from documents only (JIGGA exclusive)
 
+### JIGGA RAG Pipeline (Semantic)
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      JIGGA SEMANTIC RAG PIPELINE                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  UPLOAD FLOW:                                                               │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐                 │
+│  │   File   │ → │ Extract  │ → │  Chunk   │ → │  Store   │                 │
+│  │  Upload  │   │   Text   │   │ (500chr) │   │  Dexie   │                 │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘                 │
+│                      │                             │                        │
+│                      ▼                             ▼                        │
+│                 unpdf (PDF)              IndexedDB + FlexSearch             │
+│                 JSZip (DOCX)                                                │
+│                                                                             │
+│  QUERY FLOW:                                                                │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  │
+│  │  Query   │ → │ Embed    │ → │ Cosine   │ → │  Rank    │ → │ Context  │  │
+│  │  Input   │   │ E5-small │   │Similarity│   │  Top K   │   │  Format  │  │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘  │
+│       │              │              │              │              │        │
+│       ▼              ▼              ▼              ▼              ▼        │
+│   User query    384-dim vector   Score chunks   Filter >0.3   LLM inject  │
+│                                  vs all docs    + top 5       + scores    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Embedding Model (VCB-AI Micro)
+
+| Property | Value |
+|----------|-------|
+| Model | intfloat/e5-small-v2 (ONNX quantized) |
+| Dimensions | 384 |
+| Backend | WASM (browser) |
+| Load Time | ~2-5s (first use, cached thereafter) |
+| Memory | ~200MB (model + cache) |
+| Chunk Latency | ~50-200ms per chunk |
+| Search Latency | <10ms (cached embeddings) |
+
 ### RAG Analytics (JIGGA Exclusive)
 
 - **Analytics Dashboard**: View document usage, query patterns, retrieval stats
-- **Live Performance Graph**: Real-time visualization of RAG operations
+- **Live Performance Graph**: Real-time visualization of RAG operations (no animation on refresh)
 - **Vector Scoring Display**: See similarity scores for retrieved chunks
 - **Monitoring Stats**: Query latency, cache hits, retrieval accuracy
+- **Document Manager**: Upload, view, delete individual docs or all at once
+- **Embedding Status**: Visual indicators for pending/complete embeddings
+- **Real Vector Heatmap**: 384-dim E5 vectors visualized as color-coded heatmap
 
 ### AI Research Pipeline (JIGGA)
 
@@ -418,12 +472,35 @@ Body: { search_id, helpful: boolean, feedback? }
 
 ## Frontend Features
 
+### Tech Stack
+
+| Technology | Version | Notes |
+|------------|---------|-------|
+| Next.js | 16.0.7 | App Router + Turbopack |
+| React | 19.1.0 | Latest stable |
+| Tailwind CSS | 4.1.17 | CSS-first config with @theme |
+| TypeScript | 5.3+ | Strict mode |
+| Lucide React | 0.555.0 | Icon library |
+
 ### UI Theme
 
 - Monochrome design with grey gradients
 - Quicksand font (minimum 400 weight)
-- Black Material Icons
+- Black Material Icons + Custom GoggaIcons
 - White logo background in header
+- Tailwind v4 `@theme` CSS configuration
+
+### Custom Icons (GoggaIcons.tsx)
+
+| Icon | Purpose |
+|------|---------|
+| `FileStoreIcon` | Document store sidebar |
+| `SettingsGearIcon` | Admin panel toggle |
+| `SendArrowIcon` | Chat send button |
+| `ImageGenerateIcon` | AI image generation |
+| `MagicWandIcon` | Prompt enhancement |
+| `DocumentRAGIcon` | RAG-enabled document indicator |
+| `BrainThinkingIcon` | JIGGA thinking mode |
 
 ### Local Storage (Dexie/IndexedDB)
 
@@ -557,6 +634,178 @@ JIVE → JIGGA: +R200/month
   ✓ Comprehensive research (10 sources)
   ✓ Forever research history
   ✓ Research export to PDF/Markdown
+```
+
+---
+
+## Local RAG Architecture
+
+### Overview
+
+GOGGA's RAG (Retrieval-Augmented Generation) system runs entirely in the browser for privacy and performance. Documents are processed, chunked, and stored locally using IndexedDB (via Dexie). Search and retrieval vary by tier.
+
+### System Components
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                     GOGGA Local RAG System                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
+│  │   useRAG    │───▶│ RagManager  │───▶│EmbeddingEng │         │
+│  │   (Hook)    │    │ (Unified)   │    │   (ONNX)    │         │
+│  └─────────────┘    └─────────────┘    └─────────────┘         │
+│         │                  │                  │                 │
+│         ▼                  ▼                  ▼                 │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
+│  │   Dexie     │    │ FlexSearch  │    │  E5-small   │         │
+│  │  (IndexDB)  │    │  (Indexing) │    │   (384d)    │         │
+│  └─────────────┘    └─────────────┘    └─────────────┘         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### File Structure
+
+| File | Purpose |
+|------|---------|
+| `hooks/useRAG.ts` | React hook with tier-based mode selection |
+| `lib/rag.ts` | Document processing, FlexSearch indexing, text extraction |
+| `lib/ragManager.ts` | Unified RAG manager (basic + semantic retrieval) |
+| `lib/embeddingEngine.ts` | E5-small-v2 ONNX embedding engine |
+| `lib/ragMetrics.ts` | Analytics collection for JIGGA |
+| `lib/db.ts` | Dexie schema (documents, chunks, memories) |
+
+### Retrieval Modes by Tier
+
+| Tier | Mode | Method | Description |
+|------|------|--------|-------------|
+| FREE | None | - | No RAG access |
+| JIVE | Basic | `RagManager.retrieveBasic()` | Keyword matching + recency scoring |
+| JIGGA | Semantic | `RagManager.retrieveSemantic()` | E5 vector similarity + cosine scoring |
+
+### Document Processing Pipeline
+
+```text
+1. FILE UPLOAD
+   └─→ validateFile() - Check format & size (max 15MB)
+   
+2. TEXT EXTRACTION
+   ├─→ PDF: unpdf (enterprise) or fallback regex
+   ├─→ DOCX: JSZip + XML parsing
+   ├─→ ODT: JSZip + OpenDocument parsing
+   ├─→ RTF: Control word stripping
+   └─→ TXT/MD: Direct read
+
+3. CHUNKING
+   └─→ chunkText() - 500 chars with 50 char overlap
+
+4. STORAGE
+   ├─→ Dexie documents table (full content)
+   ├─→ Dexie chunks table (for retrieval)
+   └─→ FlexSearch index (keyword search)
+
+5. EMBEDDING (JIGGA only - on upload)
+   └─→ RagManager.preloadDocument()
+       └─→ EmbeddingEngine.generateDocumentEmbeddings()
+           └─→ E5-small-v2 ONNX (384-dim vectors)
+       └─→ emitMetric('embedding_generated') → Dashboard update
+```
+
+### Document Deletion Pipeline
+
+```text
+DELETE (Single):
+  User clicks Delete → DocumentManager.handleDelete()
+    → ragRemoveDocument(sessionId, docId)
+      → FlexSearch.remove(chunkIds)   ← Index cleanup
+      → db.chunks.delete()             ← Dexie cleanup
+      → db.documents.delete()          ← Dexie cleanup
+      → emitMetric('document_removed') ← Dashboard metric
+    → onRefresh() → Dashboard update
+
+DELETE ALL:
+  User clicks "Delete All" → Confirm dialog
+    → Loop: ragRemoveDocument() for each doc
+    → onRefresh() → Dashboard update
+```
+
+### Query Processing
+
+**JIVE (Basic Mode):**
+```text
+Query → Tokenize → Match keywords in documents → Score (keyword + recency) → Top 3 docs
+```
+
+**JIGGA (Semantic Mode):**
+```text
+Query → E5 embed → Cosine similarity vs all chunk vectors → Filter >0.3 → Top 5 chunks
+```
+
+### Context Injection
+
+The retrieved context is injected into the chat message before sending to the LLM:
+
+```text
+┌─────────────────────────────────────────────┐
+│ 1. Long-Term Memory (JIGGA only)            │
+├─────────────────────────────────────────────┤
+│ 2. RAG Context (JIVE: docs, JIGGA: chunks)  │
+├─────────────────────────────────────────────┤
+│ 3. User Question                            │
+└─────────────────────────────────────────────┘
+            │
+            ▼
+        LLM Request
+```
+
+### RAG Modes (JIGGA)
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| Analysis | AI synthesizes and interprets content | Research, summaries |
+| Authoritative | AI quotes directly, no interpretation | Legal, compliance |
+
+### Performance Characteristics
+
+| Metric | JIVE (Basic) | JIGGA (Semantic) |
+|--------|--------------|------------------|
+| Search Latency | <5ms | <10ms (cached) |
+| First Query | Instant | 2-5s (model load) |
+| Memory Usage | ~10MB | ~200MB |
+| Accuracy | Keyword-based | Context-aware |
+
+### Dependencies
+
+**Core Framework:**
+```json
+{
+  "next": "16.0.7",
+  "react": "19.1.0",
+  "react-dom": "19.1.0",
+  "tailwindcss": "4.1.17",
+  "@tailwindcss/postcss": "4.1.17"
+}
+```
+
+**RAG System:**
+```json
+{
+  "@huggingface/transformers": "^3.8.1",
+  "onnxruntime-web": "^1.23.2",
+  "flexsearch": "^0.8.212",
+  "dexie": "^4.2.1",
+  "unpdf": "^1.4.0"
+}
+```
+
+**UI Components:**
+```json
+{
+  "lucide-react": "^0.555.0",
+  "recharts": "^3.5.1",
+  "react-markdown": "^10.1.0"
+}
 ```
 
 ---

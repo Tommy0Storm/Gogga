@@ -1,8 +1,102 @@
 # GOGGA Development Status
 
-## Last Updated: December 3, 2025 (RAG Fixes + CePO Update)
+## Last Updated: December 4, 2025 (Dashboard Enhancements + Code Cleanup)
 
-## 🔧 Latest Updates (Dec 3, 2025)
+---
+
+## 🔧 Latest Session (Dec 4, 2025 - PM)
+
+### Dashboard Enhancements
+1. **Data Freshness Indicator** - Color-coded timer showing data staleness:
+   - 🟢 Green: < 10 seconds (fresh, pulsing dot)
+   - 🟡 Yellow: 10-30 seconds (stale)
+   - 🔴 Red: > 30 seconds (outdated)
+   - Shows "(paused)" when auto-refresh is disabled
+
+2. **RagManager Methods Added**:
+   - `getCachedVectors()` - Returns real embedding vectors for dashboard visualization
+   - `hasEmbeddings()` - Check if any embeddings are cached
+   - `isReady()` - Check if engine is initialized
+
+3. **Model Status Fixed** - Now correctly shows "Ready" when embeddings have been generated
+
+### Code Quality Fixes (Pylance/Sourcery)
+1. **useChatHistory.ts** - Fixed React Hook dependency warning (moved `initializeSession` to useCallback)
+2. **useRagDashboard.ts** - Removed unused imports (`MetricAggregation`, `TimeSeriesDataPoint`)
+3. **page.tsx** - Used object destructuring for `response.data`
+4. **page.tsx** - Added eslint-disable for `<img>` element (base64 images can't use Next Image)
+5. **rag.ts** - Fixed default export (assign to variable before exporting)
+6. **ai_service.py** - Used walrus operator for `thinking_matches`
+7. **ai_service.py** - Used f-string and inlined return value
+
+---
+
+## 🎉 RAG SYSTEM FULLY OPERATIONAL (Dec 4, 2025)
+
+**Status**: ✅ Semantic RAG with E5-small-v2 working in browser
+
+### Final Fixes Applied:
+1. **Webpack Config** - Force browser build via alias:
+   ```javascript
+   '@huggingface/transformers': path.join(__dirname, 'node_modules/@huggingface/transformers/dist/transformers.web.js')
+   ```
+2. **Sharp Module** - Ignored via IgnorePlugin (Node.js dependency)
+3. **JIVE Upload** - Now uses `uploadDocument()` like JIGGA (was just showing alert)
+4. **Cross-Session Docs** - `RagManager.addExternalDocuments()` added
+5. **Memory Integration** - `getMemoryContextForLLM()` injected before RAG context
+
+### Verified Working:
+- ✅ Embedding Engine initializes with WASM backend
+- ✅ Xenova/e5-small-v2 loads successfully
+- ✅ RagManager finds documents (tested with 5 docs)
+- ✅ Long-Term Memory context injected (58 chars)
+- ✅ AI responds with document context
+
+### Model Branding:
+- Internal: E5-small-v2 (Xenova quantized, 384-dim)
+- User-facing: "VCB-AI Micro"
+
+---
+
+$1
+
+### RAG Dashboard & Long-Term Memory System
+
+**RAG Dashboard** (`/dashboard` route):
+- Desktop layout with 5-tab sidebar (Overview, Model, Performance, Memory, Settings)
+- Mobile responsive layout with collapsible sections
+- Real-time metrics from `ragMetrics` system
+- Recharts-based visualizations (latency, storage, performance, query mode pie)
+- Vector heatmap for embedding visualization
+- Model status panel with WebGPU indicator
+
+**Long-Term Memory System** (NEW):
+- New `memories` table in Dexie (schema v4)
+- Categories: personal, project, reference, custom
+- Priority-based inclusion (1-10, higher = included first)
+- Toggle active/inactive per memory entry
+- Token estimation and limits (max 4000 tokens in context)
+- `MemoryManager` component with full CRUD UI
+- `getMemoryContextForLLM()` function for context injection
+- Persists across ALL chat sessions (unlike session documents)
+
+**Build Fixes Applied**:
+- Webpack config updated to externalize `@huggingface/transformers` and `onnxruntime-node`
+- IgnorePlugin for onnxruntime-node on client builds
+- serverComponentsExternalPackages for SSR compatibility
+- ESLint quote escaping fixes
+
+**Dashboard Components Created**:
+- `StatCard`, `MetricCard`, `ProgressRing`, `StatusBadge`, `TierBadge`
+- `LatencyChart`, `StorageChart`, `QueryModePie`, `PerformanceChart`, `GaugeChart`
+- `VectorHeatmap`, `VectorPreview`, `VectorStats`, `SimilarityScore`
+- `DocumentManager` (session docs), `MemoryManager` (long-term context)
+- `MobileDashboard`, `DesktopDashboard`
+- `useRagDashboard` hook for real-time data
+
+---
+
+## Previous Updates (Dec 3, 2025)
 
 ### UI/UX Improvements (Latest Session)
 

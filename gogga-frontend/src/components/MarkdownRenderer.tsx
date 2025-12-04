@@ -2,19 +2,63 @@
  * MarkdownRenderer Component
  * Renders markdown content as properly styled HTML
  * Uses react-markdown with custom component mappings
+ * Supports Material Icon syntax: [icon_name] renders as <span class="material-icons">icon_name</span>
+ * Icons are normalized via Universal Icon Mapping to canonical Material Icons
  */
 
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Copy, Check } from 'lucide-react';
+import { normalizeIcon } from '@/lib/iconMapping';
 
 interface MarkdownRendererProps {
   content: string;
   variant?: 'assistant' | 'user';
   className?: string;
+}
+
+// Material Icon pattern: [icon_name] where icon_name uses underscores
+// Must not match markdown links like [text](url)
+const MATERIAL_ICON_PATTERN = /\[([a-z][a-z0-9_]*)\](?!\()/gi;
+
+/**
+ * Pre-process content to convert [icon_name] to Material Icons HTML
+ * This runs before markdown parsing
+ * Uses Universal Icon Mapping to normalize alternative icon names to canonical Material Icons
+ */
+function processIconSyntax(content: string, isUserMessage: boolean): string {
+  const iconColor = isUserMessage ? 'text-white' : 'text-primary-700';
+
+  return content.replace(MATERIAL_ICON_PATTERN, (match, iconName) => {
+    // Skip common markdown patterns that might be mistakenly caught
+    const skipPatterns = [
+      'x',
+      'i',
+      'v',
+      'o',
+      'n',
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+    ];
+    if (skipPatterns.includes(iconName.toLowerCase())) {
+      return match;
+    }
+
+    // Normalize icon name using Universal Icon Mapping (alternative → canonical)
+    const normalizedIconName = normalizeIcon(iconName);
+
+    // Convert to Material Icon span
+    // Using inline HTML that react-markdown will pass through
+    return `<span class="material-icons ${iconColor} align-middle inline-block" style="font-size: 1.2em; vertical-align: -0.15em;">${normalizedIconName}</span>`;
+  });
 }
 
 // Code block with copy button
@@ -254,14 +298,24 @@ const userComponents = {
 
 export const MarkdownRenderer = memo(({ content, variant = 'assistant', className = '' }: MarkdownRendererProps) => {
   const components = variant === 'user' ? userComponents : assistantComponents;
-  
+
+  // Pre-process content to convert [icon_name] syntax to Material Icons
+  const processedContent = useMemo(() => {
+    return processIconSyntax(content, variant === 'user');
+  }, [content, variant]);
+
   return (
-    <div className={`prose-gogga ${variant === 'user' ? 'prose-gogga-user' : ''} ${className}`}>
-      <Markdown 
+    <div
+      className={`prose-gogga ${
+        variant === 'user' ? 'prose-gogga-user' : ''
+      } ${className}`}
+    >
+      <Markdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={components}
       >
-        {content}
+        {processedContent}
       </Markdown>
     </div>
   );

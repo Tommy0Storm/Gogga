@@ -2,6 +2,10 @@
  * useRAG Hook
  * React hook for per-session local RAG functionality
  * Active in JIVE (upload only) and JIGGA (upload + cross-session selection)
+ * 
+ * RAG Modes:
+ * - JIVE: Basic retrieval (keyword-based, no embeddings)
+ * - JIGGA: Semantic retrieval (E5 embeddings, vector similarity)
  */
 
 'use client';
@@ -18,16 +22,35 @@ import {
   RAG_LIMITS,
 } from '@/lib/db';
 import rag from '@/lib/rag';
+import { RagManager, type RagMode, type SemanticChunk } from '@/lib/ragManager';
 
 export type Tier = 'free' | 'jive' | 'jigga';
+
+// Singleton RagManager instance for semantic search
+const ragManagerInstance = new RagManager();
 
 interface RAGState {
   sessionId: string;
   documents: Document[];
-  selectedDocIds: number[];  // For JIGGA: IDs of documents selected from all sessions
+  selectedDocIds: number[]; // For JIGGA: IDs of documents selected from all sessions
   allDocuments: Document[]; // All documents across sessions (for JIGGA selection)
   isLoading: boolean;
+  isEmbedding: boolean; // True when generating embeddings (JIGGA)
+  isInitializingSemantic: boolean; // True while loading semantic engine
+  semanticReady: boolean; // True when semantic engine is ready
+  semanticStats?: {
+    engineReady: boolean;
+    cachedSessions: number;
+    totalCachedDocs: number;
+  };
   error: string | null;
+  ragMode: RagMode; // Current retrieval mode
+  lastRetrievalStats: {
+    mode: RagMode;
+    latencyMs: number;
+    topScore?: number; // Only for semantic mode
+    chunksRetrieved: number;
+  } | null;
   stats: {
     documents: number;
     chunks: number;
@@ -44,30 +67,73 @@ interface RAGState {
 interface UseRAGReturn extends RAGState {
   uploadDocument: (file: File) => Promise<void>;
   removeDocument: (docId: number) => Promise<void>;
-  getContext: (query: string) => Promise<string | null>;
+  getContext: (
+    query: string,
+    options?: { authoritative?: boolean }
+  ) => Promise<string | null>;
+  getSemanticChunks: (query: string, topK?: number) => Promise<SemanticChunk[]>; // JIGGA only
   clearAllDocuments: () => Promise<void>;
   refreshDocuments: () => Promise<void>;
   newSession: () => void;
   isRAGEnabled: boolean;
-  canUpload: boolean;  // JIVE and JIGGA can upload
-  canSelectFromAllSessions: boolean;  // Only JIGGA
-  selectDocuments: (docIds: number[]) => Promise<void>;  // JIGGA: select docs from all sessions
-  loadAllDocuments: () => Promise<void>;  // Load all docs for selection UI
+  canUpload: boolean; // JIVE and JIGGA can upload
+  canSelectFromAllSessions: boolean; // Only JIGGA
+  canUseSemanticRAG: boolean; // Only JIGGA
+  selectDocuments: (docIds: number[]) => Promise<void>; // JIGGA: select docs from all sessions
+  loadAllDocuments: () => Promise<void>; // Load all docs for selection UI
   getMaxDocsPerSession: () => number;
   getRemainingDocsSlots: () => number;
+  preloadEmbeddings: () => Promise<void>; // JIGGA: preload embeddings for faster queries
+  // Semantic RAG methods (JIGGA only)
+  initSemanticSearch: () => Promise<boolean>; // Initialize the embedding engine
+  getSemanticContext: (
+    query: string,
+    options?: {
+      topK?: number;
+      maxTokens?: number;
+      authoritative?: boolean;
+    }
+  ) => Promise<{ context: string | null; chunks: SemanticChunk[] }>;
+  getSemanticStatus: () => {
+    initialized: boolean;
+    backend: string;
+    cachedSessions: number;
+    totalCachedDocs: number;
+  } | null;
+}
+
+// Helper to get or create session ID with localStorage persistence
+function getOrCreateSessionId(): string {
+  if (typeof window === 'undefined') {
+    return generateSessionId();
+  }
+  const stored = localStorage.getItem('gogga_current_session');
+  if (stored) return stored;
+  const newId = generateSessionId();
+  localStorage.setItem('gogga_current_session', newId);
+  return newId;
 }
 
 export function useRAG(tier: Tier): UseRAGReturn {
-  // Generate session ID on mount
-  const sessionIdRef = useRef<string>(generateSessionId());
-  
+  // Get or generate session ID - persist to localStorage to survive remounts
+  const sessionIdRef = useRef<string>(getOrCreateSessionId());
+
+  // Determine RAG mode based on tier
+  const ragMode: RagMode = tier === 'jigga' ? 'semantic' : 'basic';
+
   const [state, setState] = useState<RAGState>({
     sessionId: sessionIdRef.current,
     documents: [],
     selectedDocIds: [],
     allDocuments: [],
     isLoading: false,
+    isEmbedding: false,
+    isInitializingSemantic: false,
+    semanticReady: false,
+    semanticStats: undefined,
     error: null,
+    ragMode,
+    lastRetrievalStats: null,
     stats: { documents: 0, chunks: 0, estimatedSizeMB: 0 },
     storageUsage: {
       totalMB: 0,
@@ -81,10 +147,11 @@ export function useRAG(tier: Tier): UseRAGReturn {
   const isRAGEnabled = tier === 'jive' || tier === 'jigga';
   const canUpload = tier === 'jive' || tier === 'jigga';
   const canSelectFromAllSessions = tier === 'jigga';
+  const canUseSemanticRAG = tier === 'jigga';
 
   const getMaxDocsPerSession = useCallback(() => {
-    return tier === 'jive' 
-      ? RAG_LIMITS.JIVE_MAX_DOCS_PER_SESSION 
+    return tier === 'jive'
+      ? RAG_LIMITS.JIVE_MAX_DOCS_PER_SESSION
       : RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION;
   }, [tier]);
 
@@ -92,12 +159,16 @@ export function useRAG(tier: Tier): UseRAGReturn {
     const max = getMaxDocsPerSession();
     const used = state.documents.length + state.selectedDocIds.length;
     return Math.max(0, max - used);
-  }, [getMaxDocsPerSession, state.documents.length, state.selectedDocIds.length]);
+  }, [
+    getMaxDocsPerSession,
+    state.documents.length,
+    state.selectedDocIds.length,
+  ]);
 
   const updateStorageUsage = useCallback(async () => {
     try {
       const usage = await getStorageUsageBreakdown();
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         storageUsage: {
           totalMB: usage.totalMB,
@@ -111,30 +182,20 @@ export function useRAG(tier: Tier): UseRAGReturn {
     }
   }, []);
 
-  // Load documents on mount or when session changes
-  useEffect(() => {
-    if (isRAGEnabled) {
-      refreshDocuments();
-      updateStorageUsage();
-    }
-    
-    // Cleanup: unload session index when unmounting
-    return () => {
-      rag.unloadSession(sessionIdRef.current);
-    };
-  }, [isRAGEnabled]);
-
   const refreshDocuments = useCallback(async () => {
     if (!isRAGEnabled) return;
 
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
       await rag.ensureIndexLoaded(sessionIdRef.current);
       const docs = await rag.getAllDocuments(sessionIdRef.current);
       const stats = await getStorageStats(sessionIdRef.current);
 
-      setState(prev => ({
+      // Sync documents with RagManager for semantic search
+      ragManagerInstance.setDocuments(sessionIdRef.current, docs);
+
+      setState((prev) => ({
         ...prev,
         documents: docs,
         isLoading: false,
@@ -145,10 +206,10 @@ export function useRAG(tier: Tier): UseRAGReturn {
           estimatedSizeMB: stats.estimatedSizeMB,
         },
       }));
-      
+
       await updateStorageUsage();
     } catch (err) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
         error: err instanceof Error ? err.message : 'Failed to load documents',
@@ -156,149 +217,366 @@ export function useRAG(tier: Tier): UseRAGReturn {
     }
   }, [isRAGEnabled, updateStorageUsage]);
 
+  // Load documents on mount or when session changes
+  useEffect(() => {
+    if (isRAGEnabled) {
+      refreshDocuments();
+      updateStorageUsage();
+    }
+
+    // Cleanup: unload session index when unmounting
+    return () => {
+      rag.unloadSession(sessionIdRef.current);
+    };
+  }, [isRAGEnabled, refreshDocuments, updateStorageUsage]);
+
   const loadAllDocuments = useCallback(async () => {
     if (!canSelectFromAllSessions) return;
 
-    setState(prev => ({ ...prev, isLoading: true }));
+    setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
       const allDocs = await getAllDocuments();
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         allDocuments: allDocs,
         isLoading: false,
       }));
     } catch (err) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: err instanceof Error ? err.message : 'Failed to load all documents',
+        error:
+          err instanceof Error ? err.message : 'Failed to load all documents',
       }));
     }
   }, [canSelectFromAllSessions]);
 
-  const selectDocuments = useCallback(async (docIds: number[]) => {
-    if (!canSelectFromAllSessions) {
-      throw new Error('Document selection is only available in JIGGA tier');
-    }
-
-    // Check limit (selected + session docs)
-    const totalDocs = state.documents.length + docIds.length;
-    if (totalDocs > RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION) {
-      throw new Error(
-        `Cannot select more than ${RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION} documents total. ` +
-        `Currently have ${state.documents.length} in session, trying to select ${docIds.length}.`
-      );
-    }
-
-    // Load the selected documents and index them for search
-    if (docIds.length > 0) {
-      const selectedDocs = await getDocumentsByIds(docIds);
-      
-      // Index each selected document's chunks into the current session's FlexSearch index
-      for (const doc of selectedDocs) {
-        if (doc.id && doc.chunks) {
-          await rag.indexExternalDocument(sessionIdRef.current, doc);
-        }
+  const selectDocuments = useCallback(
+    async (docIds: number[]) => {
+      if (!canSelectFromAllSessions) {
+        throw new Error('Document selection is only available in JIGGA tier');
       }
-    }
 
-    setState(prev => ({
-      ...prev,
-      selectedDocIds: docIds,
-    }));
-  }, [canSelectFromAllSessions, state.documents.length]);
+      // Check limit (selected + session docs)
+      const totalDocs = state.documents.length + docIds.length;
+      if (totalDocs > RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION) {
+        throw new Error(
+          `Cannot select more than ${RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION} documents total. ` +
+            `Currently have ${state.documents.length} in session, trying to select ${docIds.length}.`
+        );
+      }
 
-  const uploadDocument = useCallback(async (file: File) => {
-    if (!canUpload) {
-      throw new Error('RAG upload is only available in JIVE and JIGGA tiers');
-    }
+      // Load the selected documents and index them for search
+      if (docIds.length > 0) {
+        const selectedDocs = await getDocumentsByIds(docIds);
 
-    // Check storage limits
-    const tierType = tier === 'jive' ? 'jive' : 'jigga';
-    const limitCheck = await checkStorageLimits(file.size, tierType, sessionIdRef.current);
-    
-    if (!limitCheck.allowed) {
-      throw new Error(limitCheck.reason || 'Storage limit exceeded');
-    }
+        // Index each selected document's chunks into the current session's FlexSearch index
+        for (const doc of selectedDocs) {
+          if (doc.id && doc.chunks) {
+            await rag.indexExternalDocument(sessionIdRef.current, doc);
+          }
+        }
 
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+        // Also add to RagManager for semantic/basic retrieval
+        ragManagerInstance.addExternalDocuments(
+          sessionIdRef.current,
+          selectedDocs
+        );
+      }
+
+      setState((prev) => ({
+        ...prev,
+        selectedDocIds: docIds,
+      }));
+    },
+    [canSelectFromAllSessions, state.documents.length]
+  );
+
+  const uploadDocument = useCallback(
+    async (file: File) => {
+      if (!canUpload) {
+        throw new Error('RAG upload is only available in JIVE and JIGGA tiers');
+      }
+
+      // Check storage limits
+      const tierType = tier === 'jive' ? 'jive' : 'jigga';
+      const limitCheck = await checkStorageLimits(
+        file.size,
+        tierType,
+        sessionIdRef.current
+      );
+
+      if (!limitCheck.allowed) {
+        throw new Error(limitCheck.reason || 'Storage limit exceeded');
+      }
+
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const doc = await rag.addDocument(sessionIdRef.current, file);
+
+        // For JIGGA tier, pre-generate embeddings so they show in dashboard
+        if (tier === 'jigga' && doc) {
+          try {
+            // Initialize the engine if needed (first upload scenario)
+            if (!ragManagerInstance.isReady()) {
+              console.log(
+                '[RAG] Initializing semantic engine for first upload...'
+              );
+              await ragManagerInstance.initializeSemanticEngine();
+            }
+            await ragManagerInstance.preloadDocument(doc);
+            console.log('[RAG] Pre-generated embeddings for:', doc.filename);
+
+            // Update semantic state
+            const status = ragManagerInstance.getStatus();
+            setState((prev) => ({
+              ...prev,
+              semanticReady: status.initialized,
+              semanticStats: {
+                engineReady: status.initialized,
+                cachedSessions: status.cachedSessions,
+                totalCachedDocs: status.totalCachedDocs,
+              },
+            }));
+          } catch (e) {
+            console.warn('[RAG] Failed to pre-generate embeddings:', e);
+            // Non-fatal - embeddings will be generated on first query
+          }
+        }
+
+        await refreshDocuments();
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to upload document';
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: errorMessage,
+        }));
+        throw new Error(errorMessage);
+      }
+    },
+    [canUpload, tier, refreshDocuments]
+  );
+
+  const removeDocument = useCallback(
+    async (docId: number) => {
+      if (!isRAGEnabled) return;
+
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        await rag.removeDocument(sessionIdRef.current, docId);
+
+        // Also remove from selected if present
+        setState((prev) => ({
+          ...prev,
+          selectedDocIds: prev.selectedDocIds.filter((id) => id !== docId),
+        }));
+
+        await refreshDocuments();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error:
+            err instanceof Error ? err.message : 'Failed to remove document',
+        }));
+        throw err;
+      }
+    },
+    [isRAGEnabled, refreshDocuments]
+  );
+
+  const getContext = useCallback(
+    async (
+      query: string,
+      options?: { authoritative?: boolean }
+    ): Promise<string | null> => {
+      if (!isRAGEnabled) {
+        console.log('[RAG] getContext: RAG not enabled');
+        return null;
+      }
+
+      const hasSessionDocs = state.documents.length > 0;
+      const hasSelectedDocs = state.selectedDocIds.length > 0;
+
+      console.log(
+        '[RAG] getContext: sessionDocs=',
+        hasSessionDocs,
+        'selectedDocs=',
+        hasSelectedDocs,
+        'mode=',
+        ragMode
+      );
+
+      if (!hasSessionDocs && !hasSelectedDocs) {
+        console.log('[RAG] getContext: No documents available');
+        return null;
+      }
+
+      try {
+        // Check what docs RagManager has
+        const ragDocs = ragManagerInstance.getDocuments(sessionIdRef.current);
+        console.log(
+          '[RAG] RagManager has',
+          ragDocs.length,
+          'docs for session',
+          sessionIdRef.current
+        );
+
+        // Use RagManager for tier-appropriate retrieval
+        const context = await ragManagerInstance.getContextForLLM(
+          sessionIdRef.current,
+          query,
+          ragMode,
+          {
+            topK: ragMode === 'semantic' ? 5 : 3,
+            maxTokens: 2500,
+            authoritative: options?.authoritative && canUseSemanticRAG,
+          }
+        );
+
+        console.log(
+          '[RAG] getContextForLLM returned:',
+          context ? `${context.length} chars` : 'null'
+        );
+
+        // Update stats from last retrieval
+        const result = await ragManagerInstance.retrieve(
+          sessionIdRef.current,
+          query,
+          ragMode
+        );
+
+        setState((prev) => ({
+          ...prev,
+          lastRetrievalStats: {
+            mode: ragMode,
+            latencyMs: result.latencyMs,
+            topScore: result.mode === 'semantic' ? result.topScore : undefined,
+            chunksRetrieved:
+              result.mode === 'semantic'
+                ? result.chunks.length
+                : result.documents.length,
+          },
+        }));
+
+        return context || null;
+      } catch (err) {
+        console.error('RAG context error:', err);
+
+        // Fallback to basic FlexSearch for JIVE
+        if (ragMode === 'basic') {
+          try {
+            return await rag.getRAGContext(
+              sessionIdRef.current,
+              query,
+              5,
+              2500
+            );
+          } catch {
+            return null;
+          }
+        }
+
+        return null;
+      }
+    },
+    [
+      isRAGEnabled,
+      state.documents.length,
+      state.selectedDocIds,
+      ragMode,
+      canUseSemanticRAG,
+    ]
+  );
+
+  /**
+   * Get semantic chunks with scores (JIGGA only)
+   */
+  const getSemanticChunks = useCallback(
+    async (query: string, topK = 5): Promise<SemanticChunk[]> => {
+      if (!canUseSemanticRAG) {
+        console.warn('Semantic RAG is only available in JIGGA tier');
+        return [];
+      }
+
+      const hasSessionDocs = state.documents.length > 0;
+      const hasSelectedDocs = state.selectedDocIds.length > 0;
+
+      if (!hasSessionDocs && !hasSelectedDocs) {
+        return [];
+      }
+
+      try {
+        setState((prev) => ({ ...prev, isEmbedding: true }));
+
+        const result = await ragManagerInstance.retrieveSemantic(
+          sessionIdRef.current,
+          query,
+          topK
+        );
+
+        setState((prev) => ({
+          ...prev,
+          isEmbedding: false,
+          lastRetrievalStats: {
+            mode: 'semantic',
+            latencyMs: result.latencyMs,
+            topScore: result.topScore,
+            chunksRetrieved: result.chunks.length,
+          },
+        }));
+
+        return result.chunks;
+      } catch (err) {
+        console.error('Semantic retrieval error:', err);
+        setState((prev) => ({ ...prev, isEmbedding: false }));
+        return [];
+      }
+    },
+    [canUseSemanticRAG, state.documents.length, state.selectedDocIds]
+  );
+
+  /**
+   * Preload embeddings for all documents (JIGGA only)
+   */
+  const preloadEmbeddings = useCallback(async (): Promise<void> => {
+    if (!canUseSemanticRAG) return;
+
+    setState((prev) => ({ ...prev, isEmbedding: true }));
 
     try {
-      await rag.addDocument(sessionIdRef.current, file);
-      await refreshDocuments();
+      await ragManagerInstance.ensureEmbeddings(sessionIdRef.current);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to upload document';
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage,
-      }));
-      throw new Error(errorMessage);
+      console.error('Embedding preload error:', err);
+    } finally {
+      setState((prev) => ({ ...prev, isEmbedding: false }));
     }
-  }, [canUpload, tier, refreshDocuments]);
-
-  const removeDocument = useCallback(async (docId: number) => {
-    if (!isRAGEnabled) return;
-
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-
-    try {
-      await rag.removeDocument(sessionIdRef.current, docId);
-      
-      // Also remove from selected if present
-      setState(prev => ({
-        ...prev,
-        selectedDocIds: prev.selectedDocIds.filter(id => id !== docId),
-      }));
-      
-      await refreshDocuments();
-    } catch (err) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: err instanceof Error ? err.message : 'Failed to remove document',
-      }));
-      throw err;
-    }
-  }, [isRAGEnabled, refreshDocuments]);
-
-  const getContext = useCallback(async (query: string): Promise<string | null> => {
-    if (!isRAGEnabled) return null;
-    
-    const hasSessionDocs = state.documents.length > 0;
-    const hasSelectedDocs = state.selectedDocIds.length > 0;
-    
-    if (!hasSessionDocs && !hasSelectedDocs) {
-      return null;
-    }
-
-    try {
-      // Get context using FlexSearch - this searches both session docs AND indexed selected docs
-      // Selected docs are indexed when selectDocuments() is called via indexExternalDocument()
-      const context = await rag.getRAGContext(sessionIdRef.current, query, 5, 2500);
-      
-      return context || null;
-    } catch (err) {
-      console.error('RAG context error:', err);
-      return null;
-    }
-  }, [isRAGEnabled, state.documents.length, state.selectedDocIds]);
+  }, [canUseSemanticRAG]);
 
   const clearAllDocuments = useCallback(async () => {
     if (!isRAGEnabled) return;
 
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
       await rag.clearRAGData(sessionIdRef.current);
-      setState(prev => ({
+
+      // Clear RagManager cache for this session
+      ragManagerInstance.clearSessionCache(sessionIdRef.current);
+
+      setState((prev) => ({
         ...prev,
         selectedDocIds: [],
+        lastRetrievalStats: null,
       }));
       await refreshDocuments();
     } catch (err) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
         error: err instanceof Error ? err.message : 'Failed to clear documents',
@@ -308,22 +586,148 @@ export function useRAG(tier: Tier): UseRAGReturn {
   }, [isRAGEnabled, refreshDocuments]);
 
   const newSession = useCallback(() => {
-    // Unload current session
+    // Unload current session from FlexSearch
     rag.unloadSession(sessionIdRef.current);
-    
-    // Create new session ID
+
+    // Clear RagManager cache for this session
+    ragManagerInstance.clearSessionCache(sessionIdRef.current);
+
+    // Create new session ID and persist to localStorage
     const newId = generateSessionId();
     sessionIdRef.current = newId;
-    
-    setState(prev => ({
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gogga_current_session', newId);
+    }
+
+    setState((prev) => ({
       ...prev,
       sessionId: newId,
       documents: [],
       selectedDocIds: [],
       stats: { documents: 0, chunks: 0, estimatedSizeMB: 0 },
+      lastRetrievalStats: null,
       error: null,
+      semanticReady: false,
+      semanticStats: undefined,
     }));
   }, []);
+
+  /**
+   * Initialize semantic search engine (JIGGA only)
+   * Call this early to preload the model
+   */
+  const initSemanticSearch = useCallback(async (): Promise<boolean> => {
+    if (!canUseSemanticRAG) {
+      console.warn('Semantic search only available for JIGGA tier');
+      return false;
+    }
+
+    if (state.semanticReady) {
+      return true;
+    }
+
+    setState((prev) => ({ ...prev, isInitializingSemantic: true }));
+
+    try {
+      await ragManagerInstance.initializeSemanticEngine();
+
+      const status = ragManagerInstance.getStatus();
+
+      setState((prev) => ({
+        ...prev,
+        isInitializingSemantic: false,
+        semanticReady: status.initialized,
+        semanticStats: {
+          engineReady: status.initialized,
+          cachedSessions: status.cachedSessions,
+          totalCachedDocs: status.totalCachedDocs,
+        },
+      }));
+
+      return status.initialized;
+    } catch (err) {
+      console.error('Failed to initialize semantic search:', err);
+      setState((prev) => ({
+        ...prev,
+        isInitializingSemantic: false,
+        error: err instanceof Error ? err.message : 'Semantic init failed',
+      }));
+      return false;
+    }
+  }, [canUseSemanticRAG, state.semanticReady]);
+
+  /**
+   * Get semantic engine status (JIGGA only)
+   */
+  const getSemanticStatus = useCallback(() => {
+    if (!canUseSemanticRAG) {
+      return null;
+    }
+
+    return ragManagerInstance.getStatus();
+  }, [canUseSemanticRAG]);
+
+  /**
+   * Get semantic context with detailed chunk info (JIGGA only)
+   * Returns both context string and scored chunks
+   */
+  const getSemanticContext = useCallback(
+    async (
+      query: string,
+      options?: { topK?: number; maxTokens?: number; authoritative?: boolean }
+    ): Promise<{ context: string | null; chunks: SemanticChunk[] }> => {
+      if (!canUseSemanticRAG) {
+        return { context: null, chunks: [] };
+      }
+
+      const hasSessionDocs = state.documents.length > 0;
+      const hasSelectedDocs = state.selectedDocIds.length > 0;
+
+      if (!hasSessionDocs && !hasSelectedDocs) {
+        return { context: null, chunks: [] };
+      }
+
+      try {
+        setState((prev) => ({ ...prev, isEmbedding: true }));
+
+        const topK = options?.topK ?? 5;
+        const maxTokens = options?.maxTokens ?? 2500;
+
+        // Get chunks with scores
+        const result = await ragManagerInstance.retrieveSemantic(
+          sessionIdRef.current,
+          query,
+          topK
+        );
+
+        // Build context string
+        const context = await ragManagerInstance.getContextForLLM(
+          sessionIdRef.current,
+          query,
+          'semantic',
+          { topK, maxTokens, authoritative: options?.authoritative }
+        );
+
+        setState((prev) => ({
+          ...prev,
+          isEmbedding: false,
+          lastRetrievalStats: {
+            mode: 'semantic',
+            latencyMs: result.latencyMs,
+            topScore: result.topScore,
+            chunksRetrieved: result.chunks.length,
+          },
+        }));
+
+        return { context, chunks: result.chunks };
+      } catch (err) {
+        console.error('Semantic context error:', err);
+        setState((prev) => ({ ...prev, isEmbedding: false }));
+        return { context: null, chunks: [] };
+      }
+    },
+    [canUseSemanticRAG, state.documents.length, state.selectedDocIds]
+  );
 
   return {
     ...state,
@@ -340,6 +744,13 @@ export function useRAG(tier: Tier): UseRAGReturn {
     loadAllDocuments,
     getMaxDocsPerSession,
     getRemainingDocsSlots,
+    // Semantic RAG (JIGGA only)
+    canUseSemanticRAG,
+    initSemanticSearch,
+    getSemanticContext,
+    getSemanticStatus,
+    getSemanticChunks,
+    preloadEmbeddings,
   };
 }
 

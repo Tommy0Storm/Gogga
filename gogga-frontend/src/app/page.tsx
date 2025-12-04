@@ -9,16 +9,47 @@ import DocumentList from '@/components/DocumentList';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { GoggaLogo, GoggaIcon, GoggaCricket } from '@/components/GoggaLogo';
+import {
+  FileStoreIcon,
+  SendArrowIcon,
+  ImageGenerateIcon,
+  MagicWandIcon,
+} from '@/components/GoggaIcons';
+import {
+  LocationPrompt,
+  ManualLocationInput,
+  LocationBadge,
+} from '@/components/LocationPrompt';
 import { useRAG, type Tier } from '@/hooks/useRAG';
 import { useChatHistory, type Message } from '@/hooks/useChatHistory';
 import { useImageStorage } from '@/hooks/useImageStorage';
 import { useTokenTracking, formatTokenCount } from '@/hooks/useTokenTracking';
-import { softDeleteImage, RAG_LIMITS, type Document } from '@/lib/db';
-import { 
-  Send, Bot, User, Zap, Brain, Sparkles, Database, Clock,
-  Wand2, Image as ImageIcon, BookOpen, FileSearch, 
-  Plus, History, Trash2, ImageOff, FolderOpen, HardDrive,
-  ChevronDown, ChevronUp, Hash
+import { useLocation } from '@/hooks/useLocation';
+import {
+  softDeleteImage,
+  RAG_LIMITS,
+  type Document,
+  getMemoryContextForLLM,
+} from '@/lib/db';
+import {
+  Bot,
+  User,
+  Zap,
+  Brain,
+  Sparkles,
+  Database,
+  Clock,
+  BookOpen,
+  FileSearch,
+  Plus,
+  History,
+  Trash2,
+  ImageOff,
+  FolderOpen,
+  HardDrive,
+  ChevronDown,
+  ChevronUp,
+  Hash,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -39,13 +70,21 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [tier, setTier] = useState<Tier>('free');
   const [useRAGContext, setUseRAGContext] = useState(true);
-  const [ragMode, setRagMode] = useState<'analysis' | 'authoritative'>('analysis');
+  const [ragMode, setRagMode] = useState<'analysis' | 'authoritative'>(
+    'analysis'
+  );
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showDocSelector, setShowDocSelector] = useState(false);
-  const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set()); // Track expanded thinking blocks
+  const [expandedThinking, setExpandedThinking] = useState<Set<number>>(
+    new Set()
+  ); // Track expanded thinking blocks
   const [isAdmin, setIsAdmin] = useState(false); // Admin mode for PromptManager visibility
+  const [historySelectMode, setHistorySelectMode] = useState(false); // Multi-select mode for history
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(
+    new Set()
+  ); // Selected sessions for bulk delete
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Local RAG hook (per-session, JIVE/JIGGA)
@@ -57,6 +96,7 @@ export default function ChatPage() {
     stats,
     storageUsage,
     isLoading: ragLoading,
+    isEmbedding,
     uploadDocument,
     removeDocument,
     getContext,
@@ -65,10 +105,12 @@ export default function ChatPage() {
     isRAGEnabled,
     canUpload,
     canSelectFromAllSessions,
+    canUseSemanticRAG,
     selectDocuments,
     loadAllDocuments,
     getMaxDocsPerSession,
     getRemainingDocsSlots,
+    initSemanticSearch,
   } = useRAG(tier);
 
   // Chat history hook (JIVE/JIGGA only)
@@ -80,6 +122,9 @@ export default function ChatPage() {
     newSession: newChatSession,
     loadSession,
     deleteCurrentSession,
+    deleteSessionById,
+    deleteMultipleSessions,
+    deleteAllSessions,
     clearMessages,
     isPersistenceEnabled,
   } = useChatHistory(tier);
@@ -88,11 +133,38 @@ export default function ChatPage() {
   const { saveImage, deleteImage } = useImageStorage();
 
   // Token tracking hook
-  const { stats: tokenStats, track: trackTokens, refreshStats: refreshTokenStats } = useTokenTracking();
+  const {
+    stats: tokenStats,
+    track: trackTokens,
+    refreshStats: refreshTokenStats,
+  } = useTokenTracking();
+
+  // Location hook (geolocation with user consent)
+  const {
+    userLocation,
+    weatherData,
+    showLocationPrompt,
+    showManualLocation,
+    manualLocationInput,
+    isLoadingLocation,
+    locationError,
+    hasConsented: hasLocationConsent,
+    retryCount,
+    canRetry,
+    requestLocation,
+    retryLocation,
+    declineLocation,
+    setManualLocation,
+    setLocationFromSuggestion,
+    setManualLocationInput,
+    setShowManualLocation,
+    clearLocation,
+    getLocationContext,
+  } = useLocation(true); // Auto-prompt for location on first load
 
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
-  
+
   // Use appropriate messages based on tier
   const displayMessages = isPersistenceEnabled ? messages : freeMessages;
 
@@ -103,6 +175,20 @@ export default function ChatPage() {
       setTier(savedTier);
     }
   }, []);
+
+  // Auto-initialize semantic engine for JIGGA tier (preload model)
+  useEffect(() => {
+    if (canUseSemanticRAG && initSemanticSearch) {
+      console.log('[GOGGA] JIGGA tier: Preloading semantic engine...');
+      initSemanticSearch()
+        .then((success) => {
+          console.log('[GOGGA] Semantic engine initialized:', success);
+        })
+        .catch((err) => {
+          console.warn('[GOGGA] Semantic engine init failed:', err);
+        });
+    }
+  }, [canUseSemanticRAG, initSemanticSearch]);
 
   // Save tier changes
   const handleTierChange = useCallback((newTier: Tier) => {
@@ -122,48 +208,110 @@ export default function ChatPage() {
   }, [displayMessages]);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isLoading) return;
+
+    // Get Long-Term Memory context (JIGGA only, stored in Dexie)
+    let memoryContext: string | null = null;
+    if (tier === 'jigga') {
+      try {
+        memoryContext = await getMemoryContextForLLM();
+        console.log(
+          '[GOGGA] Fetched memory context:',
+          memoryContext ? `${memoryContext.length} chars` : 'empty'
+        );
+      } catch (e) {
+        console.error('[GOGGA] Failed to load memory context:', e);
+      }
+    } else {
+      console.log(
+        '[GOGGA] Skipping memory context (tier is',
+        tier,
+        ', need jigga)'
+      );
+    }
 
     // Get RAG context if enabled and has documents (current session OR selected from other sessions)
     let ragContext: string | null = null;
     const hasDocuments = documents.length > 0 || selectedDocIds.length > 0;
-    
+
     if (isRAGEnabled && hasDocuments && useRAGContext) {
       const rawContext = await getContext(text);
       if (rawContext) {
-        const modeInstruction = ragMode === 'authoritative'
-          ? 'IMPORTANT: Only quote directly from the provided documents. Do not synthesize or interpret beyond what is explicitly stated.'
-          : 'Analyze and synthesize information from the provided documents to give a comprehensive answer.';
+        const modeInstruction =
+          ragMode === 'authoritative'
+            ? 'IMPORTANT: Only quote directly from the provided documents. Do not synthesize or interpret beyond what is explicitly stated.'
+            : 'Analyze and synthesize information from the provided documents to give a comprehensive answer.';
         ragContext = `${modeInstruction}\n\n${rawContext}`;
       }
     }
 
     // Create user message
     const userMsg: ChatMessage = { role: 'user', content: text };
-    
+
     // Add to appropriate message store
     if (isPersistenceEnabled) {
       await addMessage(userMsg);
     } else {
-      setFreeMessages(prev => [...prev, userMsg]);
+      setFreeMessages((prev) => [...prev, userMsg]);
     }
-    
+
     setInput('');
     setIsLoading(true);
 
     try {
+      // Build the full message with all context
       let messageToSend = text;
-      if (ragContext) {
-        messageToSend = `${ragContext}\n\n---\n\nUser Question: ${text}`;
+
+      // Add Long-Term Memory context first (persistent user info)
+      if (memoryContext) {
+        console.log(
+          '[GOGGA] Long-Term Memory context found:',
+          memoryContext.slice(0, 200) + '...'
+        );
+        messageToSend = `${memoryContext}\n\n---\n\n${messageToSend}`;
+      } else {
+        console.log('[GOGGA] No Long-Term Memory context (tier:', tier, ')');
       }
+
+      // Add RAG context (session documents)
+      if (ragContext) {
+        console.log(
+          '[GOGGA] RAG context found:',
+          ragContext.slice(0, 200) + '...'
+        );
+        messageToSend = `${ragContext}\n\n---\n\nUser Question: ${messageToSend}`;
+      } else {
+        console.log(
+          '[GOGGA] No RAG context (RAG enabled:',
+          isRAGEnabled,
+          ', docs:',
+          documents.length,
+          ', useRAG:',
+          useRAGContext,
+          ')'
+        );
+      }
+
+      // Add Location context (if user consented and location is available)
+      const locationContext = getLocationContext();
+      if (locationContext) {
+        console.log('[GOGGA] Location context found:', locationContext);
+        messageToSend = `${locationContext}\n\n---\n\n${messageToSend}`;
+      }
+
+      console.log(
+        '[GOGGA] Final message length:',
+        messageToSend.length,
+        'chars'
+      );
 
       const response = await axios.post('/api/v1/chat', {
         message: messageToSend,
-        user_id: "demo_user_123",
+        user_id: 'demo_user_123',
         user_tier: tier,
       });
 
-      const data = response.data;
+      const { data } = response;
 
       // Track token usage if available
       if (data.meta?.tokens) {
@@ -185,28 +333,31 @@ export default function ChatPage() {
           tier: data.meta?.tier,
           provider: data.meta?.provider,
           rag_context: !!ragContext,
+          memory_context: !!memoryContext, // Long-term memory was used
+          location_context: !!locationContext, // Location was included
           has_thinking: data.meta?.has_thinking || !!data.thinking,
-        }
+        },
       };
 
       if (isPersistenceEnabled) {
         await addMessage(botMsg);
       } else {
-        setFreeMessages(prev => [...prev, botMsg]);
+        setFreeMessages((prev) => [...prev, botMsg]);
       }
-
     } catch (error: any) {
-      console.error("Chat Error:", error);
+      console.error('Chat Error:', error);
       const { response, message } = error;
       const errorMsg: ChatMessage = {
         role: 'assistant',
-        content: `Eish! Something went wrong: ${response?.data?.detail || message}`,
+        content: `Eish! Something went wrong: ${
+          response?.data?.detail || message
+        }`,
       };
-      
+
       if (isPersistenceEnabled) {
         await addMessage(errorMsg);
       } else {
-        setFreeMessages(prev => [...prev, errorMsg]);
+        setFreeMessages((prev) => [...prev, errorMsg]);
       }
     } finally {
       setIsLoading(false);
@@ -214,38 +365,39 @@ export default function ChatPage() {
   };
 
   const handleAudio = (audioBlob: Blob) => {
-    console.log("Audio recorded:", audioBlob.size, "bytes");
-    alert("Audio Captured! Transcription coming soon.");
+    console.log('Audio recorded:', audioBlob.size, 'bytes');
+    alert('Audio Captured! Transcription coming soon.');
   };
 
   const handleFileUpload = async (file: File) => {
-    if (tier === 'jigga') {
+    // Both JIVE and JIGGA can upload documents
+    if (tier === 'jive' || tier === 'jigga') {
       try {
+        console.log(`[GOGGA] ${tier.toUpperCase()} uploading:`, file.name);
         await uploadDocument(file);
+        console.log(`[GOGGA] Upload complete:`, file.name);
       } catch (error: any) {
+        console.error(`[GOGGA] Upload failed:`, error);
         alert(`Upload failed: ${error.message}`);
       }
-    } else if (tier === 'jive') {
-      console.log('JIVE upload:', file.name);
-      alert(`File "${file.name}" would be sent to server for processing (not yet implemented)`);
     }
   };
 
   const enhancePrompt = async () => {
     if (!input.trim()) return;
-    
+
     setIsEnhancing(true);
     try {
       const response = await axios.post('/api/v1/chat/enhance', {
         prompt: input,
-        user_id: "demo_user_123"
+        user_id: 'demo_user_123',
       });
-      
+
       if (response.data.success && response.data.enhanced_prompt) {
         setInput(response.data.enhanced_prompt);
       }
     } catch (error) {
-      console.error("Enhance error:", error);
+      console.error('Enhance error:', error);
     } finally {
       setIsEnhancing(false);
     }
@@ -253,39 +405,39 @@ export default function ChatPage() {
 
   const generateImage = async () => {
     if (!input.trim()) return;
-    
+
     setIsGeneratingImage(true);
     const originalPrompt = input;
     const userMsg: ChatMessage = { role: 'user', content: `🖼️ ${input}` };
-    
+
     if (isPersistenceEnabled) {
       await addMessage(userMsg);
     } else {
-      setFreeMessages(prev => [...prev, userMsg]);
+      setFreeMessages((prev) => [...prev, userMsg]);
     }
     setInput('');
-    
+
     try {
       const response = await axios.post('/api/v1/images/generate', {
         prompt: originalPrompt,
-        user_id: "demo_user_123",
+        user_id: 'demo_user_123',
         user_tier: tier,
-        enhance_prompt: true
+        enhance_prompt: true,
       });
-      
-      const data = response.data;
-      
+
+      const { data } = response;
+
       // Determine if we have actual image data
       let imageId: number | undefined;
       let botContent = '';
-      
+
       if (data.image_data) {
         // Check if it's base64 image data
-        const isBase64Image = 
-          data.image_data.startsWith('/9j/') || 
+        const isBase64Image =
+          data.image_data.startsWith('/9j/') ||
           data.image_data.startsWith('iVBOR') ||
           (data.image_data.length > 1000 && !data.image_data.includes(' '));
-        
+
         if (isBase64Image && chatSessionId) {
           // Save image to Dexie and get ID
           imageId = await saveImage(
@@ -299,7 +451,9 @@ export default function ChatPage() {
           botContent = `__IMAGE_ID__:${imageId}\n\n**Enhanced prompt:** ${data.enhanced_prompt}`;
         } else if (isBase64Image) {
           // No session (FREE tier) - display inline
-          const mimeType = data.image_data.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+          const mimeType = data.image_data.startsWith('/9j/')
+            ? 'image/jpeg'
+            : 'image/png';
           botContent = `![Generated Image](data:${mimeType};base64,${data.image_data})\n\n**Enhanced prompt:** ${data.enhanced_prompt}`;
         } else {
           // Text description (LongCat FREE tier)
@@ -308,7 +462,7 @@ export default function ChatPage() {
       } else {
         botContent = `Image generated!\n\n**Enhanced prompt:** ${data.enhanced_prompt}`;
       }
-      
+
       const botMsg: ChatMessage = {
         role: 'assistant',
         content: botContent,
@@ -317,26 +471,28 @@ export default function ChatPage() {
           tier: tier,
           provider: data.meta?.pipeline || 'unknown',
           model: data.meta?.generation_model || 'unknown',
-        }
+        },
       };
-      
+
       if (isPersistenceEnabled) {
         await addMessage(botMsg);
       } else {
-        setFreeMessages(prev => [...prev, botMsg]);
+        setFreeMessages((prev) => [...prev, botMsg]);
       }
     } catch (error: any) {
-      console.error("Image error:", error);
+      console.error('Image error:', error);
       const { response, message } = error;
       const errorMsg: ChatMessage = {
         role: 'assistant',
-        content: `Eish! Image generation failed: ${response?.data?.detail || message}`,
+        content: `Eish! Image generation failed: ${
+          response?.data?.detail || message
+        }`,
       };
-      
+
       if (isPersistenceEnabled) {
         await addMessage(errorMsg);
       } else {
-        setFreeMessages(prev => [...prev, errorMsg]);
+        setFreeMessages((prev) => [...prev, errorMsg]);
       }
     } finally {
       setIsGeneratingImage(false);
@@ -366,9 +522,9 @@ export default function ChatPage() {
 
   const handleSelectDoc = async (docId: number) => {
     const newSelected = selectedDocIds.includes(docId)
-      ? selectedDocIds.filter(id => id !== docId)
+      ? selectedDocIds.filter((id) => id !== docId)
       : [...selectedDocIds, docId];
-    
+
     try {
       await selectDocuments(newSelected);
     } catch (error: any) {
@@ -382,7 +538,7 @@ export default function ChatPage() {
 
   // Toggle thinking block visibility
   const toggleThinking = (messageIndex: number) => {
-    setExpandedThinking(prev => {
+    setExpandedThinking((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(messageIndex)) {
         newSet.delete(messageIndex);
@@ -396,68 +552,81 @@ export default function ChatPage() {
   // Render message content with image support, markdown, and collapsible thinking
   const renderMessageContent = (msg: ChatMessage, messageIndex: number) => {
     const isUser = msg.role === 'user';
-    
+
     // Extract thinking from message - either from dedicated field or from content
     let thinkingContent = (msg as ChatMessage).thinking || '';
     let mainContent = msg.content;
-    
+
     // If no thinking field, try to extract from content (fallback)
     if (!thinkingContent && msg.content) {
-      const thinkMatch = msg.content.match(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/i);
+      const thinkMatch = msg.content.match(
+        /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/i
+      );
       if (thinkMatch) {
         thinkingContent = thinkMatch[1].trim();
-        mainContent = msg.content.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '').trim();
+        mainContent = msg.content
+          .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '')
+          .trim();
       }
     }
-    
+
     const hasThinking = !!thinkingContent;
     const isThinkingExpanded = expandedThinking.has(messageIndex);
-    
+
     // Check for image reference
     if (msg.content.startsWith('__IMAGE_ID__:') && msg.imageId) {
       const parts = msg.content.split('\n\n');
       const promptPart = parts.slice(1).join('\n\n');
-      
+
       return (
         <div>
-          <ImageThumbnail 
-            imageId={msg.imageId} 
+          <ImageThumbnail
+            imageId={msg.imageId}
             onDelete={() => handleDeleteImage(msg.imageId!)}
           />
           {promptPart && (
             <div className="mt-3">
-              <MarkdownRenderer content={promptPart} variant={isUser ? 'user' : 'assistant'} />
+              <MarkdownRenderer
+                content={promptPart}
+                variant={isUser ? 'user' : 'assistant'}
+              />
             </div>
           )}
         </div>
       );
     }
-    
+
     // Check for inline base64 image (FREE tier)
     if (msg.content.includes('![Generated Image](data:image')) {
-      const match = msg.content.match(/!\[Generated Image\]\((data:image\/[^)]+)\)/);
+      const match = msg.content.match(
+        /!\[Generated Image\]\((data:image\/[^)]+)\)/
+      );
       if (match) {
         const imageSrc = match[1];
         const textAfter = msg.content.replace(match[0], '').trim();
-        
+
         return (
           <div>
-            <img 
-              src={imageSrc} 
-              alt="Generated" 
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageSrc}
+              alt="Generated"
               className="max-w-full rounded-xl shadow-md cursor-pointer hover:opacity-90 transition-opacity"
               style={{ maxHeight: '400px' }}
             />
             {textAfter && (
               <div className="mt-3">
-                <MarkdownRenderer content={textAfter} variant={isUser ? 'user' : 'assistant'} />
+                <MarkdownRenderer
+                  content={textAfter}
+                  variant={isUser ? 'user' : 'assistant'}
+                />
               </div>
             )}
           </div>
         );
       }
     }
-    
+
     // Regular text content with thinking block (JIGGA)
     return (
       <div>
@@ -468,7 +637,10 @@ export default function ChatPage() {
               onClick={() => toggleThinking(messageIndex)}
               className="flex items-center gap-2 text-xs text-primary-500 hover:text-primary-700 transition-colors mb-2 group"
             >
-              <Brain size={14} className="text-primary-400 group-hover:text-primary-600" />
+              <Brain
+                size={14}
+                className="text-primary-400 group-hover:text-primary-600"
+              />
               <span className="font-medium">Reasoning</span>
               {isThinkingExpanded ? (
                 <ChevronUp size={14} className="text-primary-400" />
@@ -478,20 +650,20 @@ export default function ChatPage() {
             </button>
             {isThinkingExpanded && (
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-3 text-xs text-primary-600 mb-3 animate-fadeIn">
-                <MarkdownRenderer 
-                  content={thinkingContent} 
-                  variant="assistant" 
+                <MarkdownRenderer
+                  content={thinkingContent}
+                  variant="assistant"
                   className="prose-sm"
                 />
               </div>
             )}
           </div>
         )}
-        
+
         {/* Main Response - use cleaned content */}
-        <MarkdownRenderer 
-          content={mainContent} 
-          variant={isUser ? 'user' : 'assistant'} 
+        <MarkdownRenderer
+          content={mainContent}
+          variant={isUser ? 'user' : 'assistant'}
         />
       </div>
     );
@@ -505,7 +677,9 @@ export default function ChatPage() {
           <GoggaLogo size="xl" variant="animated" />
           <div>
             <h1 className="text-2xl font-bold tracking-tight">GOGGA</h1>
-            <span className="text-xs text-primary-300 font-medium">South African AI</span>
+            <span className="text-xs text-primary-300 font-medium">
+              South African AI
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -518,7 +692,7 @@ export default function ChatPage() {
             <Plus size={16} />
             <span>New</span>
           </button>
-          
+
           {/* History Button (JIVE/JIGGA only) */}
           {isPersistenceEnabled && (
             <button
@@ -530,24 +704,53 @@ export default function ChatPage() {
               <span>{sessions.length}</span>
             </button>
           )}
-          
+
+          {/* Location Badge */}
+          <LocationBadge
+            location={userLocation}
+            weather={weatherData}
+            onClick={() => {
+              if (!userLocation) {
+                setShowManualLocation(true);
+              }
+            }}
+            onEdit={() => {
+              // Pre-fill with current location when editing
+              if (userLocation) {
+                setManualLocationInput(
+                  userLocation.city || userLocation.street || ''
+                );
+              }
+              setShowManualLocation(true);
+            }}
+            onClear={clearLocation}
+          />
+
           {/* Token Count Display */}
-          <div 
+          <div
             className="header-btn bg-primary-700/50 cursor-default"
-            title={`Today: ${formatTokenCount(tokenStats.today.totalTokens)} tokens | All time: ${formatTokenCount(tokenStats.allTime.totalTokens)} tokens`}
+            title={`Today: ${formatTokenCount(
+              tokenStats.today.totalTokens
+            )} tokens | All time: ${formatTokenCount(
+              tokenStats.allTime.totalTokens
+            )} tokens`}
           >
             <Hash size={14} className="text-primary-300" />
             <span className="text-sm font-medium">
-              {tokenStats.isLoading ? '...' : formatTokenCount(tokenStats.allTime.totalTokens)}
+              {tokenStats.isLoading
+                ? '...'
+                : formatTokenCount(tokenStats.allTime.totalTokens)}
             </span>
           </div>
-          
+
           {/* Tier Badge */}
           <div className={`header-btn font-bold ${TIER_DISPLAY[tier].color}`}>
             <TierIcon size={16} />
             <span>{TIER_DISPLAY[tier].name}</span>
           </div>
-          <span className="header-btn bg-primary-600/50 text-[10px]">Beta v1.0</span>
+          <span className="header-btn bg-primary-600/50 text-[10px]">
+            Beta v1.0
+          </span>
         </div>
       </header>
 
@@ -555,26 +758,167 @@ export default function ChatPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* History Sidebar (JIVE/JIGGA) */}
         {isPersistenceEnabled && showHistory && (
-          <div className="w-64 border-r border-primary-200 bg-white overflow-y-auto">
-            <div className="p-3 border-b border-primary-200">
-              <h3 className="text-sm font-bold text-primary-700">Chat History</h3>
-            </div>
-            <div className="divide-y divide-primary-100">
-              {sessions.map(session => (
+          <div className="w-72 border-r border-primary-200 bg-white overflow-y-auto flex flex-col">
+            {/* Header with actions */}
+            <div className="p-3 border-b border-primary-200 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-primary-700">
+                Chat History
+              </h3>
+              <div className="flex items-center gap-1">
+                {/* Toggle select mode */}
                 <button
+                  onClick={() => {
+                    setHistorySelectMode(!historySelectMode);
+                    setSelectedSessions(new Set());
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    historySelectMode
+                      ? 'bg-primary-200 text-primary-700'
+                      : 'hover:bg-primary-100 text-primary-500'
+                  }`}
+                  title={
+                    historySelectMode
+                      ? 'Cancel selection'
+                      : 'Select chats to delete'
+                  }
+                >
+                  <span className="material-icons text-lg">
+                    {historySelectMode ? 'close' : 'checklist'}
+                  </span>
+                </button>
+                {/* Delete all */}
+                {sessions.length > 1 && (
+                  <button
+                    onClick={() => {
+                      if (
+                        confirm(
+                          'Delete ALL chat history? This cannot be undone.'
+                        )
+                      ) {
+                        deleteAllSessions();
+                        setHistorySelectMode(false);
+                        setSelectedSessions(new Set());
+                      }
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-red-100 text-primary-500 hover:text-red-600 transition-colors"
+                    title="Delete all chats"
+                  >
+                    <span className="material-icons text-lg">delete_sweep</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Bulk delete bar (when in select mode with selections) */}
+            {historySelectMode && selectedSessions.size > 0 && (
+              <div className="p-2 bg-red-50 border-b border-red-200 flex items-center justify-between">
+                <span className="text-sm text-red-700">
+                  {selectedSessions.size} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedSessions(new Set())}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (
+                        confirm(
+                          `Delete ${selectedSessions.size} selected chat(s)?`
+                        )
+                      ) {
+                        await deleteMultipleSessions(
+                          Array.from(selectedSessions)
+                        );
+                        setSelectedSessions(new Set());
+                        setHistorySelectMode(false);
+                      }
+                    }}
+                    className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1"
+                  >
+                    <span className="material-icons text-sm">delete</span>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Session list */}
+            <div className="flex-1 overflow-y-auto divide-y divide-primary-100">
+              {sessions.map((session) => (
+                <div
                   key={session.id}
-                  onClick={() => loadSession(session.id!)}
-                  className={`w-full p-3 text-left hover:bg-primary-50 transition-colors ${
+                  className={`group relative flex items-stretch hover:bg-primary-50 transition-colors ${
                     session.id === chatSessionId ? 'bg-primary-100' : ''
                   }`}
                 >
-                  <div className="text-sm font-medium text-primary-800 truncate">
-                    {session.title}
-                  </div>
-                  <div className="text-xs text-primary-500 mt-1">
-                    {session.messageCount} messages • {new Date(session.updatedAt).toLocaleDateString()}
-                  </div>
-                </button>
+                  {/* Checkbox (select mode) */}
+                  {historySelectMode && (
+                    <label className="flex items-center px-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedSessions.has(session.id!)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedSessions);
+                          if (e.target.checked) {
+                            newSelected.add(session.id!);
+                          } else {
+                            newSelected.delete(session.id!);
+                          }
+                          setSelectedSessions(newSelected);
+                        }}
+                        className="w-4 h-4 rounded border-primary-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    </label>
+                  )}
+
+                  {/* Session button */}
+                  <button
+                    onClick={() => {
+                      if (historySelectMode) {
+                        // Toggle selection in select mode
+                        const newSelected = new Set(selectedSessions);
+                        if (newSelected.has(session.id!)) {
+                          newSelected.delete(session.id!);
+                        } else {
+                          newSelected.add(session.id!);
+                        }
+                        setSelectedSessions(newSelected);
+                      } else {
+                        loadSession(session.id!);
+                      }
+                    }}
+                    className="flex-1 p-3 text-left"
+                  >
+                    <div className="text-sm font-medium text-primary-800 truncate pr-8">
+                      {session.title}
+                    </div>
+                    <div className="text-xs text-primary-500 mt-1">
+                      {session.messageCount} messages •{' '}
+                      {new Date(session.updatedAt).toLocaleDateString()}
+                    </div>
+                  </button>
+
+                  {/* Delete button (individual, visible on hover when not in select mode) */}
+                  {!historySelectMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Delete this chat?')) {
+                          deleteSessionById(session.id!);
+                        }
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg 
+                               opacity-0 group-hover:opacity-100 hover:bg-red-100 
+                               text-primary-400 hover:text-red-600 transition-all"
+                      title="Delete this chat"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -588,36 +932,50 @@ export default function ChatPage() {
                 <div className="mb-6">
                   <GoggaLogo size="xl" variant="animated" className="mx-auto" />
                 </div>
-                <h2 className="text-2xl font-bold text-primary-700 mb-2">Sawubona!</h2>
-                <p className="text-base text-primary-500 mb-1">How can I help you today?</p>
+                <h2 className="text-2xl font-bold text-primary-700 mb-2">
+                  Sawubona!
+                </h2>
+                <p className="text-base text-primary-500 mb-1">
+                  How can I help you today?
+                </p>
                 <p className="text-sm text-primary-400 mb-8">
                   Legal questions, code, translations, or just a lekker chat.
                 </p>
-                
+
                 <div className="flex justify-center gap-6 flex-wrap">
                   <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm border border-primary-200 min-w-[140px] hover-lift">
                     <div className="p-2 bg-primary-100 rounded-lg">
                       <Zap size={20} className="text-primary-600" />
                     </div>
-                    <span className="text-sm font-bold text-primary-700">FREE</span>
+                    <span className="text-sm font-bold text-primary-700">
+                      FREE
+                    </span>
                     <span className="text-xs text-primary-500">Llama 3.3</span>
                   </div>
                   <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm border border-primary-200 min-w-[140px] hover-lift">
                     <div className="p-2 bg-primary-100 rounded-lg">
                       <Brain size={20} className="text-primary-600" />
                     </div>
-                    <span className="text-sm font-bold text-primary-700">JIVE</span>
-                    <span className="text-xs text-primary-500">Cerebras + CePO</span>
+                    <span className="text-sm font-bold text-primary-700">
+                      JIVE
+                    </span>
+                    <span className="text-xs text-primary-500">
+                      Cerebras + CePO
+                    </span>
                   </div>
                   <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm border border-primary-200 min-w-[140px] hover-lift">
                     <div className="p-2 bg-primary-100 rounded-lg">
                       <Sparkles size={20} className="text-primary-600" />
                     </div>
-                    <span className="text-sm font-bold text-primary-700">JIGGA</span>
-                    <span className="text-xs text-primary-500">Qwen 3 32B + RAG</span>
+                    <span className="text-sm font-bold text-primary-700">
+                      JIGGA
+                    </span>
+                    <span className="text-xs text-primary-500">
+                      Qwen 3 32B + RAG
+                    </span>
                   </div>
                 </div>
-                
+
                 {tier !== 'free' && (
                   <p className="text-xs text-primary-400 mt-6 flex items-center justify-center gap-1">
                     <Database size={12} />
@@ -628,17 +986,25 @@ export default function ChatPage() {
             )}
 
             {displayMessages.map((m, i) => (
-              <div 
-                key={i} 
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} chat-bubble`}
+              <div
+                key={i}
+                className={`flex ${
+                  m.role === 'user' ? 'justify-end' : 'justify-start'
+                } chat-bubble`}
               >
-                <div className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div
+                  className={`flex gap-3 max-w-[85%] ${
+                    m.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                  }`}
+                >
                   {/* Avatar - clean with no background for bot */}
-                  <div className={`flex-shrink-0 flex items-center justify-center ${
-                    m.role === 'user' 
-                      ? 'w-8 h-8 rounded-full bg-primary-800' 
-                      : 'w-10 h-10'
-                  }`}>
+                  <div
+                    className={`flex-shrink-0 flex items-center justify-center ${
+                      m.role === 'user'
+                        ? 'w-8 h-8 rounded-full bg-primary-800'
+                        : 'w-10 h-10'
+                    }`}
+                  >
                     {m.role === 'user' ? (
                       <User size={16} className="text-white" />
                     ) : (
@@ -646,28 +1012,46 @@ export default function ChatPage() {
                     )}
                   </div>
 
-                  <div className={`message-bubble ${
-                    m.role === 'user'
-                      ? 'message-bubble-user'
-                      : 'message-bubble-assistant'
-                  }`}>
+                  <div
+                    className={`message-bubble ${
+                      m.role === 'user'
+                        ? 'message-bubble-user'
+                        : 'message-bubble-assistant'
+                    }`}
+                  >
                     {renderMessageContent(m as ChatMessage, i)}
-                    
+
                     {/* Metadata Display - Clean button indicators */}
                     {m.meta && (
                       <div className="message-meta">
                         {m.meta.tier && (
-                          <button type="button" className="meta-badge meta-badge-tier">{m.meta.tier}</button>
+                          <button
+                            type="button"
+                            className="meta-badge meta-badge-tier"
+                          >
+                            {m.meta.tier}
+                          </button>
                         )}
                         {m.meta.layer && (
                           <button type="button" className="meta-badge">
-                            {m.meta.layer === 'jive_speed' ? <Zap size={12} /> : <Brain size={12} />}
-                            <span>{m.meta.layer.replace('jive_', '').replace('jigga_', '')}</span>
+                            {m.meta.layer === 'jive_speed' ? (
+                              <Zap size={12} />
+                            ) : (
+                              <Brain size={12} />
+                            )}
+                            <span>
+                              {m.meta.layer
+                                .replace('jive_', '')
+                                .replace('jigga_', '')}
+                            </span>
                           </button>
                         )}
                         {/* CePO indicator - shows when provider includes cepo */}
                         {m.meta.provider?.includes('cepo') && (
-                          <button type="button" className="meta-badge meta-badge-cepo">
+                          <button
+                            type="button"
+                            className="meta-badge meta-badge-cepo"
+                          >
                             <Brain size={12} />
                             <span>CePO</span>
                           </button>
@@ -678,13 +1062,17 @@ export default function ChatPage() {
                             <span>{m.meta.latency_seconds.toFixed(2)}s</span>
                           </button>
                         )}
-                        {m.meta.cost_zar !== undefined && m.meta.cost_zar > 0 && (
-                          <button type="button" className="meta-badge">
-                            <span>R{m.meta.cost_zar.toFixed(4)}</span>
-                          </button>
-                        )}
+                        {m.meta.cost_zar !== undefined &&
+                          m.meta.cost_zar > 0 && (
+                            <button type="button" className="meta-badge">
+                              <span>R{m.meta.cost_zar.toFixed(4)}</span>
+                            </button>
+                          )}
                         {m.meta.rag_context && (
-                          <button type="button" className="meta-badge meta-badge-rag">
+                          <button
+                            type="button"
+                            className="meta-badge meta-badge-rag"
+                          >
                             <Database size={12} />
                             <span>RAG</span>
                           </button>
@@ -726,53 +1114,79 @@ export default function ChatPage() {
                 {/* RAG Mode Button */}
                 {tier === 'jigga' && (
                   <button
-                    onClick={() => setRagMode(ragMode === 'analysis' ? 'authoritative' : 'analysis')}
+                    onClick={() =>
+                      setRagMode(
+                        ragMode === 'analysis' ? 'authoritative' : 'analysis'
+                      )
+                    }
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
-                      totalDocsActive > 0 
-                        ? 'bg-blue-100 text-blue-700' 
+                      totalDocsActive > 0
+                        ? 'bg-blue-100 text-blue-700'
                         : 'bg-gray-100 text-gray-500'
                     }`}
                   >
-                    {ragMode === 'analysis' ? <FileSearch size={12} /> : <BookOpen size={12} />}
-                    <span>{ragMode === 'analysis' ? 'Analysis' : 'Authoritative'}</span>
+                    {ragMode === 'analysis' ? (
+                      <FileSearch size={12} />
+                    ) : (
+                      <BookOpen size={12} />
+                    )}
+                    <span>
+                      {ragMode === 'analysis' ? 'Analysis' : 'Authoritative'}
+                    </span>
                     {totalDocsActive > 0 && (
-                      <span className="text-[10px] opacity-70">({totalDocsActive} docs)</span>
+                      <span className="text-[10px] opacity-70">
+                        ({totalDocsActive} docs)
+                      </span>
                     )}
                   </button>
                 )}
-                
+
                 {/* Storage Usage */}
                 {(tier === 'jive' || tier === 'jigga') && (
                   <div className="flex items-center gap-1 text-[10px] text-gray-400">
                     <HardDrive size={10} />
                     <span>
-                      {storageUsage.totalMB.toFixed(1)}/{storageUsage.maxMB}MB
-                      {' '}({documents.length}/{getMaxDocsPerSession()} docs)
+                      {storageUsage.totalMB.toFixed(1)}/{storageUsage.maxMB}MB (
+                      {documents.length}/{getMaxDocsPerSession()} docs)
                     </span>
                   </div>
                 )}
-                
+
                 {/* RAG Help Text */}
                 <span className="text-[10px] text-gray-400 flex-1">
-                  {tier === 'jive' && documents.length === 0 && 'Upload up to 5 docs for this chat'}
-                  {tier === 'jigga' && totalDocsActive === 0 && 'Upload or select docs from all sessions'}
-                  {tier === 'jigga' && totalDocsActive > 0 && ragMode === 'analysis' && 'AI analyzes from docs'}
-                  {tier === 'jigga' && totalDocsActive > 0 && ragMode === 'authoritative' && 'AI quotes directly'}
+                  {tier === 'jive' &&
+                    documents.length === 0 &&
+                    'Upload up to 5 docs for this chat'}
+                  {tier === 'jigga' &&
+                    totalDocsActive === 0 &&
+                    'Upload or select docs from all sessions'}
+                  {tier === 'jigga' &&
+                    totalDocsActive > 0 &&
+                    ragMode === 'analysis' &&
+                    'AI analyzes from docs'}
+                  {tier === 'jigga' &&
+                    totalDocsActive > 0 &&
+                    ragMode === 'authoritative' &&
+                    'AI quotes directly'}
                 </span>
               </div>
             )}
 
-            <div className="max-w-4xl mx-auto flex items-end gap-2">
-              <AudioRecorder onAudioReady={handleAudio} />
+            <div className="max-w-4xl mx-auto flex items-center gap-2">
+              {/* Left buttons - aligned center with 48px height */}
+              <div className="flex items-center gap-2 h-12">
+                <AudioRecorder onAudioReady={handleAudio} />
 
-              {/* File Upload (JIVE/JIGGA) */}
-              {tier !== 'free' && (
-                <FileUpload 
-                  tier={tier} 
-                  onUpload={handleFileUpload}
-                  disabled={isLoading || ragLoading}
-                />
-              )}
+                {/* File Upload (JIVE/JIGGA) */}
+                {tier !== 'free' && (
+                  <FileUpload
+                    tier={tier}
+                    onUpload={handleFileUpload}
+                    disabled={isLoading || ragLoading}
+                    isEmbedding={isEmbedding}
+                  />
+                )}
+              </div>
 
               {/* Input Container with Wand inside */}
               <div className="flex-1 relative">
@@ -783,23 +1197,26 @@ export default function ChatPage() {
                     // Auto-resize
                     e.target.style.height = 'auto';
                     const maxHeight = window.innerHeight * 0.5;
-                    e.target.style.height = Math.min(e.target.scrollHeight, maxHeight) + 'px';
+                    e.target.style.height =
+                      Math.min(e.target.scrollHeight, maxHeight) + 'px';
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
                       e.preventDefault();
                       sendMessage(input);
                     }
                   }}
-                  className="input-field pr-14 min-h-[48px] max-h-[50vh] resize-none overflow-y-auto"
-                  placeholder={tier === 'jigga' && documents.length > 0 
-                    ? `Ask about your documents (${ragMode} mode)...` 
-                    : "Type your message..."}
+                  className="input-field pr-14 h-12 min-h-[48px] max-h-[50vh] resize-none overflow-y-auto py-3"
+                  placeholder={
+                    tier === 'jigga' && documents.length > 0
+                      ? `Ask about your documents (${ragMode} mode)...`
+                      : 'Type your message...'
+                  }
                   disabled={isLoading || isGeneratingImage}
                   rows={1}
                 />
-                
-                {/* Enhance Button - Inside Input */}
+
+                {/* Enhance Button - Inside Input with Sparkle Animation */}
                 <button
                   onClick={enhancePrompt}
                   disabled={!input.trim() || isEnhancing || isLoading}
@@ -810,42 +1227,45 @@ export default function ChatPage() {
                   {isEnhancing ? (
                     <div className="animate-spin h-5 w-5 border-2 border-primary-500 border-t-transparent rounded-full" />
                   ) : (
-                    <div className="relative">
-                      <Wand2 size={20} className="group-hover:scale-110 transition-transform" />
-                      {/* Sparkle animation */}
-                      <Sparkles 
-                        size={10} 
-                        className="absolute -top-1 -right-1 text-primary-400 group-hover:text-primary-600 animate-pulse" 
+                    <div className="relative wand-animate">
+                      <MagicWandIcon
+                        size={20}
+                        className="group-hover:scale-110 transition-transform"
                       />
                     </div>
                   )}
                 </button>
               </div>
 
-              {/* Image Generation Button */}
-              <button
-                onClick={generateImage}
-                disabled={!input.trim() || isGeneratingImage || isLoading}
-                className="action-btn bg-primary-200 text-primary-800 hover:bg-primary-300"
-                aria-label="Generate image"
-                title={`Generate image (${tier === 'free' ? 'LongCat FREE' : 'FLUX 1.1 Pro'})`}
-              >
-                {isGeneratingImage ? (
-                  <div className="animate-spin h-5 w-5 border-2 border-primary-800 border-t-transparent rounded-full" />
-                ) : (
-                  <ImageIcon size={20} />
-                )}
-              </button>
+              {/* Right buttons - aligned center with 48px height */}
+              <div className="flex items-center gap-2 h-12">
+                {/* Image Generation Button */}
+                <button
+                  onClick={generateImage}
+                  disabled={!input.trim() || isGeneratingImage || isLoading}
+                  className="action-btn h-12 w-12 bg-primary-200 text-primary-800 hover:bg-primary-300"
+                  aria-label="Generate image"
+                  title={`Generate image (${
+                    tier === 'free' ? 'LongCat FREE' : 'FLUX 1.1 Pro'
+                  })`}
+                >
+                  {isGeneratingImage ? (
+                    <div className="animate-spin h-5 w-5 border-2 border-primary-800 border-t-transparent rounded-full" />
+                  ) : (
+                    <ImageGenerateIcon size={20} />
+                  )}
+                </button>
 
-              {/* Send Button */}
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isLoading || isGeneratingImage}
-                className="action-btn bg-primary-800 text-white hover:bg-primary-700 disabled:bg-primary-300"
-                aria-label="Send message"
-              >
-                <Send size={20} />
-              </button>
+                {/* Send Button */}
+                <button
+                  onClick={() => sendMessage(input)}
+                  disabled={!input.trim() || isLoading || isGeneratingImage}
+                  className="action-btn h-12 w-12 bg-primary-800 text-white hover:bg-primary-700 disabled:bg-primary-300"
+                  aria-label="Send message"
+                >
+                  <SendArrowIcon size={20} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -853,6 +1273,14 @@ export default function ChatPage() {
         {/* Sidebar for JIVE/JIGGA RAG */}
         {canUpload && (
           <div className="w-72 border-l border-primary-200 bg-white p-3 overflow-y-auto hidden lg:block">
+            {/* Header with FileStore Icon */}
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-primary-100">
+              <FileStoreIcon size={20} className="text-primary-600" />
+              <span className="font-semibold text-primary-800 text-sm">
+                Document Store
+              </span>
+            </div>
+
             {/* JIGGA: Browse All Documents Button */}
             {canSelectFromAllSessions && (
               <button
@@ -869,7 +1297,7 @@ export default function ChatPage() {
                 )}
               </button>
             )}
-            
+
             {/* Current Session Documents */}
             {documents.length > 0 ? (
               <DocumentList
@@ -886,7 +1314,7 @@ export default function ChatPage() {
                 <p className="text-xs mt-1">Upload files to enable RAG</p>
               </div>
             )}
-            
+
             {/* Selected docs from other sessions (JIGGA) */}
             {selectedDocIds.length > 0 && (
               <div className="mt-4 pt-4 border-t border-primary-200">
@@ -895,9 +1323,12 @@ export default function ChatPage() {
                 </div>
                 <div className="space-y-1">
                   {allDocuments
-                    .filter(d => selectedDocIds.includes(d.id!))
-                    .map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between text-xs p-2 bg-blue-50 rounded">
+                    .filter((d) => selectedDocIds.includes(d.id!))
+                    .map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between text-xs p-2 bg-blue-50 rounded"
+                      >
                         <span className="truncate flex-1">{doc.filename}</span>
                         <button
                           onClick={() => handleSelectDoc(doc.id!)}
@@ -920,7 +1351,9 @@ export default function ChatPage() {
         onTierChange={handleTierChange}
         onAdminChange={setIsAdmin}
         documentCount={documents.length}
-        ragEnabled={isRAGEnabled && (documents.length > 0 || selectedDocIds.length > 0)}
+        ragEnabled={
+          isRAGEnabled && (documents.length > 0 || selectedDocIds.length > 0)
+        }
       />
 
       {/* Prompt Manager (Admin only) */}
@@ -934,8 +1367,10 @@ export default function ChatPage() {
               <div>
                 <h3 className="font-bold text-primary-800">Select Documents</h3>
                 <p className="text-xs text-primary-500 mt-1">
-                  Choose up to {RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION - documents.length} more documents
-                  ({selectedDocIds.length} selected, {documents.length} in session)
+                  Choose up to{' '}
+                  {RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION - documents.length}{' '}
+                  more documents ({selectedDocIds.length} selected,{' '}
+                  {documents.length} in session)
                 </p>
               </div>
               <button
@@ -945,7 +1380,7 @@ export default function ChatPage() {
                 ✕
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4">
               {allDocuments.length === 0 ? (
                 <div className="text-center text-primary-400 py-8">
@@ -955,22 +1390,25 @@ export default function ChatPage() {
               ) : (
                 <div className="space-y-2">
                   {allDocuments
-                    .filter(doc => !documents.some(d => d.id === doc.id)) // Exclude current session docs
-                    .map(doc => {
+                    .filter((doc) => !documents.some((d) => d.id === doc.id)) // Exclude current session docs
+                    .map((doc) => {
                       const isSelected = selectedDocIds.includes(doc.id!);
-                      const canSelect = isSelected || (documents.length + selectedDocIds.length) < RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION;
-                      
+                      const canSelect =
+                        isSelected ||
+                        documents.length + selectedDocIds.length <
+                          RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION;
+
                       return (
                         <button
                           key={doc.id}
                           onClick={() => canSelect && handleSelectDoc(doc.id!)}
                           disabled={!canSelect && !isSelected}
                           className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                            isSelected 
-                              ? 'bg-blue-50 border-blue-300' 
-                              : canSelect 
-                                ? 'bg-white border-primary-200 hover:border-primary-400' 
-                                : 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
+                            isSelected
+                              ? 'bg-blue-50 border-blue-300'
+                              : canSelect
+                              ? 'bg-white border-primary-200 hover:border-primary-400'
+                              : 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
                           }`}
                         >
                           <div className="flex items-center gap-2">
@@ -986,7 +1424,8 @@ export default function ChatPage() {
                                 {doc.filename}
                               </div>
                               <div className="text-xs text-primary-500 mt-1">
-                                {(doc.size / 1024).toFixed(1)}KB • {doc.chunkCount} chunks •{' '}
+                                {(doc.size / 1024).toFixed(1)}KB •{' '}
+                                {doc.chunkCount} chunks •{' '}
                                 {new Date(doc.createdAt).toLocaleDateString()}
                               </div>
                             </div>
@@ -997,11 +1436,12 @@ export default function ChatPage() {
                 </div>
               )}
             </div>
-            
+
             <div className="p-4 border-t border-primary-200 flex justify-between items-center">
               <div className="text-xs text-primary-500">
                 <HardDrive size={12} className="inline mr-1" />
-                Storage: {storageUsage.totalMB.toFixed(1)}/{storageUsage.maxMB}MB ({storageUsage.usedPercent.toFixed(0)}%)
+                Storage: {storageUsage.totalMB.toFixed(1)}/{storageUsage.maxMB}
+                MB ({storageUsage.usedPercent.toFixed(0)}%)
               </div>
               <button
                 onClick={() => setShowDocSelector(false)}
@@ -1013,6 +1453,47 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Location Permission Prompt Modal */}
+      <LocationPrompt
+        show={showLocationPrompt}
+        isLoading={isLoadingLocation}
+        error={locationError}
+        canRetry={canRetry}
+        retryCount={retryCount}
+        onAllow={requestLocation}
+        onRetry={retryLocation}
+        onDeny={declineLocation}
+        onManualEntry={() => {
+          declineLocation();
+          setShowManualLocation(true);
+        }}
+      />
+
+      {/* Manual Location Entry Modal */}
+      <ManualLocationInput
+        show={showManualLocation}
+        value={manualLocationInput}
+        isLoading={isLoadingLocation}
+        isDetecting={isLoadingLocation}
+        error={locationError}
+        onChange={setManualLocationInput}
+        onSubmit={() => setManualLocation(manualLocationInput)}
+        onSelectSuggestion={(suggestion) => {
+          // Use direct location setting with coordinates (skips geocoding, fetches weather)
+          setLocationFromSuggestion(suggestion);
+        }}
+        onAutoDetect={() => {
+          // Close manual modal and trigger auto-detection
+          setShowManualLocation(false);
+          setManualLocationInput('');
+          requestLocation();
+        }}
+        onCancel={() => {
+          setShowManualLocation(false);
+          setManualLocationInput('');
+        }}
+      />
     </div>
   );
 }

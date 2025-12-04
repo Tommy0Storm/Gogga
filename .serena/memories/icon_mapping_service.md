@@ -8,6 +8,7 @@ Universal icon mapping service for normalizing alternative icon names to their c
 
 - `gogga-frontend/src/lib/iconMapping.ts` - Core mapping service
 - `gogga-frontend/src/components/Icon.tsx` - React icon components
+- `gogga-frontend/src/components/GoggaIcons.tsx` - Custom GOGGA SVG icons
 
 ## Features
 
@@ -44,39 +45,62 @@ Universal icon mapping service for normalizing alternative icon names to their c
 | `ActionIcon` | Common action buttons (add/edit/delete/save/etc) |
 | `DomainIconSet` | Icon picker for specific domains |
 
-## Usage Examples
+---
 
-```typescript
-import { normalizeIcon, IconMappingService } from '@/lib/iconMapping';
-import { Icon, StatusIcon, TierIcon } from '@/components/Icon';
+## Custom GOGGA Icons (`/components/GoggaIcons.tsx`)
 
-// Direct normalization
-normalizeIcon('fireplace'); // → 'local_fire_department'
-normalizeIcon('done'); // → 'check_circle'
+### Original Icons
+| Icon | Component | Purpose |
+|------|-----------|---------|
+| FileStoreIcon | `<FileStoreIcon />` | Filing cabinet for document store sidebar |
+| SettingsGearIcon | `<SettingsGearIcon />` | Admin panel settings |
+| SendArrowIcon | `<SendArrowIcon />` | Paper plane for message send button |
+| ImageGenerateIcon | `<ImageGenerateIcon />` | Picture + sparkle for AI image generation |
+| MagicWandIcon | `<MagicWandIcon />` | Wand with sparkles for prompt enhancement (animated) |
+| DocumentRAGIcon | `<DocumentRAGIcon />` | Document with vector nodes for RAG docs |
+| BrainThinkingIcon | `<BrainThinkingIcon />` | Brain with pulse for JIGGA thinking |
 
-// Service object
-IconMappingService.normalize('whatshot'); // → 'local_fire_department'
-IconMappingService.getAlternatives('check_circle'); // → ['done', 'verified', 'task_alt', 'done_all']
+### Ultra Premium Menu Icons
+| Icon | Component | Purpose |
+|------|-----------|---------|
+| FreeTierIcon | `<FreeTierIcon />` | Lightning bolt with circuit paths - FREE tier |
+| JiveTierIcon | `<JiveTierIcon />` | Brain with neural network - JIVE tier |
+| JiggaTierIcon | `<JiggaTierIcon />` | Diamond with vectors - JIGGA tier |
+| NewChatIcon | `<NewChatIcon />` | Speech bubble with plus - new conversation |
+| HistoryIcon | `<HistoryIcon />` | Clock with document stack - chat history |
+| TokenCounterIcon | `<TokenCounterIcon />` | Hash with meter bar - token usage |
+| MicrophoneIcon | `<MicrophoneIcon />` | Elegant mic with grill - audio input |
+| UploadIcon | `<UploadIcon />` | Document with arrow - file upload |
+| DashboardIcon | `<DashboardIcon />` | Grid with chart element - analytics |
+| MemoryIcon | `<MemoryIcon />` | Brain chip with pins - long-term memory |
+| SemanticSearchIcon | `<SemanticSearchIcon />` | Magnifying glass with sparkle - AI search |
+| CepoIcon | `<CepoIcon />` | Brain with planning arrows - CePO indicator |
 
-// React components
-<Icon name="fireplace" size={24} />  // Renders local_fire_department
-<StatusIcon status="success" />       // Green check_circle
-<TierIcon tier="JIGGA" />            // Purple star
+## CSS Animations
+
+### Magic Wand Animation (`globals.css`)
+```css
+.wand-animate {
+  animation: wand-sparkle 2s ease-in-out infinite, wand-glow 1.5s ease-in-out infinite;
+}
+.wand-animate:hover {
+  animation-duration: 0.8s, 0.6s; /* Faster on hover */
+}
 ```
 
-## Domain Categories
+## Usage
+```tsx
+import { MagicWandIcon, JiggaTierIcon, GoggaIcons } from '@/components/GoggaIcons';
 
-1. **cooking** - Fire, blender, kitchen tools, restaurant
-2. **technology** - Errors, success, loops, storage, security
-3. **health** - Heart, pills, fitness, hospital
-4. **business** - Money, trends, payments, documents
-5. **learning** - School, assignments, help, video
-6. **travel** - Flight, hotel, car, location
-7. **social** - Mail, phone, video, share
-8. **media** - Image, video, music, edit
-9. **weather** - Sun, cloud, thermostat
-10. **sports** - Fitness center
-11. **home** - Chair, bed, bath, cleaning
-12. **shopping** - Cart, bag, payment, shipping
-13. **environment** - Recycle, water, nature
-14. **general** - Add, info, expand, navigation
+// Direct import
+<MagicWandIcon size={20} className="wand-animate" />
+
+// Namespace import
+<GoggaIcons.JiggaTier size={24} strokeWidth={1.5} />
+```
+
+## Design Principles
+- All icons: Monochrome (black, currentColor)
+- Material Icons style with custom detail work
+- Configurable: `size`, `className`, `strokeWidth` props
+- Tier icons have finer detail (strokeWidth: 1.5 default)

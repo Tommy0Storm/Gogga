@@ -1,9 +1,59 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* Import Quicksand font - 400, 500, 600, 700 weights */
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
+/* Tailwind v4 Theme Configuration */
+@theme {
+  /* Monochrome color palette */
+  --color-primary-50: #fafafa;
+  --color-primary-100: #f5f5f5;
+  --color-primary-200: #e5e5e5;
+  --color-primary-300: #d4d4d4;
+  --color-primary-400: #a3a3a3;
+  --color-primary-500: #737373;
+  --color-primary-600: #525252;
+  --color-primary-700: #404040;
+  --color-primary-800: #262626;
+  --color-primary-900: #171717;
+  --color-primary-950: #0a0a0a;
+  
+  /* South African accent colors */
+  --color-sa-green: #007749;
+  --color-sa-gold: #FFB612;
+  --color-sa-red: #DE3831;
+  --color-sa-blue: #002395;
+  --color-sa-black: #000000;
+  
+  /* Typography */
+  --font-family-sans: 'Quicksand', system-ui, sans-serif;
+  
+  /* Border radius */
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  
+  /* Shadows */
+  --shadow-soft: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 4px 16px -4px rgba(0, 0, 0, 0.12);
+  --shadow-elevated: 0 8px 24px -8px rgba(0, 0, 0, 0.15);
+  
+  /* Animations */
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-slide-up: slideUp 0.4s ease-out;
+  --animate-pulse-soft: pulseSoft 2s infinite;
+  
+  @keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes pulseSoft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+}
 
 :root {
   --foreground-rgb: 23, 23, 23;
@@ -404,6 +454,63 @@
 .gogga-leg-right {
   transform-origin: 24px 22px;
   animation: gogga-leg-kick 1.5s ease-in-out infinite 0.75s;
+}
+
+/* Magic Wand Animation - Sparkle trail effect */
+@keyframes wand-sparkle {
+  0%, 100% {
+    filter: drop-shadow(0 0 0px transparent);
+    transform: rotate(0deg);
+  }
+  25% {
+    filter: drop-shadow(2px -2px 3px rgba(115, 115, 115, 0.6));
+    transform: rotate(-5deg);
+  }
+  50% {
+    filter: drop-shadow(0 -3px 6px rgba(115, 115, 115, 0.8));
+    transform: rotate(0deg);
+  }
+  75% {
+    filter: drop-shadow(-2px -2px 3px rgba(115, 115, 115, 0.6));
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes wand-glow {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sparkle-burst {
+  0% {
+    transform: scale(0.8) rotate(0deg);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2) rotate(10deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8) rotate(0deg);
+    opacity: 0.5;
+  }
+}
+
+.wand-animate {
+  animation: wand-sparkle 2s ease-in-out infinite, wand-glow 1.5s ease-in-out infinite;
+}
+
+.wand-animate:hover {
+  animation: wand-sparkle 0.8s ease-in-out infinite, wand-glow 0.6s ease-in-out infinite;
+}
+
+/* Sparkle effect on hover */
+.sparkle-animate {
+  animation: sparkle-burst 1.5s ease-in-out infinite;
 }
 
 /* Tier badges */

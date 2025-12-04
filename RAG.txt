@@ -1,0 +1,529 @@
+Below are the minimal, practical files you asked for. Drop them under src/ (or utils/ / components/ as shown), run npm i onnxruntime-web chart.js react-chartjs-2 dexie, restart TS server, and test.
+
+I kept things short and pragmatic; you’ll get a working local-RAG Jive (context-only) and Jigga (semantic + analytics).
+
+1) Finalised utils/embeddingEngine.ts (ONNX + tokenizer loader)
+
+Place model files in /public/models/e5-small-v2/ (or adapt modelPath).
+
+// src/utils/embeddingEngine.ts
+// Uses onnxruntime-web to load intfloat/e5-small-v2 model (ONNX).
+// Exports EmbeddingEngine { generateDocumentEmbeddings(doc) -> Promise<number[][]> }
+
+import * as ort from 'onnxruntime-web';
+import type { StoredDocument } from '../types/documents';
+
+type TokenizerJSON = {
+  // minimal expected interface for quick encode; replace with real tokenizer JSON or small JS tokenizer
+  encode: (text: string) => { ids: number[] };
+};
+
+export class EmbeddingEngine {
+  private session: ort.InferenceSession | null = null;
+  private tokenizer: TokenizerJSON | null = null;
+  private modelPath: string;
+  private tokenizerPath: string;
+  private maxLength = 512;
+
+  constructor(opts?: { modelPath?: string; tokenizerPath?: string }) {
+    this.modelPath = opts?.modelPath ?? '/models/e5-small-v2/model.onnx';
+    this.tokenizerPath = opts?.tokenizerPath ?? '/models/e5-small-v2/tokenizer.json';
+  }
+
+  async init() {
+    if (this.session) return;
+    // create session with basic options
+    this.session = await ort.InferenceSession.create(this.modelPath, { executionProviders: ['wasm'] });
+    // load tokenizer JSON (a minimal tokenizer JSON must be provided or swap in a JS tokenizer)
+    try {
+      const r = await fetch(this.tokenizerPath);
+      this.tokenizer = await r.json();
+      // ensure encoder exists: fallback simple whitespace encoder if not present
+      if (typeof this.tokenizer.encode !== 'function') {
+        this.tokenizer = { encode: (t: string) => ({ ids: t.split(/\s+/).map((_, i) => (i % 300) + 1) }) };
+      }
+    } catch (e) {
+      // fallback simple encoder (deterministic but coarse)
+      console.warn('[EmbeddingEngine] tokenizer load failed, using fallback encoder', e);
+      this.tokenizer = { encode: (t: string) => ({ ids: t.split(/\s+/).map((_, i) => (i % 300) + 1) }) };
+    }
+  }
+
+  chunkText(text: string, approxWords = 250): string[] {
+    const words = text.split(/\s+/);
+    const chunks: string[] = [];
+    for (let i = 0; i < words.length; i += approxWords) {
+      chunks.push(words.slice(i, i + approxWords).join(' '));
+    }
+    if (chunks.length === 0) chunks.push(text);
+    return chunks;
+  }
+
+  private pad(ids: number[], maxLen: number) {
+    const padded = new Int32Array(maxLen).fill(0);
+    const mask = new Int32Array(maxLen).fill(0);
+    for (let i = 0; i < Math.min(ids.length, maxLen); i++) {
+      padded[i] = ids[i];
+      mask[i] = 1;
+    }
+    return { padded, mask };
+  }
+
+  // Public API called by App.tsx
+  async generateDocumentEmbeddings(doc: StoredDocument): Promise<number[][]> {
+    if (!doc || !doc.text) return [];
+    await this.init();
+    const chunks = this.chunkText(doc.text, 200);
+    const resultVectors: number[][] = [];
+
+    for (const chunk of chunks) {
+      // prefix as retrieval text - mirrors HF usage: "query: "
+      const text = 'query: ' + chunk.slice(0, 4000);
+      const encoded = this.tokenizer!.encode(text); // { ids: number[] }
+      const { padded, mask } = this.pad(encoded.ids, this.maxLength);
+
+      // ONNX runtime expects typed array input; names depend on model export - adapt if necessary
+      const inputIds = new ort.Tensor('int32', padded, [1, this.maxLength]);
+      const attention = new ort.Tensor('int32', mask, [1, this.maxLength]);
+
+      const feeds: Record<string, ort.Tensor> = {
+        input_ids: inputIds,
+        attention_mask: attention,
+      };
+
+      const out = await this.session!.run(feeds);
+      // typical token encoder output name might be 'last_hidden_state' or 'hidden_states'; examine ONNX file if needed
+      const arr = out.last_hidden_state ?? out['output'] ?? out['hidden_states'];
+      // arr.data is Float32Array of shape [1, seq_len, hidden_dim] — we average-pool non-masked tokens
+      const raw = arr.data as Float32Array;
+      const seqLen = (arr.dims && arr.dims.length === 3) ? arr.dims[1] : this.maxLength;
+      const dim = (arr.dims && arr.dims.length === 3) ? arr.dims[2] : (raw.length / seqLen);
+      // average pooling with mask
+      const v = new Float32Array(dim).fill(0);
+      let count = 0;
+      for (let t = 0; t < seqLen; t++) {
+        if (mask[t] === 0) continue;
+        count++;
+        for (let d = 0; d < dim; d++) {
+          v[d] += raw[t * dim + d];
+        }
+      }
+      const denom = count || 1;
+      for (let i = 0; i < dim; i++) v[i] /= denom;
+
+      // L2 normalize
+      let norm = 0;
+      for (let i = 0; i < dim; i++) norm += v[i] * v[i];
+      norm = Math.sqrt(norm) || 1.0;
+      const vec = Array.from(v.map(x => x / norm));
+      resultVectors.push(vec);
+    }
+
+    return resultVectors;
+  }
+}
+
+
+Notes:
+
+You must adapt input_ids / attention_mask names if your ONNX export uses different names — inspect the model or use an ONNX tool.
+
+Put real tokenizer files into /public/models/e5-small-v2/tokenizer.json or swap in a JS tokenizer library for precise tokenization.
+
+2) utils/ragManager.ts — provides Basic RAG (JIVE) and Semantic RAG (JIGGA)
+
+This manager exposes two retrieval modes: basic (context-only: attach top N documents raw) and semantic (vector ranking).
+
+// src/utils/ragManager.ts
+import type { StoredDocument } from '../types/documents';
+import { EmbeddingEngine } from './embeddingEngine';
+
+// simple cosine helper
+function cosine(a: number[], b: number[]) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+
+export type RagMode = 'basic'|'semantic';
+
+export class RagManager {
+  private engine: EmbeddingEngine;
+  private documentsByConv: Map<string, StoredDocument[]> = new Map();
+  // runtime cache of embeddings (not persisted to Dexie)
+  private embeddingsCache: Map<string, number[][]> = new Map();
+
+  constructor(engine?: EmbeddingEngine) {
+    this.engine = engine ?? new EmbeddingEngine();
+  }
+
+  setDocuments(convId: string, docs: StoredDocument[]) {
+    this.documentsByConv.set(convId, docs);
+  }
+
+  async ensureEmbeddingsForConv(convId: string) {
+    const docs = this.documentsByConv.get(convId) ?? [];
+    for (const doc of docs) {
+      if (!this.embeddingsCache.has(doc.id)) {
+        const embs = await this.engine.generateDocumentEmbeddings(doc);
+        this.embeddingsCache.set(doc.id, embs);
+      }
+    }
+  }
+
+  // For JIVE: attach top-K documents by simple recency or naive keyword match
+  async retrieveBasic(convId: string, query: string, k = 3): Promise<StoredDocument[]> {
+    const docs = this.documentsByConv.get(convId) ?? [];
+    // naive: prefer most recently uploaded documents that contain any query token
+    const q = query.toLowerCase().split(/\s+/);
+    const scored = docs.map(d => {
+      const txt = (d.text || '').toLowerCase();
+      const hits = q.reduce((acc, t) => acc + (txt.includes(t) ? 1 : 0), 0);
+      const recency = d.uploadedAt || 0;
+      return { d, score: hits * 1000 + (recency / (1000*60*60)) };
+    }).sort((a,b)=>b.score-a.score);
+    return scored.slice(0,k).map(s => s.d);
+  }
+
+  // For JIGGA: vector similarity ranking across chunks
+  async retrieveSemantic(convId: string, query: string, k = 5): Promise<{doc: StoredDocument, score: number, chunkIndex: number}[]> {
+    await this.ensureEmbeddingsForConv(convId);
+    // embed query
+    const qDoc = { id: `__q_${Date.now()}`, name: '__query', text: query, uploadedAt: Date.now() };
+    const qEmbChunks = await this.engine.generateDocumentEmbeddings(qDoc); // typically 1 chunk
+    const docs = this.documentsByConv.get(convId) ?? [];
+    const results: { doc: StoredDocument, score: number, chunkIndex: number }[] = [];
+    for (const doc of docs) {
+      const embs = this.embeddingsCache.get(doc.id) ?? [];
+      for (let i=0;i<embs.length;i++) {
+        const s = cosine(qEmbChunks[0], embs[i]);
+        results.push({ doc, score: s, chunkIndex: i });
+      }
+    }
+    results.sort((a,b)=>b.score-a.score);
+    return results.slice(0,k);
+  }
+
+  // Unified retrieval API used by App
+  async retrieve(convId: string, query: string, mode: RagMode, opts?: { k?: number }) {
+    if (mode === 'basic') {
+      return { mode: 'basic', items: await this.retrieveBasic(convId, query, opts?.k ?? 3) };
+    } else {
+      return { mode: 'semantic', items: await this.retrieveSemantic(convId, query, opts?.k ?? 5) };
+    }
+  }
+
+  // helpers to remove cached embeddings on document delete
+  removeDocument(docId: string) {
+    this.embeddingsCache.delete(docId);
+    // also remove from documentsByConv entries
+    for (const [convId, docs] of this.documentsByConv.entries()) {
+      this.documentsByConv.set(convId, docs.filter(d => d.id !== docId));
+    }
+  }
+}
+
+
+Usage:
+
+For JIVE tier: call ragManager.retrieve(convId, query, 'basic') — attach returned docs raw as context (no ranked chunking).
+
+For JIGGA tier: call ragManager.retrieve(convId, query, 'semantic') — use these ranked chunks as RAG authoritative context.
+
+3) File Upload / Delete Modal component (basic)
+
+Place under src/components/FileModal.tsx. Keeps file upload, delete, and auto-attach logic. Works with your conversationManagerRef used in App.tsx (per earlier app). 
+
+App (1)
+
+// src/components/FileModal.tsx
+import React, { useState } from 'react';
+import type { StoredDocument } from '../types/documents';
+import { EmbeddingEngine } from '../utils/embeddingEngine';
+
+type Props = {
+  conversationId: string | null;
+  onClose: () => void;
+  onDocumentsChange?: (docs: StoredDocument[]) => void;
+  conversationManager: any; // conversationManagerRef.current
+  mode: 'FREE'|'JIVE'|'JIGGA';
+};
+
+export const FileModal: React.FC<Props> = ({ conversationId, onClose, onDocumentsChange, conversationManager, mode }) => {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<StoredDocument[]>([]);
+
+  React.useEffect(() => {
+    if (!conversationId) return;
+    const docs = conversationManager.getDocumentsForConversation(conversationId);
+    setFiles(docs || []);
+  }, [conversationId, conversationManager]);
+
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      const doc: StoredDocument = {
+        id: `doc_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        text,
+        uploadedAt: Date.now(),
+        conversationId: conversationId || undefined
+      };
+      // For JIVE and JIGGA both we persist doc, but embeddings only generated for JIGGA runtime:
+      conversationManager.addDocumentToConversation(conversationId!, doc);
+      setFiles(prev => [doc, ...prev]);
+      onDocumentsChange?.(conversationManager.getDocumentsForConversation(conversationId!));
+    } catch (e: any) {
+      setError(e.message || 'Failed to read file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onFileInput = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const f = ev.target.files?.[0];
+    if (!f) return;
+    handleFile(f);
+    ev.target.value = '';
+  };
+
+  const removeDoc = (id: string) => {
+    conversationManager.removeDocumentFromConversation(conversationId, id);
+    setFiles(prev => prev.filter(d => d.id !== id));
+    onDocumentsChange?.(conversationManager.getDocumentsForConversation(conversationId!));
+  };
+
+  return (
+    <div className="p-4 bg-white rounded shadow">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold">Files (Mode: {mode})</h3>
+        <button onClick={onClose}>Close</button>
+      </div>
+
+      <div className="mb-3">
+        <input type="file" onChange={onFileInput} />
+        {uploading && <div className="text-sm">Uploading...</div>}
+        {error && <div className="text-red-600 text-sm">{error}</div>}
+      </div>
+
+      <div className="">
+        {files.length === 0 && <div className="text-sm text-gray-600">No files</div>}
+        <ul>
+          {files.map(f => (
+            <li key={f.id} className="flex items-center justify-between py-2 border-b">
+              <div className="truncate">{f.name} <span className="text-xs text-gray-500">({Math.round((f.size||0)/1024)} KB)</span></div>
+              <div className="flex gap-2">
+                <button onClick={() => { /* attach to next message */ }}>Attach</button>
+                <button onClick={() => removeDoc(f.id)} className="text-red-600">Delete</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+
+Notes:
+
+Files are saved to conversationManager; embeddings are intentionally NOT produced here to keep upload cheap for JIVE. Embeddings will be generated by RagManager on-demand for JIGGA.
+
+4) Jigga subscription: RAG Analytics + Live Performance Graph (component)
+
+Uses react-chartjs-2 + chart.js. Basic auto-updating graph for similarity/throughput over time. Expand into full dashboard later.
+
+// src/components/RagMonitorPanel.tsx
+import React, { useEffect, useState, useRef } from 'react';
+import { Line } from 'react-chartjs-2';
+import type { RagManager } from '../utils/ragManager';
+
+type Props = {
+  ragManager: RagManager;
+  conversationId: string;
+  pollInterval?: number; // ms
+  visible: boolean;
+};
+
+export const RagMonitorPanel: React.FC<Props> = ({ ragManager, conversationId, pollInterval = 5000, visible }) => {
+  const [dataPoints, setDataPoints] = useState<{ts:number, score:number, qps:number}[]>([]);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    let lastCount = 0;
+    const t = setInterval(async () => {
+      // For demo: compute average top similarity of a synthetic heartbeat query (or track from metrics store)
+      const q = 'monitor heartbeat';
+      const res = await ragManager.retrieve(conversationId, q, 'semantic', { k: 3 });
+      const items = (res as any).items ?? [];
+      const avgTop = items.length ? (items.reduce((s: any, it: any)=> s + it.score, 0) / items.length) : 0;
+      // simplistic qps measurement (just a placeholder)
+      const now = Date.now();
+      setDataPoints(prev => [...prev.slice(-100), { ts: now, score: avgTop, qps: Math.random() * 2 + 0.5 }]);
+    }, pollInterval);
+    return () => clearInterval(t);
+  }, [visible, ragManager, conversationId, pollInterval]);
+
+  const chartData = {
+    labels: dataPoints.map(p => new Date(p.ts).toLocaleTimeString()),
+    datasets: [
+      { label: 'Avg top similarity', data: dataPoints.map(p => p.score), tension: 0.2, fill: false },
+      { label: 'QPS (approx)', data: dataPoints.map(p => p.qps), tension: 0.2, fill: false, yAxisID: 'qps' }
+    ]
+  };
+
+  const options = {
+    scales: {
+      y: [{ type: 'linear', position: 'left', title: { display: true, text: 'Similarity' } },
+          { id: 'qps', position: 'right', title: { display: true, text: 'QPS' } }]
+    }
+  };
+
+  return (
+    <div>
+      <h4 className="font-bold">RAG Monitor (JIGGA)</h4>
+      <div style={{height: 260}}>
+        <Line data={chartData} options={options as any} />
+      </div>
+      <div className="text-sm text-gray-600 mt-2">Live feed of top similarity and approximate QPS.</div>
+    </div>
+  );
+};
+
+
+Important: this demo monitor uses ragManager.retrieve to compute a sample metric. For production, implement a metrics store (see next file) and emit real events e.g. retrieval latency, query length, items returned, top similarity, memory/CPU usage, errors.
+
+5) Minimal Metrics Collector (in-memory) for Jigga subscription
+
+Add src/utils/metrics.ts:
+
+// src/utils/metrics.ts
+type Metric = { ts: number; convId?: string; type: string; value: any };
+const buffer: Metric[] = [];
+
+export function emitMetric(m: Metric) {
+  buffer.push(m);
+  // keep buffer small
+  if (buffer.length > 5000) buffer.shift();
+}
+
+export function getRecentMetrics(convId?: string, limit = 200) {
+  return buffer.filter(x => !convId || x.convId === convId).slice(-limit);
+}
+
+
+Integrate into RagManager.retrieve() to emitMetric({ts:Date.now(), convId, type:'retrieval', value:{mode, latency, topScore}}).
+
+6) Adjust Dexie schema: do not store embeddings
+
+If you use Dexie for persistence, change schema to remove embeddings column (store embeddings in ephemeral blob storage or a separate model artifact). Example Dexie schema:
+
+// src/utils/db.ts (Dexie)
+import Dexie from 'dexie';
+import type { StoredDocument } from '../types/documents';
+
+export class AppDB extends Dexie {
+  conversations: Dexie.Table<any, string>;
+  documents: Dexie.Table<StoredDocument, string>;
+
+  constructor() {
+    super('vcb_db_v2');
+    this.version(2).stores({
+      conversations: 'id, title, createdAt',
+      // note: DO NOT include embeddings in schema
+      documents: 'id, name, conversationId, uploadedAt'
+    });
+    this.conversations = this.table('conversations');
+    this.documents = this.table('documents');
+  }
+}
+
+export const db = new AppDB();
+
+
+Migration note: if you had embeddings stored in Dexie v1, create a small migration script to export them and delete the column. The new approach keeps embeddings ephemeral (in-memory cache) or stored as separate files if you must persist them.
+
+7) IDE instructions (brief):
+
+Add/replace these in your tsconfig.json:
+
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "lib": ["ES2020", "DOM"],
+    "baseUrl": "src",
+    "paths": { "utils/*": ["utils/*"], "components/*": ["components/*"], "types/*": ["types/*"] },
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+
+
+Add src/global.d.ts:
+
+declare global {
+  interface Window {
+    vcbApp?: any;
+  }
+}
+export {};
+
+
+Install packages:
+
+npm i onnxruntime-web chart.js react-chartjs-2 dexie
+
+
+Restart TypeScript server.
+
+8) Where to wire the tier logic in your App (concept)
+
+Maintain a userTier state already in App.tsx (free|jive|jigga) — you have it. Use it to:
+
+FREE: disable file modal, rag retrieval
+
+JIVE: allow FileModal, call ragManager.retrieve(convId, query, 'basic') (basic context-only)
+
+JIGGA: allow FileModal + run semantic ragManager.retrieve(convId, query, 'semantic'), show monitor, compute metrics and write to analytics
+
+When building the prompt for the LLM:
+
+For JIVE: append the raw documents (e.g. doc.text) up to small token threshold — do NOT include ranked chunks or vector metadata; use them only as context hints.
+
+For JIGGA: append the top-ranked chunks (with score and chunk id) and set RAG authoritative mode flag in system prompt so the local LLM treats those chunks as higher-weight evidence.
+
+Ensure that you log metrics in RagManager.retrieve() (latency, top score, items returned) using emitMetric().
+
+9) Example: where to add the small metric emit in ragManager.retrieve() (snippet)
+// inside retrieveSemantic after computing results
+const top = results[0];
+emitMetric({ ts: Date.now(), convId, type: 'retrieval', value: { mode: 'semantic', k: results.length, topScore: top?.score ?? 0, latencyMs: latency } });
+
+
+Then your RagMonitorPanel can read getRecentMetrics(convId) and render better dashboards.
+
+10) Final notes about monetisation logic you described
+
+JIVE = limited RAG context-only: keep it cheap — no embeddings generation during upload; generate ephemeral embeddings only when performing the JIVE retrieve (but prefer naive basic retrieval). This reduces CPU & model access on free servers.
+
+JIGGA = full semantic RAG: compute embeddings at upload OR on demand, persist in a secure store (or allow recompute), present analytics/dashboard widgets and export usage stats. Use those usage stats to gate subscription features.
+
+UI: keep the RAG monitor behind the Jigga paywall. Show a preview card (locked) to entice upgrades.

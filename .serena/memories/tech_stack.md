@@ -16,11 +16,11 @@
 - **Payments**: PayFast (South African gateway)
 
 ## Frontend
-- **Framework**: Next.js 14 with App Router
+- **Framework**: Next.js 16.0.7 with App Router + Turbopack
 - **Language**: TypeScript
-- **UI**: React 18
-- **Styling**: Tailwind CSS (Monochrome theme)
-- **Icons**: Lucide React (black only)
+- **UI**: React 19.1.0
+- **Styling**: Tailwind CSS 4.1.17 (Monochrome theme, @theme CSS config)
+- **Icons**: Lucide React 0.555.0 + Custom GoggaIcons (black only)
 - **Font**: Quicksand (400, 700)
 - **HTTP**: Axios
 
@@ -46,10 +46,21 @@ asyncpg>=0.29.0
 ## Dependencies (Frontend)
 ```json
 {
-  "next": "14.0.4",
-  "react": "^18.2.0",
+  "next": "16.0.7",
+  "react": "19.1.0",
+  "tailwindcss": "4.1.17",
+  "@tailwindcss/postcss": "4.1.17",
+  "@huggingface/transformers": "^3.8.1",
+  "onnxruntime-web": "^1.23.2",
+  "lucide-react": "0.555.0",
   "axios": "^1.6.2",
-  "lucide-react": "^0.294.0",
-  "tailwindcss": "^3.3.6"
+  "recharts": "^3.5.1",
+  "dexie": "^4.2.1"
 }
 ```
+
+## Turbopack Configuration Notes
+The frontend uses Turbopack (Next.js 16 default). Key configuration for browser-only ML libraries:
+- Node.js modules (`fs`, `path`, `crypto`) aliased to `./src/empty.ts` 
+- `sharp` and `onnxruntime-node` also aliased to empty module
+- `@huggingface/transformers` uses browser-specific build via `{ browser: '...' }` condition
