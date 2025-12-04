@@ -1,66 +1,86 @@
 # GOGGA Architecture Details
 
-## Quadricameral Routing Engine
+## Tier-Based Cognitive Routing
 
-The core innovation of GOGGA is the 4-layer Quadricameral Router located in `gogga-backend/app/core/router.py`.
+GOGGA uses a 3-tier subscription model with distinct routing logic and pricing.
 
-### Model Architecture
+### Tier Overview
 
-| Layer | Model ID | CePO | Speed | Use Case |
-|-------|----------|------|-------|----------|
-| SPEED | `llama3.1-8b` | ❌ | ~2,200 t/s | Fast factual responses |
-| COMPLEX | `qwen-3-235b-a22b-instruct-2507` | ❌ | ~1,400 t/s | Nuanced conversations |
-| REASONING | `llama3.1-8b` | ✅ | ~2,200 t/s | Fast multi-step reasoning |
-| DEEP_REASONING | `qwen-3-235b-a22b-instruct-2507` | ✅ | ~1,400 t/s | Complex analysis |
+| Tier | Text Model | Image Generator | Prompt Enhancement | Cost (Text) | Cost (Image) |
+|------|------------|-----------------|-------------------|-------------|--------------|
+| FREE | OpenRouter Llama 3.3 70B FREE | OpenRouter LongCat Flash FREE | Llama 3.3 70B FREE | $0.00 | $0.00 |
+| JIVE | Cerebras Llama 3.3 70B (+CePO) | DeepInfra FLUX 1.1 Pro (200/mo) | Llama 3.3 70B FREE | $0.10/$0.10 per M | $0.04/image |
+| JIGGA | Cerebras Qwen 3 32B (think/no_think) | DeepInfra FLUX 1.1 Pro (1000/mo) | Llama 3.3 70B FREE | $0.40/$0.80 per M | $0.04/image |
 
-### CePO (Cerebras Planning Optimization)
-- Runs as Docker sidecar container (OptiLLM with `--approach cepo`)
-- Provides iterative chain-of-thought planning
-- Automatic fallback to non-CePO layer if unavailable
-- Configuration: `CEPO_URL=http://localhost:8080`, `CEPO_ENABLED=true`
+### Pricing Summary (USD)
 
-### Classification Logic
-1. **Deep Reasoning Detection**: "deep analysis", "comprehensive review", "thoroughly examine"
-2. **Fast Reasoning Detection**: "explain", "analyze", "how does", "solve step by step"
-3. **Complex Keywords**: Legal, coding, translation context
-4. **Length Analysis**: Messages > 50 words route to Complex Layer
-5. **Default Fallback**: Simple queries use Speed Layer
+**Text (per Million Tokens):**
+- FREE: $0.00 input, $0.00 output
+- JIVE (Llama 3.3 70B): $0.10 input, $0.10 output
+- JIGGA (Qwen 3 32B): $0.40 input, $0.80 output
 
-### Complex Keywords Trigger
-- Legal: `popia`, `constitution`, `act`, `contract`, `rights`, `bbbee`, `fica`
-- Coding: `code`, `function`, `python`, `api`, `database`, `docker`
-- Translation: `translate`, `isizulu`, `isixhosa`, `afrikaans`
+**Images (per image):**
+- FREE (LongCat): $0.00
+- JIVE/JIGGA (FLUX 1.1 Pro): $0.04
 
-## System Prompts
-
-Each layer has a tailored system prompt in the router.
-
-## PayFast Integration
-
-### Signature Generation
-1. Sort parameters alphabetically
-2. Filter empty values
-3. URL encode with `quote_plus` (spaces → +)
-4. Append passphrase
-5. MD5 hash
-
-### Key Requirements
-- Subscription frequency `3` = Monthly
-- Cancellation uses `PUT` request (not DELETE)
-- Sandbox mode with `testing=true` query param
-
-## Data Flow
-
+### FREE Tier Pipeline
 ```
-User Message
-     ↓
-QuadricameralRouter.classify_intent()
-     ↓
-SPEED / COMPLEX / REASONING / DEEP_REASONING
-     ↓
-CePO Sidecar (if reasoning) OR Cerebras SDK
-     ↓
-Cost Tracker → Token Ledger
-     ↓
-Response with Metadata
+TEXT:  User → Llama 3.3 70B FREE → Response
+IMAGE: User → Llama 3.3 (enhance) → LongCat Flash → Image
 ```
+
+### JIVE Tier Pipeline
+```
+TEXT (simple):  User → Llama 3.3 70B → Response
+TEXT (complex): User → Llama 3.3 70B + CePO → Response
+IMAGE:          User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
+```
+
+### JIGGA Tier Pipeline
+```
+TEXT (thinking): User → Qwen 3 32B (temp=0.6, top_p=0.95, top_k=20, min_p=0) → Deep reasoning
+TEXT (fast):     User → Qwen 3 32B + /no_think (temp=0.7, top_p=0.8, top_k=20, min_p=0) → Fast response
+IMAGE:           User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
+```
+
+### Qwen Thinking Mode (JIGGA)
+- **Thinking ON** (default): temp=0.6, top_p=0.95, top_k=20, min_p=0, max_tokens=8000
+- **Fast mode** (/no_think): temp=0.7, top_p=0.8, top_k=20, min_p=0, max_tokens=8000
+- **Thinking block**: Output wrapped in `<think>...</think>` tags, parsed and returned separately
+- **UI display**: Thinking block shown collapsed, main response shown expanded
+- **NEVER use greedy decoding (temp=0)** - causes performance degradation and endless repetitions
+- **Language rule**: Model MUST respond in same language as user prompt
+- Long context (131k+): Auto-disable thinking for accuracy
+
+### Token Tracking
+- ALL tiers track token usage (tied to user email)
+- FREE tier: No cost but still counted for usage limits
+- JIVE/JIGGA: Costs calculated and tracked per-request
+
+### Universal Prompt Enhancement
+- Available to ALL tiers via "Enhance" button
+- Uses OpenRouter Llama 3.3 70B FREE
+- Works for both text and image prompts
+- Cost: FREE
+
+### Image Generation Limits
+| Tier | Limit | Generator | Cost |
+|------|-------|-----------|------|
+| FREE | 50/month | LongCat Flash | $0.00 |
+| JIVE | 200/month | FLUX 1.1 Pro | $0.04/image |
+| JIGGA | 1000/month | FLUX 1.1 Pro | $0.04/image |
+
+### Separation Rule
+- TEXT → Cerebras (JIVE/JIGGA) or OpenRouter (FREE)
+- IMAGE → OpenRouter (prompt) + LongCat/FLUX (generation)
+- ENHANCEMENT → OpenRouter Llama 3.3 FREE (universal)
+
+### JIGGA-Exclusive Features
+| Feature | Description |
+|---------|-------------|
+| Semantic RAG | Vector similarity ranking for context retrieval |
+| RAG Authoritative | Quotes directly from documents only |
+| RAG Analytics Dashboard | Document usage, query patterns, retrieval stats |
+| Live RAG Performance Graph | Real-time visualization of RAG operations |
+| Vector Similarity Scoring | Relevance scores for retrieved chunks |
+| Monitoring / Performance Stats | Query latency, cache hits, retrieval accuracy |

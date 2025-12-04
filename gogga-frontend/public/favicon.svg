@@ -1,0 +1,55 @@
+<svg width="32" height="32" viewBox="0 0 36 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gogga Cricket - No Background Circle -->
+  <defs>
+    <linearGradient id="cricketBodyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#525252" />
+      <stop offset="100%" stop-color="#404040" />
+    </linearGradient>
+    <linearGradient id="cricketAccentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d4d4d4" />
+      <stop offset="50%" stop-color="#a3a3a3" />
+      <stop offset="100%" stop-color="#737373" />
+    </linearGradient>
+    <linearGradient id="cricketWingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#737373" />
+      <stop offset="100%" stop-color="#525252" />
+    </linearGradient>
+  </defs>
+  
+  <g transform="translate(0, 2)">
+    <!-- Thorax (middle body) -->
+    <ellipse cx="18" cy="18" rx="8" ry="10" fill="url(#cricketBodyGradient)"/>
+    
+    <!-- Head -->
+    <circle cx="18" cy="7" r="6" fill="url(#cricketBodyGradient)"/>
+    
+    <!-- Eyes - two bright dots -->
+    <circle cx="15" cy="6" r="2" fill="#fafafa"/>
+    <circle cx="21" cy="6" r="2" fill="#fafafa"/>
+    <circle cx="15" cy="6" r="1" fill="#262626"/>
+    <circle cx="21" cy="6" r="1" fill="#262626"/>
+    
+    <!-- Antennae -->
+    <path d="M14 3 Q10 -2 6 0" stroke="url(#cricketAccentGradient)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    <path d="M22 3 Q26 -2 30 0" stroke="url(#cricketAccentGradient)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    
+    <!-- Wings (folded) -->
+    <path d="M10 12 Q4 18 8 28 Q12 20 10 12" fill="url(#cricketWingGradient)" opacity="0.8"/>
+    <path d="M26 12 Q32 18 28 28 Q24 20 26 12" fill="url(#cricketWingGradient)" opacity="0.8"/>
+    
+    <!-- Abdomen (lower body) -->
+    <ellipse cx="18" cy="28" rx="6" ry="5" fill="url(#cricketBodyGradient)"/>
+    
+    <!-- Back legs (powerful cricket legs) -->
+    <path d="M12 22 Q6 20 4 26 Q2 32 8 34" stroke="url(#cricketAccentGradient)" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <path d="M24 22 Q30 20 32 26 Q34 32 28 34" stroke="url(#cricketAccentGradient)" stroke-width="2" stroke-linecap="round" fill="none"/>
+    
+    <!-- Front legs -->
+    <path d="M12 16 Q8 14 6 18" stroke="url(#cricketAccentGradient)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    <path d="M24 16 Q28 14 30 18" stroke="url(#cricketAccentGradient)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    
+    <!-- Middle legs -->
+    <path d="M11 20 Q6 22 5 26" stroke="url(#cricketAccentGradient)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    <path d="M25 20 Q30 22 31 26" stroke="url(#cricketAccentGradient)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

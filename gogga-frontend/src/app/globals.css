@@ -2,44 +2,218 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Quicksand font */
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;700&display=swap');
+/* Import Quicksand font - 400, 500, 600, 700 weights */
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
 
 :root {
   --foreground-rgb: 23, 23, 23;
   --background-rgb: 250, 250, 250;
+  --font-quicksand: 'Quicksand', system-ui, sans-serif;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
-  font-family: 'Quicksand', sans-serif;
+/* Base layer for typography */
+@layer base {
+  html {
+    font-family: var(--font-quicksand);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    @apply text-primary-900 bg-primary-50;
+    font-family: var(--font-quicksand);
+    font-weight: 400;
+    line-height: 1.6;
+  }
+  
+  /* Ensure minimum 400 weight throughout - Quicksand doesn't go below 400 */
+  * {
+    font-family: var(--font-quicksand);
+    font-weight: inherit;
+  }
+  
+  /* Prevent any element from using font-weight below 400 */
+  *:not(strong):not(b):not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+    font-weight: 400;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+    line-height: 1.2;
+  }
+  
+  h1 { @apply text-3xl md:text-4xl; }
+  h2 { @apply text-2xl md:text-3xl; }
+  h3 { @apply text-xl md:text-2xl; }
+  h4 { @apply text-lg md:text-xl; }
+  
+  p {
+    @apply text-base leading-relaxed;
+  }
+  
+  strong, b {
+    @apply font-bold;
+  }
 }
 
-/* Monochrome theme styles */
+/* Monochrome theme components */
 @layer components {
   .btn-primary {
-    @apply bg-primary-800 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-bold;
+    @apply bg-primary-800 text-white px-5 py-2.5 rounded-xl hover:bg-primary-700 
+           transition-all duration-200 font-semibold shadow-sm hover:shadow-md
+           active:scale-[0.98];
   }
   
   .btn-secondary {
-    @apply bg-primary-200 text-primary-800 px-4 py-2 rounded-lg hover:bg-primary-300 transition-colors;
+    @apply bg-primary-200 text-primary-800 px-5 py-2.5 rounded-xl hover:bg-primary-300 
+           transition-all duration-200 font-medium;
+  }
+  
+  .btn-ghost {
+    @apply text-primary-600 hover:text-primary-800 hover:bg-primary-100 
+           px-3 py-2 rounded-lg transition-all duration-200;
+  }
+  
+  /* Header buttons - uniform size */
+  .header-btn {
+    @apply flex items-center gap-1.5 text-xs h-9 px-3 
+           bg-primary-700 hover:bg-primary-600 rounded-lg 
+           transition-all duration-200 font-medium whitespace-nowrap;
+  }
+  
+  /* Action buttons for input area */
+  .action-btn {
+    @apply p-3 rounded-full disabled:bg-gray-100 disabled:text-gray-400 
+           disabled:cursor-not-allowed transition-all duration-200
+           hover:scale-105 active:scale-95;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-primary-200 p-4;
+    @apply bg-white rounded-2xl shadow-sm border border-primary-200 p-5
+           hover:shadow-md transition-shadow duration-200;
   }
   
   .input-field {
-    @apply w-full border border-primary-300 rounded-full py-3 px-5 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all bg-white;
+    @apply w-full border border-primary-300 rounded-2xl py-3.5 px-5 
+           focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent 
+           transition-all duration-200 bg-white text-primary-800
+           placeholder:text-primary-400 font-normal;
+  }
+  
+  /* Chat message bubbles */
+  .message-bubble {
+    @apply p-4 rounded-2xl shadow-sm transition-all duration-200;
+  }
+  
+  .message-bubble-user {
+    @apply bg-primary-800 text-white rounded-tr-sm;
+  }
+  
+  .message-bubble-assistant {
+    @apply bg-white text-primary-800 border border-primary-200 rounded-tl-sm;
+  }
+  
+  /* Rendered markdown content styling */
+  .prose-gogga {
+    @apply text-primary-800 leading-relaxed;
+  }
+  
+  .prose-gogga h1 {
+    @apply text-2xl font-bold text-primary-900 mt-6 mb-3 pb-2 border-b border-primary-200;
+  }
+  
+  .prose-gogga h2 {
+    @apply text-xl font-bold text-primary-900 mt-5 mb-2;
+  }
+  
+  .prose-gogga h3 {
+    @apply text-lg font-semibold text-primary-800 mt-4 mb-2;
+  }
+  
+  .prose-gogga p {
+    @apply mb-3 last:mb-0;
+  }
+  
+  .prose-gogga ul {
+    @apply list-disc list-outside ml-5 mb-3 space-y-1;
+  }
+  
+  .prose-gogga ol {
+    @apply list-decimal list-outside ml-5 mb-3 space-y-1;
+  }
+  
+  .prose-gogga li {
+    @apply pl-1;
+  }
+  
+  .prose-gogga strong {
+    @apply font-bold text-primary-900;
+  }
+  
+  .prose-gogga em {
+    @apply italic text-primary-700;
+  }
+  
+  .prose-gogga code {
+    @apply bg-primary-100 text-primary-800 px-1.5 py-0.5 rounded text-sm font-mono;
+  }
+  
+  .prose-gogga pre {
+    @apply bg-primary-900 text-primary-100 p-4 rounded-xl overflow-x-auto mb-3 text-sm;
+  }
+  
+  .prose-gogga pre code {
+    @apply bg-transparent text-inherit p-0;
+  }
+  
+  .prose-gogga blockquote {
+    @apply border-l-4 border-primary-400 pl-4 py-1 italic text-primary-600 my-3 bg-primary-50 rounded-r-lg;
+  }
+  
+  .prose-gogga a {
+    @apply text-primary-700 underline underline-offset-2 hover:text-primary-900 transition-colors;
+  }
+  
+  .prose-gogga hr {
+    @apply border-primary-200 my-4;
+  }
+  
+  .prose-gogga table {
+    @apply w-full border-collapse mb-3 text-sm;
+  }
+  
+  .prose-gogga th {
+    @apply bg-primary-100 text-left p-2 font-semibold border border-primary-200;
+  }
+  
+  .prose-gogga td {
+    @apply p-2 border border-primary-200;
+  }
+  
+  /* User message prose (light text on dark) */
+  .prose-gogga-user {
+    @apply text-white leading-relaxed;
+  }
+  
+  .prose-gogga-user code {
+    @apply bg-white/20 text-white;
+  }
+  
+  .prose-gogga-user strong {
+    @apply font-bold text-white;
+  }
+  
+  .prose-gogga-user a {
+    @apply text-white/90 underline;
   }
 }
 
 /* Chat bubble animations */
-@keyframes fadeIn {
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -47,38 +221,273 @@ body {
   }
 }
 
-.chat-bubble {
-  animation: fadeIn 0.3s ease-out;
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-/* Recording pulse animation */
-@keyframes pulse {
-  0%, 100% {
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.chat-bubble {
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+.animate-fadeIn {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+/* Thinking/loading animation */
+@keyframes thinking {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
     opacity: 1;
   }
-  50% {
-    opacity: 0.5;
+}
+
+.thinking-dot {
+  animation: thinking 1.4s infinite ease-in-out both;
+}
+
+.thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+.thinking-dot:nth-child(3) { animation-delay: 0s; }
+
+/* Recording pulse animation */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
   }
 }
 
-.animate-pulse {
-  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Scrollbar styling - monochrome */
+/* Smooth hover transitions */
+.hover-lift {
+  @apply transition-all duration-200;
+}
+
+.hover-lift:hover {
+  @apply -translate-y-0.5 shadow-md;
+}
+
+/* Scrollbar styling - refined monochrome */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f5f5f5;
+  @apply bg-primary-100 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #a3a3a3;
-  border-radius: 3px;
+  @apply bg-primary-400 rounded-full;
+  transition: background 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #737373;
+  @apply bg-primary-500;
+}
+
+/* Focus visible styles */
+:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+}
+
+/* Selection color */
+::selection {
+  @apply bg-primary-200 text-primary-900;
+}
+
+/* Smooth page transitions */
+.page-transition {
+  @apply transition-all duration-300 ease-out;
+}
+
+/* Gogga Logo Animations */
+@keyframes gogga-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes gogga-antenna-wave {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes gogga-leg-kick {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-10deg);
+  }
+}
+
+@keyframes gogga-pulse-glow {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.gogga-bounce {
+  animation: gogga-bounce 2s ease-in-out infinite;
+}
+
+.gogga-pulse {
+  animation: gogga-pulse-glow 2s ease-in-out infinite;
+}
+
+.gogga-antenna-left {
+  transform-origin: 14px 3px;
+  animation: gogga-antenna-wave 3s ease-in-out infinite;
+}
+
+.gogga-antenna-right {
+  transform-origin: 22px 3px;
+  animation: gogga-antenna-wave 3s ease-in-out infinite 0.5s;
+}
+
+.gogga-leg-left {
+  transform-origin: 12px 22px;
+  animation: gogga-leg-kick 1.5s ease-in-out infinite;
+}
+
+.gogga-leg-right {
+  transform-origin: 24px 22px;
+  animation: gogga-leg-kick 1.5s ease-in-out infinite 0.75s;
+}
+
+/* Tier badges */
+.tier-badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.tier-badge-free {
+  @apply bg-primary-200 text-primary-700;
+}
+
+.tier-badge-paid {
+  @apply bg-primary-700 text-white;
+}
+
+.tier-badge-pro {
+  @apply bg-primary-900 text-white;
+}
+
+/* CePO indicator */
+.cepo-badge {
+  @apply inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium
+         bg-primary-700 text-white;
+}
+
+/* Google Material Icons - Black monochrome styling */
+.material-icons,
+.material-icons-outlined {
+  font-family: 'Material Icons', 'Material Icons Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  color: #262626; /* Black monochrome */
+}
+
+/* Material icon size variants */
+.material-icons.md-16,
+.material-icons-outlined.md-16 { font-size: 16px; }
+.material-icons.md-18,
+.material-icons-outlined.md-18 { font-size: 18px; }
+.material-icons.md-24,
+.material-icons-outlined.md-24 { font-size: 24px; }
+.material-icons.md-36,
+.material-icons-outlined.md-36 { font-size: 36px; }
+.material-icons.md-48,
+.material-icons-outlined.md-48 { font-size: 48px; }
+
+/* Metadata display - Clean button-style badges */
+.message-meta {
+  @apply flex flex-wrap items-center gap-2 mt-3 pt-3 
+         border-t border-primary-100;
+}
+
+.meta-badge {
+  @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+         bg-primary-100 text-primary-600 border border-primary-200
+         hover:bg-primary-200 hover:text-primary-700
+         transition-all duration-150 cursor-default select-none;
+}
+
+.meta-badge-tier {
+  @apply uppercase font-bold bg-primary-800 text-white border-primary-800
+         hover:bg-primary-700 hover:border-primary-700;
+}
+
+.meta-badge-cepo {
+  @apply bg-primary-700 text-white border-primary-700
+         hover:bg-primary-600 hover:border-primary-600;
+}
+
+.meta-badge-rag {
+  @apply bg-primary-600 text-white border-primary-600
+         hover:bg-primary-500 hover:border-primary-500;
+}
+
+.message-meta-item {
+  @apply inline-flex items-center gap-1;
 }

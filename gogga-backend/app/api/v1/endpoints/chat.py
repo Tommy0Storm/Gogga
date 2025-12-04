@@ -1,19 +1,22 @@
 """
-GOGGA Chat Endpoints
-Handles chat completions using the Tricameral AI architecture.
+GOGGA Chat Endpoints - Tier-Based Routing.
 
-Layers:
-- Speed: Fast responses (Llama 3.1 8B)
-- Complex: Advanced reasoning (Qwen 3 235B)  
-- Reasoning: CePO-optimized multi-step planning (Qwen 3 235B + OptiLLM)
+FREE Tier: OpenRouter Llama 3.3 70B FREE
+JIVE Tier: Cerebras Llama 3.1 8B (direct or + CePO)
+JIGGA Tier: Cerebras Qwen 3 235B (thinking or /no_think)
+
+Universal: Prompt enhancement via Llama 3.3 70B FREE (all tiers)
 """
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from app.models.domain import ChatRequest, ChatResponse
 from app.services.ai_service import ai_service
-from app.core.router import CognitiveLayer
+from app.services.openrouter_service import openrouter_service
+from app.core.router import CognitiveLayer, UserTier, tier_router, is_image_prompt
 from app.core.exceptions import InferenceError
 
 
@@ -21,136 +24,227 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
+class TieredChatRequest(BaseModel):
+    """Extended chat request with tier support."""
+    message: str = Field(..., min_length=1, max_length=32000)
+    user_id: str = Field(default="anonymous")
+    user_tier: UserTier = Field(default=UserTier.FREE)
+    history: list[dict[str, str]] | None = None
+    context_tokens: int = Field(default=0, description="Token count for JIGGA thinking mode")
+    force_layer: str | None = None
+
+
 @router.post("", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: TieredChatRequest) -> ChatResponse:
     """
-    Send a message to Gogga and receive a response.
+    Send a message to Gogga with tier-based routing.
     
-    The Tricameral Router automatically selects the appropriate layer:
-    - Speed Layer (Llama 3.1 8B): For simple queries, greetings
-    - Complex Layer (Qwen 3 235B): For legal, coding, translation queries
-    - Reasoning Layer (Qwen 3 235B + CePO): For multi-step planning tasks
-    
-    Args:
-        request: ChatRequest containing message, user_id, and optional history
+    FREE Tier:
+        → OpenRouter Llama 3.3 70B FREE
         
-    Returns:
-        ChatResponse with the AI response and metadata
+    JIVE Tier:
+        Simple → Cerebras Llama 3.1 8B direct
+        Complex → Cerebras Llama 3.1 8B + CePO
+        
+    JIGGA Tier:
+        Thinking → Cerebras Qwen 3 235B (temp=0.6, top_p=0.95)
+        Fast → Cerebras Qwen 3 235B + /no_think
     """
     try:
-        # Convert history to the expected format
-        history = (
-            [{"role": m.role, "content": m.content} for m in request.history]
-            if request.history
-            else None
-        )
+        # Check if this is an image request
+        if is_image_prompt(request.message):
+            raise HTTPException(
+                status_code=400,
+                detail="This looks like an image request. Use /api/v1/images/generate instead."
+            )
         
-        # Determine if force_model should override routing
-        force_layer = _resolve_force_layer(request.force_model)
+        # Resolve force_layer if provided
+        force_layer = _resolve_force_layer(request.force_layer, request.user_tier)
         
         result = await ai_service.generate_response(
             user_id=request.user_id,
             message=request.message,
-            history=history,
-            force_layer=force_layer
+            history=request.history,
+            user_tier=request.user_tier,
+            force_layer=force_layer,
+            context_tokens=request.context_tokens
         )
         
         return ChatResponse(
             response=result["response"],
-            meta={
-                "model_used": result["meta"]["model_used"],
-                "layer": result["meta"]["layer"],
-                "latency_seconds": result["meta"]["latency_seconds"],
-                "tokens": {
-                    "input": result["meta"]["tokens"]["input"],
-                    "output": result["meta"]["tokens"]["output"]
-                },
-                "cost_usd": result["meta"]["cost_usd"],
-                "cost_zar": result["meta"]["cost_zar"]
-            }
+            thinking=result.get("thinking"),  # JIGGA thinking block for UI
+            meta=result.get("meta", {})
         )
         
     except InferenceError as e:
-        logger.error(f"Inference error for user {request.user_id}: {e}")
+        logger.error("Inference error for user %s: %s", request.user_id, e)
         raise HTTPException(status_code=503, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"Unexpected error for user {request.user_id}")
+        logger.exception("Unexpected error for user %s", request.user_id)
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
-def _resolve_force_layer(force_model: str | None) -> CognitiveLayer | None:
-    """Resolve force_model string to CognitiveLayer enum."""
-    if not force_model:
+def _resolve_force_layer(
+    force_layer: str | None, 
+    user_tier: UserTier
+) -> CognitiveLayer | None:
+    """Resolve force_layer string to CognitiveLayer enum."""
+    if not force_layer:
         return None
     
-    force_model_lower = force_model.lower()
-    if "speed" in force_model_lower or "llama" in force_model_lower:
-        return CognitiveLayer.SPEED
-    if "reasoning" in force_model_lower or "cepo" in force_model_lower:
-        return CognitiveLayer.REASONING
-    if "complex" in force_model_lower or "qwen" in force_model_lower:
-        return CognitiveLayer.COMPLEX
+    force_lower = force_layer.lower()
+    
+    # FREE tier layers
+    if user_tier == UserTier.FREE:
+        return CognitiveLayer.FREE_TEXT
+    
+    # JIVE tier layers
+    if user_tier == UserTier.JIVE:
+        if "reasoning" in force_lower or "cepo" in force_lower:
+            return CognitiveLayer.JIVE_REASONING
+        return CognitiveLayer.JIVE_SPEED
+    
+    # JIGGA tier layers
+    if user_tier == UserTier.JIGGA:
+        if "fast" in force_lower or "quick" in force_lower:
+            return CognitiveLayer.JIGGA_FAST
+        return CognitiveLayer.JIGGA_THINK
     
     return None
 
 
-@router.post("/stream")
-async def chat_stream(request: ChatRequest):
+# =========================================================================
+# PROMPT ENHANCEMENT (Universal - All Tiers)
+# =========================================================================
+
+class EnhanceRequest(BaseModel):
+    """Request for prompt enhancement."""
+    prompt: str = Field(..., min_length=1, max_length=4000)
+    user_id: str | None = None
+
+
+@router.post("/enhance")
+async def enhance_prompt(request: EnhanceRequest) -> dict[str, Any]:
     """
-    Stream a response from Gogga (Server-Sent Events).
+    Enhance a prompt using Llama 3.3 70B FREE.
     
-    Note: This is a placeholder for streaming implementation.
-    In production, this would use Cerebras streaming API.
+    Available to ALL tiers - this is the universal "Enhance" button.
+    Works for both text and image prompts.
+    
+    Returns:
+        original_prompt, enhanced_prompt, and metadata
     """
-    logger.info(f"Streaming requested by user {request.user_id} - not yet implemented")
-    raise HTTPException(
-        status_code=501,
-        detail="Streaming not yet implemented"
-    )
+    try:
+        result = await openrouter_service.enhance_prompt(request.prompt)
+        return {
+            "success": True,
+            **result
+        }
+    except Exception as e:
+        logger.exception("Prompt enhancement error")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/models")
-async def list_models():
-    """
-    List available models and their characteristics.
-    """
+# =========================================================================
+# STREAMING (Placeholder)
+# =========================================================================
+
+@router.post("/stream")
+async def chat_stream(request: TieredChatRequest):
+    """Stream a response (not yet implemented)."""
+    raise HTTPException(status_code=501, detail="Streaming not yet implemented")
+
+
+# =========================================================================
+# MODEL INFO
+# =========================================================================
+
+@router.get("/tiers")
+async def list_tiers():
+    """List available tiers and their capabilities."""
     from app.config import settings
+    from app.core.router import IMAGE_LIMITS
     
     return {
-        "models": [
+        "tiers": [
             {
-                "id": settings.MODEL_SPEED,
-                "name": "Llama 3.1 8B",
-                "layer": "speed",
-                "description": "Fast inference for simple queries",
-                "speed": "~2,200 tokens/second",
-                "cost": {
-                    "input": f"${settings.COST_SPEED_INPUT}/M tokens",
-                    "output": f"${settings.COST_SPEED_OUTPUT}/M tokens"
+                "id": "free",
+                "name": "Free Tier",
+                "text": {
+                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "provider": "OpenRouter",
+                    "cost": "FREE"
+                },
+                "images": {
+                    "model": settings.OPENROUTER_MODEL_LONGCAT,
+                    "provider": "OpenRouter", 
+                    "limit": IMAGE_LIMITS[UserTier.FREE],
+                    "cost": "FREE"
+                },
+                "prompt_enhancement": {
+                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "cost": "FREE"
                 }
             },
             {
-                "id": settings.MODEL_COMPLEX,
-                "name": "Qwen 3 235B",
-                "layer": "complex",
-                "description": "Advanced reasoning for legal, coding, translation",
-                "speed": "~1,400 tokens/second",
-                "cost": {
-                    "input": f"${settings.COST_COMPLEX_INPUT}/M tokens",
-                    "output": f"${settings.COST_COMPLEX_OUTPUT}/M tokens"
+                "id": "jive",
+                "name": "Jive Tier (Pro)",
+                "text": {
+                    "simple": {
+                        "model": settings.MODEL_SPEED,
+                        "name": "Llama 3.1 8B",
+                        "provider": "Cerebras"
+                    },
+                    "complex": {
+                        "model": f"{settings.MODEL_SPEED}+CePO",
+                        "name": "Llama 3.1 8B + CePO",
+                        "provider": "Cerebras"
+                    }
+                },
+                "images": {
+                    "model": settings.DEEPINFRA_IMAGE_MODEL,
+                    "provider": "DeepInfra",
+                    "limit": IMAGE_LIMITS[UserTier.JIVE]
+                },
+                "prompt_enhancement": {
+                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "cost": "FREE (included)"
                 }
             },
             {
-                "id": f"{settings.MODEL_COMPLEX}+cepo",
-                "name": "Qwen 3 235B + CePO",
-                "layer": "reasoning",
-                "description": "CePO-optimized multi-step planning and reasoning",
-                "speed": "Variable (depends on planning depth)",
-                "cost": {
-                    "input": f"${settings.COST_COMPLEX_INPUT}/M tokens",
-                    "output": f"${settings.COST_COMPLEX_OUTPUT}/M tokens",
-                    "note": "May use additional tokens for planning iterations"
+                "id": "jigga",
+                "name": "Jigga Tier (Advanced)",
+                "text": {
+                    "thinking": {
+                        "model": settings.MODEL_COMPLEX,
+                        "name": "Qwen 3 235B",
+                        "provider": "Cerebras",
+                        "settings": "temp=0.6, top_p=0.95"
+                    },
+                    "fast": {
+                        "model": settings.MODEL_COMPLEX,
+                        "name": "Qwen 3 235B + /no_think",
+                        "provider": "Cerebras",
+                        "note": "Appends /no_think for fast responses"
+                    }
+                },
+                "images": {
+                    "model": settings.DEEPINFRA_IMAGE_MODEL,
+                    "provider": "DeepInfra",
+                    "limit": IMAGE_LIMITS[UserTier.JIGGA]
+                },
+                "prompt_enhancement": {
+                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "cost": "FREE (included)"
                 }
             }
         ]
     }
+
+
+@router.get("/models")
+async def list_models():
+    """List available models (legacy endpoint)."""
+    return await list_tiers()

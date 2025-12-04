@@ -1,7 +1,13 @@
 """
-GOGGA Bicameral Router
-The semantic traffic controller that evaluates cognitive load and routes requests
-to the appropriate model tier (Speed Layer vs Complex Layer).
+GOGGA Tier-Based Cognitive Router
+
+Routes requests based on user subscription tier:
+- FREE: OpenRouter Llama 3.3 70B (text) + LongCat Flash (images)
+- JIVE: Cerebras Llama 3.1 8B + CePO (text) + FLUX 1.1 Pro (images, capped)
+- JIGGA: Cerebras Qwen 3 235B think/no_think (text) + FLUX 1.1 Pro (images, higher cap)
+
+Universal across all tiers:
+- Prompt Enhancement: OpenRouter Llama 3.3 70B FREE
 """
 from enum import Enum
 from functools import lru_cache
@@ -10,182 +16,447 @@ from typing import Final
 from app.config import settings
 
 
+class UserTier(str, Enum):
+    """User subscription tiers."""
+    FREE = "free"      # OpenRouter FREE models only
+    JIVE = "jive"      # Cerebras Llama + CePO, FLUX capped
+    JIGGA = "jigga"    # Cerebras Qwen think/no_think, FLUX higher cap
+
+
 class CognitiveLayer(str, Enum):
     """Enumeration of available cognitive layers."""
-    SPEED = "speed"              # Fast responses for simple queries (Llama 3.1 8B)
-    COMPLEX = "complex"          # Advanced reasoning for legal/coding (Qwen 3 235B)
-    REASONING = "reasoning"      # CePO-enhanced planning (default: Llama 3.1 8B)
-    REASONING_DEEP = "reasoning_deep"  # CePO-enhanced planning (Qwen 3 235B)
+    # FREE tier layers (OpenRouter)
+    FREE_TEXT = "free_text"              # Llama 3.3 70B FREE (OpenRouter)
+    FREE_IMAGE = "free_image"            # LongCat Flash FREE (OpenRouter)
+    
+    # JIVE tier layers (Cerebras + CePO)
+    JIVE_SPEED = "jive_speed"            # Llama 3.1 8B direct (fast queries)
+    JIVE_REASONING = "jive_reasoning"    # Llama 3.1 8B + CePO (complex queries)
+    JIVE_IMAGE = "jive_image"            # FLUX 1.1 Pro (capped)
+    
+    # JIGGA tier layers (Cerebras Qwen)
+    JIGGA_THINK = "jigga_think"          # Qwen 3 235B with thinking (temp=0.6, top_p=0.95)
+    JIGGA_FAST = "jigga_fast"            # Qwen 3 235B + /no_think (fast response)
+    JIGGA_IMAGE = "jigga_image"          # FLUX 1.1 Pro (higher cap)
+    
+    # Universal layers
+    ENHANCE_PROMPT = "enhance_prompt"    # Llama 3.3 70B FREE (all tiers)
+    MULTIMODAL = "multimodal"            # Google Live API (TODO)
 
 
-# Threshold for word count that triggers Complex Layer
-WORD_COUNT_THRESHOLD: Final[int] = 50
+# Image generation limits per tier (per month)
+IMAGE_LIMITS: Final[dict[UserTier, int]] = {
+    UserTier.FREE: 50,      # 50 LongCat images/month
+    UserTier.JIVE: 200,     # 200 FLUX images/month
+    UserTier.JIGGA: 1000,   # 1000 FLUX images/month
+}
 
-# Keywords that trigger CePO Reasoning Layer (multi-step planning)
-# Default uses Llama 3.1 8B for fast CePO reasoning
+
+# Qwen thinking mode settings (JIGGA tier)
+# DO NOT use greedy decoding (temp=0) - causes performance degradation and endless repetitions
+QWEN_THINKING_SETTINGS: Final[dict] = {
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "max_tokens": 8000,  # Qwen 3 32B max output tokens
+}
+
+# Qwen fast mode settings (JIGGA tier with /no_think)
+QWEN_FAST_SETTINGS: Final[dict] = {
+    "temperature": 0.7,
+    "top_p": 0.8,
+    "top_k": 20,
+    "min_p": 0.0,
+    "max_tokens": 8000,
+}
+
+
+# Keywords that trigger comprehensive document/analysis output
+DOCUMENT_ANALYSIS_KEYWORDS: Final[frozenset[str]] = frozenset([
+    # Analysis requests
+    "analyze", "analyse", "analysis", "assessment", "evaluate", "evaluation",
+    "review", "examine", "investigation", "investigate", "audit", "scrutinize",
+    
+    # Report types
+    "report", "summary report", "detailed report", "comprehensive report",
+    "executive summary", "briefing", "brief me", "overview", "breakdown",
+    
+    # Document types
+    "document", "write a document", "draft", "prepare", "compile",
+    "memo", "memorandum", "proposal", "business case", "white paper",
+    "research paper", "study", "findings", "recommendation",
+    
+    # Professional outputs
+    "professional", "formal", "structured", "comprehensive", "thorough",
+    "in-depth", "detailed", "complete", "full", "exhaustive",
+    
+    # Business documents
+    "business plan", "marketing plan", "strategy", "strategic plan",
+    "project plan", "implementation plan", "action plan", "roadmap",
+    "feasibility study", "market analysis", "swot analysis", "risk assessment",
+    
+    # Legal documents
+    "legal opinion", "legal analysis", "case study", "contract review",
+    "compliance report", "due diligence", "legal brief",
+    
+    # Technical documents
+    "technical specification", "technical report", "architecture document",
+    "design document", "requirements document", "documentation",
+])
+
+
+# Keywords that trigger CePO Reasoning (JIVE tier)
 REASONING_KEYWORDS: Final[frozenset[str]] = frozenset([
-    # Explicit reasoning requests
     "think step by step", "reason through", "plan out", "break down",
     "walk me through", "explain your reasoning", "show your work",
     "let's think", "consider all", "weigh the options",
-    
-    # Complex problem solving
     "optimize", "design a solution", "architect", "strategy",
     "implementation plan", "roadmap", "approach this",
 ])
 
-# Keywords that trigger DEEP CePO Reasoning (Qwen 3 235B)
-# For very complex multi-step problems
-REASONING_DEEP_KEYWORDS: Final[frozenset[str]] = frozenset([
-    # Multi-part legal analysis
+# Keywords that trigger thinking mode (JIGGA tier)
+THINKING_KEYWORDS: Final[frozenset[str]] = frozenset([
+    # Deep analysis
+    "analyze deeply", "comprehensive analysis", "thorough review",
+    "examine carefully", "deep dive", "full assessment",
+    
+    # Legal reasoning
     "legal implications", "case analysis", "precedent",
     "constitutional analysis", "statutory interpretation",
-    "comprehensive legal", "full legal review",
     
-    # Complex coding tasks
-    "refactor entire", "design pattern", "system design", "scale",
-    "performance optimization", "debug this complex",
-    "architect the", "full implementation",
+    # Complex coding
+    "system design", "architecture review", "refactor entire",
+    "performance optimization", "security audit",
+    
+    # Research
+    "research thoroughly", "investigate", "evaluate all options",
 ])
 
-# Keywords that trigger the Complex Layer (Qwen 3 235B)
-# Using frozenset for O(1) lookup performance
+# Keywords that trigger fast mode /no_think (JIGGA tier)
+# Also auto-triggered for long contexts (131k+ tokens)
+FAST_MODE_KEYWORDS: Final[frozenset[str]] = frozenset([
+    "quick answer", "briefly", "short answer", "tldr", "summary",
+    "just tell me", "simple answer", "fast", "quickly",
+])
+
+# Complex keywords (for JIVE tier routing to CePO)
 COMPLEX_KEYWORDS: Final[frozenset[str]] = frozenset([
     # Legal terms
     "popia", "gdpr", "constitution", "act", "regulation", "compliance",
     "contract", "clause", "liability", "indemnity", "lawsuit", "court",
     "tribunal", "advocate", "attorney", "litigation", "damages", "rights",
     "consumer protection", "rental housing", "labour", "employment",
-    
-    # South African legal specifics
-    "bbbee", "b-bbee", "fica", "rica", "irs", "sars", "commissioner",
+    "bbbee", "b-bbee", "fica", "rica", "sars",
     
     # Coding and technical
     "code", "function", "class", "algorithm", "debug", "api", "database",
     "python", "javascript", "typescript", "react", "fastapi", "django",
     "sql", "query", "optimization", "architecture", "deploy", "docker",
     
-    # Translation and language
+    # Translation
     "translate", "isizulu", "isixhosa", "afrikaans", "sesotho", "setswana",
     "tshivenda", "xitsonga", "siswati", "isindebele", "sepedi",
-    
-    # Complex reasoning
-    "analyze", "analyse", "compare", "evaluate", "explain in detail",
-    "step by step", "comprehensive", "thorough", "research", "study",
-    "calculate", "derive", "prove", "hypothesis", "methodology"
+])
+
+# Image intent keywords
+IMAGE_KEYWORDS: Final[frozenset[str]] = frozenset([
+    "draw", "create an image", "make a picture", "generate an image",
+    "illustration", "logo", "design", "render", "art", "artwork",
+    "picture of", "image of", "photo of", "photograph", "visualize",
+    "sketch", "paint", "painting", "portrait", "landscape", "scene",
 ])
 
 
-class BicameralRouter:
+def is_image_prompt(prompt: str) -> bool:
+    """Detect if a prompt is requesting image generation."""
+    prompt_lower = prompt.lower()
+    return any(keyword in prompt_lower for keyword in IMAGE_KEYWORDS)
+
+
+def is_document_analysis_request(message: str) -> bool:
     """
-    The Bicameral Router determines which cognitive layer should handle a request.
+    Detect if user is requesting a document, analysis, report, or professional output.
+    These requests should trigger comprehensive, structured, verbose output.
+    """
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in DOCUMENT_ANALYSIS_KEYWORDS)
+
+
+# Comprehensive output format instruction for document/analysis requests
+# This is appended to the user's message when document analysis is detected
+COMPREHENSIVE_OUTPUT_INSTRUCTION: Final[str] = """
+
+---
+[SYSTEM: Document/Analysis Request Detected - Comprehensive Output Mode]
+
+CRITICAL: The user is requesting a professional document, analysis, or report. 
+You MUST provide comprehensive, verbose, well-structured output UNLESS the user 
+explicitly requests something shorter (e.g., "brief", "quick", "summary only").
+
+USER'S REQUEST ALWAYS TAKES PRIORITY - if they specify a format or length, follow that.
+
+DEFAULT COMPREHENSIVE OUTPUT FORMAT:
+
+1. EXECUTIVE SUMMARY
+   - 2-3 sentence overview of key findings/recommendations
+   - Highlight the most critical points upfront
+
+2. BACKGROUND/CONTEXT
+   - Relevant context for the analysis
+   - Key assumptions or constraints
+   - Scope of the analysis
+
+3. DETAILED ANALYSIS/FINDINGS
+   - Structured breakdown of main points
+   - Use clear headings and subheadings
+   - Include supporting evidence/reasoning
+   - Present multiple perspectives where relevant
+
+4. KEY INSIGHTS
+   - Numbered list of important observations
+   - Connect findings to practical implications
+   - Highlight patterns or trends
+
+5. RECOMMENDATIONS/ACTION ITEMS
+   - Prioritized list of recommendations
+   - Practical, actionable steps
+   - Include timelines where appropriate
+
+6. RISKS & CONSIDERATIONS
+   - Potential challenges or limitations
+   - Mitigating factors or alternatives
+   - Important caveats
+
+7. CONCLUSION
+   - Synthesize main points
+   - Restate key recommendations
+   - Next steps or follow-up items
+
+FORMATTING GUIDELINES:
+- Use clear section headers with appropriate formatting
+- Use bullet points and numbered lists for readability
+- Include tables where data comparison is useful
+- Bold key terms and important points
+- Keep paragraphs focused and digestible
+- Use professional, clear language
+- Maintain SA context where relevant (Rands, local regulations, etc.)
+
+REMEMBER: Be VERBOSE and THOROUGH. The user wants comprehensive output.
+If you're unsure whether to include something, INCLUDE IT.
+---
+"""
+
+
+def should_use_thinking(message: str, context_tokens: int = 0) -> bool:
+    """
+    Determine if JIGGA tier should use thinking mode.
     
-    Speed Layer (Reflexive Mind): 
-        - Llama 3.1 8B via Cerebras
-        - ~2,200 tokens/second
-        - $0.10 per million tokens
-        - Use for: greetings, simple definitions, UI navigation help
+    Returns False (use /no_think) if:
+    - Message contains fast mode keywords
+    - Context is very long (131k+ tokens)
     
-    Complex Layer (Analytical Mind):
-        - Qwen 3 235B via Cerebras
-        - ~1,400 tokens/second
-        - $0.60 input / $1.20 output per million tokens
-        - Use for: legal analysis, translation, coding, complex reasoning
+    Returns True (use thinking) if:
+    - Message contains thinking keywords
+    - Default for complex queries
+    """
+    message_lower = message.lower()
+    
+    # Fast mode keywords → disable thinking
+    if any(keyword in message_lower for keyword in FAST_MODE_KEYWORDS):
+        return False
+    
+    # Long context → disable thinking for accuracy
+    if context_tokens > 100000:  # ~100k tokens
+        return False
+    
+    # Thinking keywords → enable thinking
+    if any(keyword in message_lower for keyword in THINKING_KEYWORDS):
+        return True
+    
+    # Default: use thinking for JIGGA tier
+    return True
+
+
+class TierRouter:
+    """
+    Routes requests based on user tier and intent.
+    
+    FREE Tier:
+        Text → OpenRouter Llama 3.3 70B FREE
+        Image → OpenRouter LongCat Flash FREE
+        
+    JIVE Tier (Pro):
+        Simple text → Cerebras Llama 3.1 8B direct
+        Complex text → Cerebras Llama 3.1 8B + CePO
+        Image → FLUX 1.1 Pro (capped at 200/month)
+        
+    JIGGA Tier (Advanced):
+        Text (thinking) → Cerebras Qwen 3 235B (temp=0.6, top_p=0.95)
+        Text (fast) → Cerebras Qwen 3 235B + /no_think
+        Image → FLUX 1.1 Pro (capped at 1000/month)
+        
+    Universal (all tiers):
+        Prompt Enhancement → OpenRouter Llama 3.3 70B FREE
     """
     
     @staticmethod
-    def classify_intent(message: str) -> CognitiveLayer:
+    def classify_intent(
+        message: str,
+        user_tier: UserTier = UserTier.FREE,
+        context_tokens: int = 0
+    ) -> CognitiveLayer:
         """
-        Determines whether to route to Speed, Complex, or Reasoning Layer.
-        
-        Logic:
-        1. Check for deep reasoning keywords (triggers CePO with Qwen)
-        2. Check for reasoning keywords (triggers CePO with Llama)
-        3. Check for 'heavy' keywords (legal, coding, translation)
-        4. Check for input length (long contexts require bigger models)
-        5. Default to speed
+        Route request to appropriate layer based on tier and intent.
         
         Args:
-            message: The user's input message
+            message: User's input message
+            user_tier: User's subscription tier
+            context_tokens: Number of tokens in context (for thinking mode decision)
             
         Returns:
             CognitiveLayer indicating which layer to use
         """
         message_lower = message.lower()
         
-        # First, check for deep reasoning keywords (CePO with Qwen 3 235B)
-        if any(keyword in message_lower for keyword in REASONING_DEEP_KEYWORDS):
-            return CognitiveLayer.REASONING_DEEP
+        # Check for image generation intent
+        if is_image_prompt(message):
+            if user_tier == UserTier.FREE:
+                return CognitiveLayer.FREE_IMAGE
+            elif user_tier == UserTier.JIVE:
+                return CognitiveLayer.JIVE_IMAGE
+            else:  # JIGGA
+                return CognitiveLayer.JIGGA_IMAGE
         
-        # Check for reasoning keywords (CePO with Llama 3.1 8B - faster)
-        if any(keyword in message_lower for keyword in REASONING_KEYWORDS):
-            return CognitiveLayer.REASONING
+        # Text routing based on tier
+        if user_tier == UserTier.FREE:
+            return CognitiveLayer.FREE_TEXT
         
-        # Check for complex keywords using frozenset for O(1) lookups
-        if any(keyword in message_lower for keyword in COMPLEX_KEYWORDS):
-            return CognitiveLayer.COMPLEX
+        elif user_tier == UserTier.JIVE:
+            # Check for reasoning/complex keywords → CePO
+            if any(kw in message_lower for kw in REASONING_KEYWORDS):
+                return CognitiveLayer.JIVE_REASONING
+            if any(kw in message_lower for kw in COMPLEX_KEYWORDS):
+                return CognitiveLayer.JIVE_REASONING
+            # Simple queries → direct Llama
+            return CognitiveLayer.JIVE_SPEED
         
-        # Check for input length - long contexts need bigger models
-        word_count = len(message.split())
-        
-        return CognitiveLayer.COMPLEX if word_count > WORD_COUNT_THRESHOLD else CognitiveLayer.SPEED
+        else:  # JIGGA
+            # Determine thinking vs fast mode
+            if should_use_thinking(message, context_tokens):
+                return CognitiveLayer.JIGGA_THINK
+            else:
+                return CognitiveLayer.JIGGA_FAST
     
     @staticmethod
-    def get_model_id(layer: CognitiveLayer) -> str:
+    def get_model_config(layer: CognitiveLayer) -> dict:
         """
-        Get the model identifier for the specified layer.
+        Get model configuration for the specified layer.
         
-        Args:
-            layer: CognitiveLayer enum value
+        Returns dict with:
+        - provider: "openrouter" | "cerebras" | "deepinfra"
+        - model: model identifier
+        - settings: temperature, top_p, etc.
+        - use_cepo: whether to route through CePO sidecar
+        - append_no_think: whether to append /no_think
+        """
+        configs = {
+            # FREE tier
+            CognitiveLayer.FREE_TEXT: {
+                "provider": "openrouter",
+                "model": settings.OPENROUTER_MODEL_LLAMA,
+                "settings": {"temperature": 0.7, "max_tokens": 2048},
+                "use_cepo": False,
+                "append_no_think": False,
+            },
+            CognitiveLayer.FREE_IMAGE: {
+                "provider": "openrouter",
+                "model": settings.OPENROUTER_MODEL_LONGCAT,
+                "settings": {},
+                "use_cepo": False,
+                "append_no_think": False,
+            },
             
-        Returns:
-            The model ID string for Cerebras API
-        """
-        if layer in (CognitiveLayer.SPEED, CognitiveLayer.REASONING):
-            # Speed and fast Reasoning use Llama 3.1 8B
-            return settings.MODEL_SPEED
-        # COMPLEX and REASONING_DEEP use Qwen 3 235B
-        return settings.MODEL_COMPLEX
+            # JIVE tier
+            CognitiveLayer.JIVE_SPEED: {
+                "provider": "cerebras",
+                "model": settings.MODEL_CEPO,  # Llama 3.3 70B at 2,000 tokens/s
+                "settings": {"temperature": 0.7, "max_tokens": 4096},
+                "use_cepo": False,
+                "append_no_think": False,
+            },
+            CognitiveLayer.JIVE_REASONING: {
+                "provider": "cerebras",
+                "model": settings.MODEL_CEPO,  # Llama 3.3 70B at 2,000 reasoning tokens/s
+                "settings": {"temperature": 0.7, "max_tokens": 4096},
+                "use_cepo": False,  # Direct API (OptiLLM CePO has reasoning_effort bug)
+                "append_no_think": False,
+            },
+            CognitiveLayer.JIVE_IMAGE: {
+                "provider": "deepinfra",
+                "model": settings.DEEPINFRA_IMAGE_MODEL,  # FLUX 1.1 Pro
+                "settings": {},
+                "use_cepo": False,
+                "append_no_think": False,
+            },
+            
+            # JIGGA tier
+            CognitiveLayer.JIGGA_THINK: {
+                "provider": "cerebras",
+                "model": settings.MODEL_COMPLEX,  # Qwen 3 32B
+                "settings": QWEN_THINKING_SETTINGS,  # temp=0.6, top_p=0.95, top_k=20, min_p=0
+                "use_cepo": False,
+                "append_no_think": False,
+            },
+            CognitiveLayer.JIGGA_FAST: {
+                "provider": "cerebras",
+                "model": settings.MODEL_COMPLEX,  # Qwen 3 32B
+                "settings": QWEN_FAST_SETTINGS,  # temp=0.7, top_p=0.8, top_k=20, min_p=0
+                "use_cepo": False,
+                "append_no_think": True,  # Append /no_think to prompt
+            },
+            CognitiveLayer.JIGGA_IMAGE: {
+                "provider": "deepinfra",
+                "model": settings.DEEPINFRA_IMAGE_MODEL,  # FLUX 1.1 Pro
+                "settings": {},
+                "use_cepo": False,
+                "append_no_think": False,
+            },
+            
+            # Universal
+            CognitiveLayer.ENHANCE_PROMPT: {
+                "provider": "openrouter",
+                "model": settings.OPENROUTER_MODEL_LLAMA,  # Llama 3.3 70B FREE
+                "settings": {"temperature": 0.7, "max_tokens": 500},
+                "use_cepo": False,
+                "append_no_think": False,
+            },
+        }
+        
+        return configs.get(layer, configs[CognitiveLayer.FREE_TEXT])
     
     @staticmethod
-    @lru_cache(maxsize=3)
     def get_system_prompt(layer: CognitiveLayer) -> str:
-        """
-        Get the appropriate system prompt for the specified layer.
-        Uses lru_cache since prompts are static per layer.
+        """Get the appropriate system prompt for the specified layer."""
+        from app.prompts import get_prompt_for_layer
         
-        Args:
-            layer: CognitiveLayer enum value
-            
-        Returns:
-            The system prompt string
-        """
-        base_prompt = (
-            "You are Gogga, a helpful, witty, and knowledgeable South African AI assistant. "
-            "You speak English but understand local slang (Mzansi style). "
-            "Be concise and helpful."
-        )
+        # Map CognitiveLayer enum to prompt registry keys
+        layer_mapping = {
+            CognitiveLayer.FREE_TEXT: "free_text",
+            CognitiveLayer.JIVE_SPEED: "jive_speed",
+            CognitiveLayer.JIVE_REASONING: "jive_reasoning",
+            CognitiveLayer.JIGGA_THINK: "jigga_think",
+            CognitiveLayer.JIGGA_FAST: "jigga_fast",
+            CognitiveLayer.ENHANCE_PROMPT: "enhance_prompt",
+        }
         
-        if layer == CognitiveLayer.COMPLEX:
-            base_prompt += (
-                " You are currently operating in 'Complex Mode'. "
-                "You are an expert in South African law, advanced coding, and complex analysis. "
-                "When discussing legal matters, cite relevant South African Acts "
-                "(e.g., POPIA, CPA, The Constitution Chapter 2 - Bill of Rights). "
-                "Be precise and authoritative."
-            )
-        elif layer == CognitiveLayer.REASONING:
-            base_prompt += (
-                " You are currently operating in 'Reasoning Mode' with CePO optimization. "
-                "Think step by step. Break down complex problems into manageable parts. "
-                "Consider multiple approaches before selecting the best one. "
-                "Show your reasoning process clearly. "
-                "For legal matters, analyze from multiple angles and cite precedents. "
-                "For coding, consider edge cases and optimize for maintainability."
-            )
-        
-        return base_prompt
+        layer_key = layer_mapping.get(layer, "free_text")
+        return get_prompt_for_layer(layer_key)
 
 
-# Singleton instance for the router
-bicameral_router = BicameralRouter()
+# Singleton instance
+tier_router = TierRouter()
+
+# Backwards compatibility aliases
+BicameralRouter = TierRouter
+bicameral_router = tier_router

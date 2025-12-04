@@ -1,36 +1,51 @@
 """
-GOGGA AI Service
-Encapsulates interaction with the Cerebras Cloud SDK.
-Implements the Bicameral routing strategy between Speed and Complex layers.
+GOGGA AI Service - Tier-Based Text Routing.
+
+Routes text requests based on user tier:
+- FREE: OpenRouter Llama 3.3 70B FREE
+- JIVE: Cerebras Llama 3.1 8B (direct or + CePO)
+- JIGGA: Cerebras Qwen 3 235B (thinking or /no_think)
+
+Universal prompt enhancement: OpenRouter Llama 3.3 70B FREE (all tiers)
 """
 import logging
 import time
 import asyncio
+import re
 from typing import Any, Final
 
 from cerebras.cloud.sdk import Cerebras
 
 from app.config import settings
-from app.core.router import bicameral_router, CognitiveLayer
+from app.core.router import (
+    tier_router, CognitiveLayer, UserTier,
+    QWEN_THINKING_SETTINGS, QWEN_FAST_SETTINGS, should_use_thinking
+)
 from app.services.cost_tracker import track_usage
 from app.core.exceptions import InferenceError
 
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 # Constants
-MAX_HISTORY_TURNS: Final[int] = 5
+MAX_HISTORY_TURNS: Final[int] = 10
 DEFAULT_TEMPERATURE: Final[float] = 0.7
-DEFAULT_MAX_TOKENS: Final[int] = 2048
+DEFAULT_MAX_TOKENS: Final[int] = 4096
+JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B max output tokens
 DEFAULT_TOP_P: Final[float] = 0.95
+
+# Regex pattern to extract <think>...</think> or <thinking>...</thinking> blocks
+# Qwen 3 may use either format depending on configuration
+THINK_PATTERN: Final[re.Pattern] = re.compile(
+    r'<think(?:ing)?>(.*?)</think(?:ing)?>',
+    re.DOTALL | re.IGNORECASE
+)
 
 # Type aliases
 MessageDict = dict[str, str]
 ResponseDict = dict[str, Any]
 
-
-# Initialize the Cerebras client lazily for better error handling
+# Cerebras client (lazy init)
 _client: Cerebras | None = None
 
 
@@ -42,15 +57,49 @@ def get_client() -> Cerebras:
     return _client
 
 
+def parse_thinking_response(content: str) -> tuple[str, str | None]:
+    """
+    Parse Qwen's response to separate thinking from main response.
+    
+    Qwen 3 outputs thinking in <think>...</think> tags when enable_thinking=True.
+    This function extracts the thinking block and returns it separately.
+    
+    Args:
+        content: The raw response from Qwen
+        
+    Returns:
+        Tuple of (main_response, thinking_block or None)
+    """
+    # Find all thinking blocks
+    thinking_matches = THINK_PATTERN.findall(content)
+    
+    if thinking_matches:
+        # Combine all thinking blocks if multiple exist
+        thinking = "\n\n".join(thinking_matches).strip()
+        
+        # Remove thinking blocks from content to get main response
+        main_response = THINK_PATTERN.sub('', content).strip()
+        
+        return main_response, thinking
+    
+    # No thinking block found - return content as-is
+    return content, None
+
+
 class AIService:
     """
-    AI Service for handling chat completions using the Quadricameral Architecture.
+    Tier-based AI Service for text generation.
     
-    The service routes requests between four cognitive layers:
-    - Speed Layer: Llama 3.1 8B (~2,200 tok/s) - Fast factual responses
-    - Complex Layer: Qwen 3 235B (~1,400 tok/s) - Nuanced conversations
-    - Reasoning Layer: Llama 3.1 8B + CePO - Fast multi-step reasoning
-    - Deep Reasoning: Qwen 3 235B + CePO - Complex analysis & planning
+    FREE Tier:
+        → OpenRouter Llama 3.3 70B FREE
+        
+    JIVE Tier:
+        Simple → Cerebras Llama 3.1 8B direct
+        Complex → Cerebras Llama 3.1 8B + CePO
+        
+    JIGGA Tier:
+        Thinking → Cerebras Qwen 3 235B (temp=0.6, top_p=0.95)
+        Fast → Cerebras Qwen 3 235B + /no_think
     """
     
     @staticmethod
@@ -58,218 +107,275 @@ class AIService:
         user_id: str,
         message: str,
         history: list[MessageDict] | None = None,
-        force_layer: CognitiveLayer | str | None = None
+        user_tier: UserTier = UserTier.FREE,
+        force_layer: CognitiveLayer | None = None,
+        context_tokens: int = 0
     ) -> ResponseDict:
         """
-        Executes the inference request using the selected model.
-        Tracks precise token usage and calculates cost.
+        Generate a response based on user tier.
         
         Args:
             user_id: Unique identifier for the user
             message: The user's input message
-            history: Optional conversation history (last 5 turns used)
-            force_layer: Optional layer override (CognitiveLayer or string)
+            history: Optional conversation history
+            user_tier: User's subscription tier
+            force_layer: Optional layer override
+            context_tokens: Number of tokens in context (for JIGGA thinking mode)
             
         Returns:
             Dict containing the response and metadata
-            
-        Raises:
-            InferenceError: If the inference fails
         """
         # Determine which layer to use
-        layer = AIService._resolve_layer(message, force_layer)
+        if force_layer:
+            layer = force_layer
+        else:
+            layer = tier_router.classify_intent(message, user_tier, context_tokens)
         
-        # Use CePO for REASONING (Llama) or DEEP_REASONING (Qwen)
-        if layer in (CognitiveLayer.REASONING, CognitiveLayer.DEEP_REASONING):
-            return await AIService._generate_with_cepo(
-                user_id, message, history, layer
+        # Route based on layer
+        if layer == CognitiveLayer.FREE_TEXT:
+            return await AIService._generate_free(user_id, message, history)
+        
+        elif layer == CognitiveLayer.JIVE_SPEED:
+            return await AIService._generate_cerebras(
+                user_id, message, history, layer,
+                use_cepo=False
             )
         
-        model_id = bicameral_router.get_model_id(layer)
-        system_prompt = bicameral_router.get_system_prompt(layer)
-        
-        start_time = time.perf_counter()  # More precise than time.time()
-        
-        # Construct the context window
-        messages = AIService._build_messages(system_prompt, history, message)
-        
-        try:
-            response = await AIService._execute_inference(messages, model_id)
-            return await AIService._process_response(
-                response, user_id, model_id, layer, start_time
+        elif layer == CognitiveLayer.JIVE_REASONING:
+            return await AIService._generate_cerebras(
+                user_id, message, history, layer,
+                use_cepo=True
             )
-            
-        except Exception as e:
-            logger.error(f"Inference Error: {e}")
-            return await AIService._handle_inference_error(
-                e, layer, user_id, message, history
+        
+        elif layer == CognitiveLayer.JIGGA_THINK:
+            return await AIService._generate_cerebras(
+                user_id, message, history, layer,
+                use_cepo=False,
+                thinking_mode=True
             )
+        
+        elif layer == CognitiveLayer.JIGGA_FAST:
+            return await AIService._generate_cerebras(
+                user_id, message, history, layer,
+                use_cepo=False,
+                append_no_think=True
+            )
+        
+        # Default fallback
+        return await AIService._generate_free(user_id, message, history)
     
     @staticmethod
-    def _resolve_layer(
-        message: str,
-        force_layer: CognitiveLayer | str | None
-    ) -> CognitiveLayer:
-        """Resolve the cognitive layer to use."""
-        if force_layer is not None:
-            if isinstance(force_layer, CognitiveLayer):
-                return force_layer
-            if force_layer in ("speed", "complex", "reasoning", "deep_reasoning"):
-                return CognitiveLayer(force_layer)
-        return bicameral_router.classify_intent(message)
-    
-    @staticmethod
-    def _build_messages(
-        system_prompt: str,
-        history: list[MessageDict] | None,
-        message: str
-    ) -> list[MessageDict]:
-        """Build the message list for the API call."""
-        messages: list[MessageDict] = [{"role": "system", "content": system_prompt}]
-        
-        if history:
-            messages.extend(history[-MAX_HISTORY_TURNS:])
-        
-        messages.append({"role": "user", "content": message})
-        return messages
-    
-    @staticmethod
-    async def _execute_inference(
-        messages: list[MessageDict],
-        model_id: str
-    ) -> Any:
-        """Execute the inference call asynchronously."""
-        client = get_client()
-        return await asyncio.to_thread(
-            client.chat.completions.create,
-            messages=messages,
-            model=model_id,
-            temperature=DEFAULT_TEMPERATURE,
-            max_tokens=DEFAULT_MAX_TOKENS,
-            top_p=DEFAULT_TOP_P
-        )
-    
-    @staticmethod
-    async def _process_response(
-        response: Any,
-        user_id: str,
-        model_id: str,
-        layer: CognitiveLayer,
-        start_time: float
-    ) -> ResponseDict:
-        """Process the API response and track usage."""
-        usage = response.usage
-        input_tokens = usage.prompt_tokens
-        output_tokens = usage.completion_tokens
-        content = response.choices[0].message.content
-        
-        latency = time.perf_counter() - start_time
-        
-        cost_data = await track_usage(
-            user_id=user_id,
-            model=model_id,
-            layer=layer.value,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens
-        )
-        
-        return {
-            "response": content,
-            "meta": {
-                "model_used": model_id,
-                "layer": layer.value,
-                "latency_seconds": round(latency, 3),
-                "tokens": {
-                    "input": input_tokens,
-                    "output": output_tokens
-                },
-                "cost_usd": cost_data["usd"],
-                "cost_zar": cost_data["zar"]
-            }
-        }
-    
-    @staticmethod
-    async def _handle_inference_error(
-        error: Exception,
-        layer: CognitiveLayer,
+    async def _generate_free(
         user_id: str,
         message: str,
         history: list[MessageDict] | None
     ) -> ResponseDict:
-        """Handle inference errors with fallback logic."""
-        # Fallback chain: DEEP_REASONING -> REASONING -> COMPLEX -> SPEED
-        if layer == CognitiveLayer.DEEP_REASONING:
-            logger.warning("Attempting fallback from Deep Reasoning to Reasoning...")
-            try:
-                return await AIService.generate_response(
-                    user_id=user_id,
-                    message=message,
-                    history=history,
-                    force_layer=CognitiveLayer.REASONING
-                )
-            except Exception:
-                pass  # Continue to Complex fallback
+        """
+        FREE tier: OpenRouter Llama 3.3 70B.
+        """
+        from app.services.openrouter_service import openrouter_service
         
-        if layer in (CognitiveLayer.REASONING, CognitiveLayer.DEEP_REASONING):
-            logger.warning("Attempting fallback to Complex layer...")
-            try:
-                return await AIService.generate_response(
-                    user_id=user_id,
-                    message=message,
-                    history=history,
-                    force_layer=CognitiveLayer.COMPLEX
-                )
-            except Exception:
-                pass  # Continue to Speed layer fallback
+        system_prompt = tier_router.get_system_prompt(CognitiveLayer.FREE_TEXT)
         
-        if layer in (CognitiveLayer.COMPLEX, CognitiveLayer.REASONING, CognitiveLayer.DEEP_REASONING):
-            logger.warning("Attempting fallback to Speed layer...")
-            try:
-                return await AIService.generate_response(
-                    user_id=user_id,
-                    message=message,
-                    history=history,
-                    force_layer=CognitiveLayer.SPEED
-                )
-            except Exception as fallback_error:
-                raise InferenceError(f"All layers failed: {fallback_error}") from fallback_error
+        logger.info(
+            "FREE text | user=%s | prompt=%s",
+            user_id,
+            message[:50] + "..." if len(message) > 50 else message
+        )
         
-        raise InferenceError(str(error)) from error
+        result = await openrouter_service.chat_free(
+            message=message,
+            system_prompt=system_prompt,
+            history=history,
+            user_id=user_id
+        )
+        
+        return result
+    
+    @staticmethod
+    async def _generate_cerebras(
+        user_id: str,
+        message: str,
+        history: list[MessageDict] | None,
+        layer: CognitiveLayer,
+        use_cepo: bool = False,
+        thinking_mode: bool = False,
+        append_no_think: bool = False
+    ) -> ResponseDict:
+        """
+        JIVE/JIGGA tier: Cerebras Llama or Qwen.
+        
+        Args:
+            use_cepo: Route through CePO sidecar (JIVE reasoning)
+            thinking_mode: Use Qwen thinking settings (JIGGA)
+            append_no_think: Append /no_think to message (JIGGA fast)
+            
+        Returns:
+            ResponseDict with 'response', 'thinking' (if applicable), and 'meta'
+        """
+        config = tier_router.get_model_config(layer)
+        model_id = config["model"]
+        system_prompt = tier_router.get_system_prompt(layer)
+        
+        # Determine if this is JIGGA tier
+        is_jigga = layer in (CognitiveLayer.JIGGA_THINK, CognitiveLayer.JIGGA_FAST)
+        tier = "jigga" if is_jigga else "jive"
+        
+        # Check for document/analysis request - add comprehensive output instruction
+        from app.core.router import is_document_analysis_request, COMPREHENSIVE_OUTPUT_INSTRUCTION
+        
+        actual_message = message
+        is_doc_request = is_document_analysis_request(message)
+        
+        if is_doc_request and (thinking_mode or use_cepo):
+            # Only add comprehensive instruction for reasoning modes (JIVE CePO or JIGGA thinking)
+            actual_message = f"{message}{COMPREHENSIVE_OUTPUT_INSTRUCTION}"
+            logger.info("Document/analysis request detected - comprehensive output mode enabled")
+        
+        # Append /no_think for JIGGA fast mode
+        if append_no_think:
+            actual_message = f"{actual_message} /no_think"
+            logger.info("JIGGA fast mode - appending /no_think")
+        
+        # Route through CePO if enabled
+        if use_cepo:
+            return await AIService._generate_with_cepo(
+                user_id, actual_message, history, layer, model_id, system_prompt
+            )
+        
+        start_time = time.perf_counter()
+        
+        # Build messages
+        messages: list[MessageDict] = [{"role": "system", "content": system_prompt}]
+        if history:
+            messages.extend(history[-MAX_HISTORY_TURNS:])
+        messages.append({"role": "user", "content": actual_message})
+        
+        # Set generation parameters based on tier and mode
+        # JIGGA tier uses specific settings for thinking/non-thinking
+        # DO NOT use greedy decoding (temp=0) - causes performance degradation
+        if is_jigga:
+            if thinking_mode:
+                # Qwen thinking mode: temp=0.6, top_p=0.95, top_k=20, min_p=0
+                temperature = QWEN_THINKING_SETTINGS["temperature"]
+                top_p = QWEN_THINKING_SETTINGS["top_p"]
+                max_tokens = QWEN_THINKING_SETTINGS.get("max_tokens", JIGGA_MAX_TOKENS)
+                logger.info("JIGGA thinking mode - temp=0.6, top_p=0.95, top_k=20, min_p=0")
+            else:
+                # Qwen fast mode: temp=0.7, top_p=0.8, top_k=20, min_p=0
+                temperature = QWEN_FAST_SETTINGS["temperature"]
+                top_p = QWEN_FAST_SETTINGS["top_p"]
+                max_tokens = QWEN_FAST_SETTINGS.get("max_tokens", JIGGA_MAX_TOKENS)
+                logger.info("JIGGA fast mode - temp=0.7, top_p=0.8, top_k=20, min_p=0")
+        else:
+            # JIVE tier (Llama 3.3 70B)
+            temperature = DEFAULT_TEMPERATURE
+            top_p = DEFAULT_TOP_P
+            max_tokens = DEFAULT_MAX_TOKENS
+        
+        try:
+            client = get_client()
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                messages=messages,
+                model=model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p
+            )
+            
+            usage = response.usage
+            raw_content = response.choices[0].message.content
+            latency = time.perf_counter() - start_time
+            
+            # Parse thinking block from response (JIGGA thinking mode)
+            # Qwen wraps its reasoning in <think>...</think> tags
+            main_response, thinking_block = parse_thinking_response(raw_content)
+            
+            if thinking_block:
+                logger.info(
+                    "Parsed thinking block | length=%d chars",
+                    len(thinking_block)
+                )
+            
+            # Track usage with tier for proper pricing
+            cost_data = await track_usage(
+                user_id=user_id,
+                model=model_id,
+                layer=layer.value,
+                input_tokens=usage.prompt_tokens,
+                output_tokens=usage.completion_tokens,
+                tier=tier
+            )
+            
+            logger.info(
+                "Cerebras complete | tier=%s | layer=%s | latency=%.2fs | tokens=%d/%d",
+                tier, layer.value, latency, usage.prompt_tokens, usage.completion_tokens
+            )
+            
+            result: ResponseDict = {
+                "response": main_response,
+                "meta": {
+                    "tier": tier,
+                    "layer": layer.value,
+                    "model": model_id,
+                    "provider": "cerebras",
+                    "thinking_mode": thinking_mode,
+                    "no_think": append_no_think,
+                    "latency_seconds": round(latency, 3),
+                    "tokens": {
+                        "input": usage.prompt_tokens,
+                        "output": usage.completion_tokens
+                    },
+                    "cost_usd": cost_data["usd"],
+                    "cost_zar": cost_data["zar"]
+                }
+            }
+            
+            # Include thinking block separately if present (for UI to display collapsed)
+            if thinking_block:
+                result["thinking"] = thinking_block
+                result["meta"]["has_thinking"] = True
+            
+            return result
+            
+        except Exception as e:
+            logger.error("Cerebras error: %s", e)
+            raise InferenceError(str(e)) from e
     
     @staticmethod
     async def _generate_with_cepo(
         user_id: str,
         message: str,
         history: list[MessageDict] | None,
-        layer: CognitiveLayer
+        layer: CognitiveLayer,
+        model_id: str,
+        system_prompt: str
     ) -> ResponseDict:
         """
-        Generate response using CePO optimization.
-        
-        CePO provides multi-step planning and reasoning for complex tasks.
-        - REASONING: Uses Llama 3.1 8B (~2200 tok/s) for fast reasoning
-        - DEEP_REASONING: Uses Qwen 3 235B (~1400 tok/s) for deep analysis
-        
-        Falls back to standard layers if CePO is unavailable.
+        JIVE reasoning: Llama 3.1 8B + CePO.
         """
         from app.services.cepo_service import cepo_service
         
-        system_prompt = bicameral_router.get_system_prompt(layer)
-        model_id = bicameral_router.get_model_id(layer)
+        logger.info("JIVE reasoning mode - routing through CePO")
         
         try:
             result = await cepo_service.generate_with_cepo(
                 message=message,
                 system_prompt=system_prompt,
                 history=history,
-                model=model_id  # Pass the appropriate model
+                model=model_id
             )
             
-            # Track usage for CePO
-            if "meta" in result and "tokens" in result["meta"]:
+            # Add tier info
+            result["meta"]["tier"] = "jive"
+            result["meta"]["provider"] = "cerebras+cepo"
+            
+            # Track usage
+            if "tokens" in result.get("meta", {}):
                 await track_usage(
                     user_id=user_id,
-                    model=result["meta"].get("model_used", model_id),
+                    model=model_id,
                     layer=layer.value,
                     input_tokens=result["meta"]["tokens"].get("input", 0),
                     output_tokens=result["meta"]["tokens"].get("output", 0)
@@ -278,27 +384,17 @@ class AIService:
             return result
             
         except Exception as e:
-            logger.warning("CePO generation failed, falling back: %s", e)
-            # Fallback to non-CePO layer
-            fallback_layer = (
-                CognitiveLayer.COMPLEX if layer == CognitiveLayer.DEEP_REASONING
-                else CognitiveLayer.SPEED
-            )
-            return await AIService.generate_response(
-                user_id=user_id,
-                message=message,
-                history=history,
-                force_layer=fallback_layer
+            logger.warning("CePO failed, falling back to direct: %s", e)
+            # Fallback to direct Cerebras
+            return await AIService._generate_cerebras(
+                user_id, message, history, 
+                CognitiveLayer.JIVE_SPEED,
+                use_cepo=False
             )
     
     @staticmethod
     async def health_check() -> ResponseDict:
-        """
-        Check the health of the Cerebras connection.
-        
-        Returns:
-            Dict with status and latency information
-        """
+        """Check Cerebras connection health."""
         try:
             start_time = time.perf_counter()
             
@@ -314,10 +410,11 @@ class AIService:
             
             return {
                 "status": "healthy",
+                "provider": "cerebras",
                 "latency_ms": round(latency * 1000, 2)
             }
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error("Health check failed: %s", e)
             return {
                 "status": "unhealthy",
                 "error": str(e)
@@ -326,3 +423,6 @@ class AIService:
 
 # Singleton instance
 ai_service = AIService()
+
+# Backwards compatibility
+bicameral_router = tier_router

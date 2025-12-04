@@ -7,7 +7,9 @@
   - Speed Layer: `llama3.1-8b` (~2,200 tokens/sec, $0.10/M)
   - Complex Layer: `qwen-3-235b-a22b-instruct-2507` (~1,400 tokens/sec, $0.60-1.20/M)
   - Reasoning Layer: Qwen 3 235B + CePO (multi-step planning via OptiLLM sidecar)
-- **CePO**: OptiLLM Docker sidecar for advanced reasoning optimization
+- **CePO**: Cerebras Planning Optimization via OptiLLM
+  - Model: `llama3.3-70b` at **2,000 reasoning tokens/s**
+  - Status: Direct API works; OptiLLM has `reasoning_effort` parameter issue
 - **Database**: PostgreSQL 15 with SQLModel ORM
 - **HTTP Client**: HTTPX (async)
 - **Validation**: Pydantic v2 with pydantic-settings

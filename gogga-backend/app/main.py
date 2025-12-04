@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.v1.endpoints import chat, payments
+from app.api.v1.endpoints import chat, payments, images, prompts
 from app.core.exceptions import (
     GoggaException,
     gogga_exception_handler,
@@ -100,6 +100,8 @@ async def log_requests(request: Request, call_next: Callable) -> Response:
 # Include API routers
 app.include_router(chat.router, prefix=settings.API_V1_STR)
 app.include_router(payments.router, prefix=settings.API_V1_STR)
+app.include_router(images.router, prefix=settings.API_V1_STR)
+app.include_router(prompts.router, prefix=settings.API_V1_STR)
 
 
 # Root endpoint
@@ -119,37 +121,167 @@ async def root():
 @app.get("/health")
 async def health_check():
     """
-    Health check endpoint for container orchestration.
-    Used by Azure Container Apps for liveness/readiness probes.
+    Comprehensive health check endpoint for monitoring.
+    Shows status of all services, tiers, and system info.
     """
+    import platform
+    import psutil
+    import os
+    
     from app.services.ai_service import ai_service
     from app.services.cepo_service import cepo_service
+    from app.services.openrouter_service import openrouter_service
+    from app.core.router import UserTier, IMAGE_LIMITS
     
-    # Check Cerebras connection
+    start_time = datetime.now(timezone.utc)
+    
+    # Check all services in parallel
     cerebras_status = await ai_service.health_check()
-    
-    # Check CePO sidecar (optional)
     cepo_status = await cepo_service.health_check() if settings.CEPO_ENABLED else {"status": "disabled"}
+    openrouter_status = await openrouter_service.health_check()
     
-    # Overall status: healthy if Cerebras works, degraded if CePO unavailable
+    # Calculate overall status
     overall = "healthy"
-    if cerebras_status["status"] != "healthy":
-        overall = "unhealthy"
-    elif cepo_status["status"] not in ("healthy", "disabled"):
+    issues = []
+    
+    if cerebras_status.get("status") != "healthy":
         overall = "degraded"
+        issues.append("Cerebras unavailable - JIVE/JIGGA text affected")
+    
+    if cepo_status.get("status") not in ("healthy", "disabled"):
+        if overall == "healthy":
+            overall = "degraded"
+        issues.append("CePO unavailable - JIVE reasoning fallback to direct")
+    
+    if openrouter_status.get("status") != "healthy":
+        if overall == "healthy":
+            overall = "degraded"
+        issues.append("OpenRouter unavailable - FREE tier affected")
+    
+    # System metrics
+    try:
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        system_metrics = {
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "memory": {
+                "total_gb": round(memory.total / (1024**3), 2),
+                "used_gb": round(memory.used / (1024**3), 2),
+                "percent": memory.percent
+            },
+            "disk": {
+                "total_gb": round(disk.total / (1024**3), 2),
+                "used_gb": round(disk.used / (1024**3), 2),
+                "percent": round(disk.percent, 1)
+            }
+        }
+    except Exception:
+        system_metrics = {"error": "psutil not available"}
+    
+    check_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     
     return {
         "status": overall,
+        "issues": issues if issues else None,
         "version": "1.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "check_duration_seconds": round(check_duration, 3),
+        
+        # Environment info
+        "environment": {
+            "mode": settings.PAYFAST_ENV,
+            "python": platform.python_version(),
+            "platform": platform.system(),
+            "hostname": os.environ.get("HOSTNAME", "unknown")
+        },
+        
+        # Service health
         "services": {
-            "cerebras": cerebras_status,
-            "cepo": cepo_status
+            "cerebras": {
+                **cerebras_status,
+                "models": {
+                    "speed": settings.MODEL_SPEED,
+                    "complex": settings.MODEL_COMPLEX
+                },
+                "tiers_affected": ["jive", "jigga"]
+            },
+            "cepo": {
+                **cepo_status,
+                "url": settings.CEPO_URL if settings.CEPO_ENABLED else None,
+                "enabled": settings.CEPO_ENABLED,
+                "tiers_affected": ["jive (reasoning)"]
+            },
+            "openrouter": {
+                **openrouter_status,
+                "models": {
+                    "text": settings.OPENROUTER_MODEL_LLAMA,
+                    "image": settings.OPENROUTER_MODEL_LONGCAT
+                },
+                "tiers_affected": ["free", "all (prompt enhancement)"]
+            },
+            "deepinfra": {
+                "status": "configured" if settings.DEEPINFRA_API_KEY else "unconfigured",
+                "model": settings.DEEPINFRA_IMAGE_MODEL,
+                "tiers_affected": ["jive", "jigga"]
+            }
+        },
+        
+        # Tier configuration
+        "tiers": {
+            "free": {
+                "text": "OpenRouter Llama 3.3 70B FREE",
+                "images": f"LongCat Flash ({IMAGE_LIMITS[UserTier.FREE]}/month)",
+                "cost": "FREE"
+            },
+            "jive": {
+                "text": "Cerebras Llama 3.1 8B + CePO",
+                "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIVE]}/month)",
+                "cost": "Subscription"
+            },
+            "jigga": {
+                "text": "Cerebras Qwen 3 235B (think/no_think)",
+                "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIGGA]}/month)",
+                "cost": "Premium"
+            }
+        },
+        
+        # System metrics
+        "system": system_metrics,
+        
+        # API endpoints
+        "endpoints": {
+            "chat": "/api/v1/chat",
+            "images": "/api/v1/images/generate",
+            "enhance": "/api/v1/chat/enhance",
+            "tiers": "/api/v1/chat/tiers",
+            "docs": "/docs"
         }
     }
 
 
-# Ready check endpoint
+# Simplified health for container probes
+@app.get("/health/live")
+async def liveness_check():
+    """Liveness probe - is the app running?"""
+    return {"alive": True, "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Readiness probe - can the app handle traffic?"""
+    from app.services.ai_service import ai_service
+    
+    cerebras = await ai_service.health_check()
+    ready = cerebras.get("status") == "healthy"
+    
+    return {
+        "ready": ready,
+        "cerebras": cerebras.get("status"),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+# Ready check endpoint (legacy)
 @app.get("/ready")
 async def ready_check():
     """Readiness check for Kubernetes/Azure."""

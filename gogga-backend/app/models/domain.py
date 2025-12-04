@@ -31,18 +31,24 @@ class TokenUsage(BaseModel):
 
 class ChatMetadata(BaseModel):
     """Metadata about the chat response."""
-    model_used: str = Field(..., description="Model identifier used for inference")
-    layer: str = Field(..., description="Either 'speed' or 'complex'")
+    tier: str = Field(default="free", description="User tier: free, jive, or jigga")
+    layer: str = Field(..., description="Cognitive layer used")
+    model: str = Field(default="", description="Model identifier used")
+    provider: str = Field(default="", description="Provider: openrouter, cerebras, deepinfra")
     latency_seconds: float = Field(..., description="Inference latency in seconds")
-    tokens: TokenUsage = Field(..., description="Token usage breakdown")
-    cost_usd: float = Field(..., description="Cost in US Dollars")
-    cost_zar: float = Field(..., description="Cost in South African Rand")
+    tokens: Optional[Dict[str, int]] = Field(default=None, description="Token usage")
+    cost_usd: Optional[float] = Field(default=0.0, description="Cost in US Dollars")
+    cost_zar: Optional[float] = Field(default=0.0, description="Cost in South African Rand")
+    thinking_mode: Optional[bool] = Field(default=None, description="JIGGA thinking mode")
+    no_think: Optional[bool] = Field(default=None, description="JIGGA /no_think appended")
+    has_thinking: Optional[bool] = Field(default=False, description="Response contains thinking block")
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
     response: str = Field(..., description="The AI assistant's response")
-    meta: ChatMetadata = Field(..., description="Response metadata")
+    thinking: Optional[str] = Field(default=None, description="JIGGA thinking block (collapsed in UI)")
+    meta: Dict[str, Any] = Field(default={}, description="Response metadata")
 
 
 # ============== User Models ==============

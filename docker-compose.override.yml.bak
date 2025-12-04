@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  gogga-frontend:
+    build:
+      context: ./gogga-frontend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./gogga-frontend:/app
+    restart: unless-stopped
+
+  gogga-backend:
+    build:
+      context: ./gogga-backend
+    command: ["python", "main.py"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./gogga-backend:/app
+    restart: unless-stopped

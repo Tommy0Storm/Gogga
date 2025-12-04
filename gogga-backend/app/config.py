@@ -20,18 +20,52 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(default="dev-secret-key-change-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     
-    # Cerebras Configuration
+    # Cerebras Configuration (Text only)
     CEREBRAS_API_KEY: str = Field(..., description="Cerebras Cloud API Key")
     
-    # Model Identification
-    MODEL_SPEED: str = "llama3.1-8b"
-    MODEL_COMPLEX: str = "qwen-3-235b-a22b-instruct-2507"
+    # Model Identification (Cerebras)
+    MODEL_SPEED: str = "llama3.1-8b"  # Legacy - kept for reference
+    MODEL_COMPLEX: str = "qwen-3-32b"  # JIGGA tier - Qwen 3 32B
+    MODEL_CEPO: str = "llama3.3-70b"  # JIVE tier + CePO reasoning at 2,000 tokens/s
+    
+    # Model Settings (JIGGA Qwen)
+    JIGGA_MAX_TOKENS: int = 8000  # Max output tokens for Qwen 3 32B
+    
+    # Qwen Thinking Mode Settings (enable_thinking=True)
+    # DO NOT use greedy decoding (temp=0) - causes performance degradation and repetitions
+    QWEN_THINKING_TEMPERATURE: float = 0.6
+    QWEN_THINKING_TOP_P: float = 0.95
+    QWEN_THINKING_TOP_K: int = 20
+    QWEN_THINKING_MIN_P: float = 0.0
+    
+    # Qwen Non-Thinking Mode Settings (enable_thinking=False)
+    QWEN_FAST_TEMPERATURE: float = 0.7
+    QWEN_FAST_TOP_P: float = 0.8
+    QWEN_FAST_TOP_K: int = 20
+    QWEN_FAST_MIN_P: float = 0.0
     
     # Pricing Configuration (USD per Million Tokens)
+    # FREE tier: OpenRouter free models - no cost but still track tokens
+    COST_FREE_INPUT: float = 0.0
+    COST_FREE_OUTPUT: float = 0.0
+    
+    # JIVE tier: Llama 3.3 70B (via Cerebras)
+    COST_JIVE_INPUT: float = 0.10   # $0.10 per M tokens
+    COST_JIVE_OUTPUT: float = 0.10  # $0.10 per M tokens
+    
+    # JIGGA tier: Qwen 3 32B (via Cerebras)
+    COST_JIGGA_INPUT: float = 0.40   # $0.40 per M tokens
+    COST_JIGGA_OUTPUT: float = 0.80  # $0.80 per M tokens
+    
+    # Legacy pricing (kept for backwards compatibility)
     COST_SPEED_INPUT: float = 0.10
     COST_SPEED_OUTPUT: float = 0.10
-    COST_COMPLEX_INPUT: float = 0.60
-    COST_COMPLEX_OUTPUT: float = 1.20
+    COST_COMPLEX_INPUT: float = 0.40
+    COST_COMPLEX_OUTPUT: float = 0.80
+    
+    # Image Generation Pricing
+    COST_FLUX_IMAGE: float = 0.04  # $0.04 per FLUX 1.1 Pro image
+    COST_LONGCAT_IMAGE: float = 0.0  # FREE tier images
     
     # Exchange Rate
     ZAR_USD_RATE: float = Field(default=18.50, ge=1.0, le=100.0)
@@ -50,6 +84,15 @@ class Settings(BaseSettings):
     # In Docker: http://cepo:8080, locally: http://localhost:8080
     CEPO_URL: str = Field(default="http://localhost:8080")
     CEPO_ENABLED: bool = Field(default=True)
+    
+    # DeepInfra - Image Generation (FLUX 1.1 Pro)
+    DEEPINFRA_API_KEY: str = Field(default="", description="DeepInfra API Key for image generation")
+    DEEPINFRA_IMAGE_MODEL: str = Field(default="black-forest-labs/FLUX-1.1-pro")
+    
+    # OpenRouter - Free Image Prompt Enhancement (Llama 3.3 70B + LongCat)
+    OPENROUTER_API_KEY: str = Field(default="", description="OpenRouter API Key for prompt enhancement")
+    OPENROUTER_MODEL_LLAMA: str = Field(default="meta-llama/llama-3.3-70b-instruct:free")
+    OPENROUTER_MODEL_LONGCAT: str = Field(default="meituan/longcat-flash-chat:free")
     
     # Database
     DATABASE_URL: str = Field(default="sqlite:///./gogga.db")
@@ -74,7 +117,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
-        extra = "ignore"  # Ignore extra environment variables
+        extra = "ignore"  # Ignore extra environment variables  # Ignore extra environment variables
 
 
 @lru_cache()
