@@ -232,6 +232,20 @@ export function ChatClient() {
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
+    // Get BuddySystem context (all paid tiers - includes name, relationship, preferences)
+    let buddyContext: string | null = null;
+    if (tier === 'jive' || tier === 'jigga') {
+      try {
+        buddyContext = await getBuddyContext();
+        console.log(
+          '[GOGGA] Fetched BuddySystem context:',
+          buddyContext ? `${buddyContext.length} chars` : 'empty'
+        );
+      } catch (e) {
+        console.error('[GOGGA] Failed to load BuddySystem context:', e);
+      }
+    }
+
     // Get Long-Term Memory context (JIGGA only, stored in Dexie)
     let memoryContext: string | null = null;
     if (tier === 'jigga') {
@@ -293,7 +307,16 @@ export function ChatClient() {
       // Build the full message with all context
       let messageToSend = text;
 
-      // Add Long-Term Memory context first (persistent user info)
+      // Add BuddySystem context first (user identity, relationship, preferences)
+      if (buddyContext) {
+        console.log(
+          '[GOGGA] BuddySystem context found:',
+          buddyContext.slice(0, 200) + '...'
+        );
+        messageToSend = `USER CONTEXT:\n${buddyContext}\n\n---\n\n${messageToSend}`;
+      }
+
+      // Add Long-Term Memory context (persistent user info)
       if (memoryContext) {
         console.log(
           '[GOGGA] Long-Term Memory context found:',
@@ -376,6 +399,7 @@ export function ChatClient() {
           provider: data.meta?.provider,
           rag_context: !!ragContext,
           memory_context: !!memoryContext, // Long-term memory was used
+          buddy_context: !!buddyContext, // BuddySystem profile was used
           location_context: !!locationContext, // Location was included
           has_thinking: data.meta?.has_thinking || !!data.thinking,
         },
