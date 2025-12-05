@@ -1,5 +1,32 @@
 # GOGGA Authentication System
 
+## Session Lifecycle (Fully Automatic)
+
+> **You do not manage session connections. NextAuth handles everything.**
+
+**What You Don't Do:**
+- ❌ Create sessions manually
+- ❌ Track active sessions
+- ❌ Store session data
+- ❌ Refresh tokens manually
+- ❌ Clean up expired sessions
+
+**What NextAuth Does:**
+| Phase | What Happens |
+|-------|--------------|
+| Login | JWT created → encrypted cookie → browser |
+| Navigation | Cookie → NextAuth verifies → `session.user` populated |
+| Expiry | Auto-refresh or invalidate after 30 days |
+| Logout | Cookie wiped → session gone |
+| Server Restart | No problem. Sessions live in cookies |
+| Multiple Devices | Each device = own cookie. Same `userId` |
+
+**HTTP is stateless. No persistent connections. No session tables.**
+
+---
+
+# GOGGA Authentication System
+
 ## Overview
 
 GOGGA uses a token-based passwordless authentication system built with:

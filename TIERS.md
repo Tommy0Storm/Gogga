@@ -277,6 +277,56 @@ import { auth } from '@/auth'
 const session = await auth()
 ```
 
+### Session Lifecycle (Fully Automatic)
+
+> **You do not manage session connections. NextAuth handles everything.**
+
+**What You Don't Do:**
+- ❌ Create sessions manually
+- ❌ Track active sessions
+- ❌ Store session data
+- ❌ Refresh tokens manually
+- ❌ Clean up expired sessions
+- ❌ Invalidate sessions manually
+
+**What NextAuth Does Silently:**
+
+| Phase | What Happens |
+|-------|--------------|
+| **Login** | JWT created → encrypted cookie → sent to browser |
+| **Navigation** | Cookie sent → NextAuth verifies → `session.user` populated |
+| **Expiry** | Auto-refresh on activity or invalidate after 30 days |
+| **Logout** | Cookie wiped → session gone instantly |
+| **Server Restart** | No problem. Sessions live in cookies, not server memory |
+| **Multiple Devices** | Each device gets its own cookie. Same `userId` everywhere |
+
+**Why This Works:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    STATELESS SESSION FLOW                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  HTTP is stateless. There is no persistent connection.         │
+│                                                                 │
+│  Browser Request                                                │
+│     └─→ Cookie: authjs.session-token=xxx                        │
+│         └─→ NextAuth reads cookie                               │
+│             └─→ Verifies JWT signature                          │
+│                 └─→ Populates session.user.id                   │
+│                     └─→ Returns session object                  │
+│                                                                 │
+│  No sockets. No live connections. No session tables.           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Concurrency? Handled.**
+- Isolated sessions per device (separate cookies)
+- Stateless validation per request (no race conditions)
+- No live session tables to manage
+- SQLite only stores identity (`userId`), not session state
+
 ### Route Protection (Server-Side)
 
 GOGGA uses server-side route protection for security. All protected routes check session on the server before rendering.
