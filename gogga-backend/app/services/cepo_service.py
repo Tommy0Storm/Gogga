@@ -23,11 +23,9 @@ logger = logging.getLogger(__name__)
 # CePO Configuration - connects to Docker sidecar or local OptiLLM
 CEPO_TIMEOUT: Final[float] = 120.0  # CePO can take longer for complex reasoning
 
-# CePO can use either model:
-# - Llama 3.1 8B: Faster CePO reasoning (~2,200 t/s)
-# - Qwen 3 235B: Deeper CePO reasoning (~1,400 t/s)
-CEPO_MODEL_FAST: Final[str] = "llama3.1-8b"
-CEPO_MODEL_DEEP: Final[str] = "qwen-3-235b-a22b-instruct-2507"
+# CePO uses Llama 3.3 70B for JIVE tier reasoning
+# ~2,200 tokens/s on Cerebras - excellent for complex reasoning
+CEPO_MODEL: Final[str] = "llama3.3-70b"  # JIVE tier model
 
 
 class CepoService:
@@ -132,13 +130,8 @@ class CepoService:
             messages.extend(history[-5:])
         messages.append({"role": "user", "content": message})
         
-        # Select model: explicit > mode > default to fast (Llama)
-        if model:
-            model_id = model
-        elif mode == "deep":
-            model_id = CEPO_MODEL_DEEP
-        else:
-            model_id = CEPO_MODEL_FAST  # Default: Llama 3.1 8B for speed
+        # Use explicit model or default to Llama 3.3 70B
+        model_id = model if model else CEPO_MODEL
         
         try:
             client = await self._get_client()
@@ -172,18 +165,13 @@ class CepoService:
                 model_id, latency, prompt_tokens, completion_tokens
             )
             
-            # Determine layer based on model
-            layer_value = (
-                "deep_reasoning" if model_id == CEPO_MODEL_DEEP else "reasoning"
-            )
-            
             return {
                 "response": content,
                 "meta": {
                     "model_used": model_id,
-                    "layer": layer_value,
+                    "layer": "reasoning",
                     "approach": "cepo",
-                    "mode": "fast" if model_id == CEPO_MODEL_FAST else "deep",
+                    "mode": "deep",  # All JIVE reasoning uses deep mode
                     "latency_seconds": round(latency, 3),
                     "tokens": {
                         "input": prompt_tokens,

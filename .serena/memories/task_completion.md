@@ -1,5 +1,30 @@
 # Task Completion Log
 
+## 2025-12-05 - Extended Output Mode Complete
+
+### Completed Tasks:
+1. **JIVE Extended Output** - Dynamic token limits (4096 default, 8000 extended)
+2. **JIGGA Extended Output** - Dynamic token limits (4096 default, 8000 extended)
+3. **Extended Keywords** - "detailed report", "comprehensive analysis", "full breakdown", etc.
+4. **Long Context Tip** - Document /no_think for >100k context savings
+5. **Tests** - test_extended_output.py with all tests passing
+6. **TIERS.md** - Token Limits sections for both tiers
+7. **PERSONA.md** - Technical token reference for Llama and Qwen
+
+### Token Limits:
+| Tier | Default | Extended | Max |
+|------|---------|----------|-----|
+| JIVE (Llama 3.3 70B) | 4,096 | 8,000 | 40,000 (when ready) |
+| JIGGA (Qwen 3 32B) | 4,096 | 8,000 | 8,000 (model max) |
+
+### Live Tests Passed:
+- JIGGA casual chat → 4096 tokens ✓
+- JIGGA extended output → 8000 tokens ✓
+- JIVE casual chat → 4096 tokens ✓
+- JIVE extended output → 8000 tokens ✓
+
+---
+
 ## 2025-12-06 - Authentication System Complete
 
 ### Completed Tasks:

@@ -24,9 +24,11 @@ class Settings(BaseSettings):
     CEREBRAS_API_KEY: str = Field(..., description="Cerebras Cloud API Key")
     
     # Model Identification (Cerebras)
-    MODEL_SPEED: str = "llama3.1-8b"  # Legacy - kept for reference
+    # JIVE tier: Llama 3.3 70B via CePO at ~2,200 tokens/s
+    # JIGGA tier: Qwen 3 32B with thinking mode at ~1,400 tokens/s
+    MODEL_SPEED: str = "llama3.3-70b"  # JIVE tier (was llama3.1-8b, now unified)
     MODEL_COMPLEX: str = "qwen-3-32b"  # JIGGA tier - Qwen 3 32B
-    MODEL_CEPO: str = "llama3.3-70b"  # JIVE tier + CePO reasoning at 2,000 tokens/s
+    MODEL_CEPO: str = "llama3.3-70b"  # JIVE reasoning model (same as MODEL_SPEED)
     
     # Model Settings (JIGGA Qwen)
     JIGGA_MAX_TOKENS: int = 8000  # Max output tokens for Qwen 3 32B
