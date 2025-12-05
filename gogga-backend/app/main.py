@@ -38,8 +38,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("GOGGA API Starting...")
     logger.info("Environment: %s", settings.PAYFAST_ENV)
-    logger.info("Speed Model: %s", settings.MODEL_SPEED)
-    logger.info("Complex Model: %s", settings.MODEL_COMPLEX)
+    logger.info("FREE Tier: OpenRouter Llama 3.3 70B")
+    logger.info("JIVE Tier: Cerebras %s + CePO", settings.MODEL_CEPO)
+    logger.info("JIGGA Tier: Cerebras %s (thinking)", settings.MODEL_COMPLEX)
     logger.info("CePO Enabled: %s (URL: %s)", settings.CEPO_ENABLED, settings.CEPO_URL)
     
     yield
@@ -202,8 +203,8 @@ async def health_check():
             "cerebras": {
                 **cerebras_status,
                 "models": {
-                    "speed": settings.MODEL_SPEED,
-                    "complex": settings.MODEL_COMPLEX
+                    "jive": settings.MODEL_CEPO,
+                    "jigga": settings.MODEL_COMPLEX
                 },
                 "tiers_affected": ["jive", "jigga"]
             },
