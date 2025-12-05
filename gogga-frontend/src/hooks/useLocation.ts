@@ -69,38 +69,86 @@ const LOCATION_CONSENT_KEY = 'gogga_location_consent';
 const LOCATION_DATA_KEY = 'gogga_user_location';
 
 /**
- * Fetch weather data for a city
+ * Check if we're in a secure context where geolocation is allowed
+ * Geolocation API requires HTTPS, localhost, or 127.0.0.1
  */
-async function getWeatherForecast(city: string): Promise<WeatherData | null> {
+function isSecureContext(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.protocol === 'https:' ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  );
+}
+
+/**
+ * Get location from IP address (fallback when geolocation unavailable)
+ * Uses a free IP geolocation service
+ */
+async function getLocationFromIP(): Promise<UserLocation | null> {
   try {
-    // Using Open-Meteo API (free, no API key required)
-    // First geocode the city to get coordinates
-    const geoResponse = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`
-    );
-    const geoData = await geoResponse.json();
-    
-    if (!geoData.results || geoData.results.length === 0) {
-      console.warn('[Weather] City not found:', city);
+    console.log('[Location] Attempting IP-based geolocation...');
+    const response = await fetch('https://ipapi.co/json/', {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      console.warn('[Location] IP geolocation failed:', response.status);
       return null;
     }
-    
-    const { latitude, longitude } = geoData.results[0];
-    
-    // Fetch current weather
+
+    const data = await response.json();
+
+    if (data.latitude && data.longitude) {
+      return {
+        lat: data.latitude,
+        lon: data.longitude,
+        city: data.city,
+        country: data.country_name,
+        displayName: data.city
+          ? `${data.city}, ${data.country_name}`
+          : data.country_name,
+        isManual: false,
+        timestamp: Date.now(),
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('[Location] IP geolocation error:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch weather data using coordinates directly (most reliable)
+ */
+async function getWeatherByCoords(
+  lat: number,
+  lon: number
+): Promise<WeatherData | null> {
+  try {
+    console.log('[Weather] Fetching by coordinates:', lat, lon);
     const weatherResponse = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`
     );
     const weatherData = await weatherResponse.json();
-    
+
     if (!weatherData.current) {
+      console.warn('[Weather] No current weather data');
       return null;
     }
-    
+
     // Map WMO weather codes to descriptions and icons
     const weatherCode = weatherData.current.weather_code;
     const { description, icon } = mapWeatherCode(weatherCode);
-    
+
+    console.log(
+      '[Weather] Success:',
+      weatherData.current.temperature_2m + '°C',
+      description
+    );
+
     return {
       temperature: Math.round(weatherData.current.temperature_2m),
       description,
@@ -108,6 +156,33 @@ async function getWeatherForecast(city: string): Promise<WeatherData | null> {
       humidity: weatherData.current.relative_humidity_2m,
       windSpeed: weatherData.current.wind_speed_10m,
     };
+  } catch (error) {
+    console.error('[Weather] Failed to fetch by coords:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch weather data for a city (fallback if no coordinates)
+ */
+async function getWeatherForecast(city: string): Promise<WeatherData | null> {
+  try {
+    // Using Open-Meteo API (free, no API key required)
+    // First geocode the city to get coordinates
+    const geoResponse = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+        city
+      )}&count=1`
+    );
+    const geoData = await geoResponse.json();
+
+    if (!geoData.results || geoData.results.length === 0) {
+      console.warn('[Weather] City not found:', city);
+      return null;
+    }
+
+    const { latitude, longitude } = geoData.results[0];
+    return getWeatherByCoords(latitude, longitude);
   } catch (error) {
     console.error('[Weather] Failed to fetch:', error);
     return null;
@@ -144,7 +219,7 @@ function mapWeatherCode(code: number): { description: string; icon: string } {
     96: { description: 'Thunderstorm with hail', icon: 'thunderstorm' },
     99: { description: 'Thunderstorm with heavy hail', icon: 'thunderstorm' },
   };
-  
+
   return weatherMap[code] || { description: 'Unknown', icon: 'cloud' };
 }
 
@@ -171,10 +246,10 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
     try {
       const savedConsent = localStorage.getItem(LOCATION_CONSENT_KEY);
       const savedLocation = localStorage.getItem(LOCATION_DATA_KEY);
-      
+
       if (savedConsent === 'true') {
         setHasConsented(true);
-        
+
         if (savedLocation) {
           const parsed = JSON.parse(savedLocation) as UserLocation;
           // Only use cached location if less than 1 hour old
@@ -196,50 +271,93 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
   // Show location prompt on app load (if autoPrompt enabled and no consent yet)
   useEffect(() => {
     if (!autoPrompt) return;
-    
+
     const savedConsent = localStorage.getItem(LOCATION_CONSENT_KEY);
     if (savedConsent === 'true' || savedConsent === 'declined') {
       return; // Already answered
     }
-    
+
     const timer = setTimeout(() => {
       setShowLocationPrompt(true);
     }, 1500); // Show prompt after 1.5 seconds
-    
+
     return () => clearTimeout(timer);
   }, [autoPrompt]);
 
   /**
    * Request location permission and get current position
+   * Strategy: Try HTTPS geolocation first, fallback to IP geolocation
    */
   const requestLocation = useCallback(() => {
-    if (!('geolocation' in navigator)) {
-      setLocationError('Geolocation is not supported by your browser');
-      setShowLocationPrompt(false);
-      return;
-    }
+    console.log('[Location] requestLocation called');
 
     setIsLoadingLocation(true);
     setLocationError(null);
-    
+
+    // Helper to try IP-based geolocation as fallback
+    const tryIPFallback = async (reason: string) => {
+      console.log(`[Location] Trying IP fallback: ${reason}`);
+      const ipLocation = await getLocationFromIP();
+
+      if (ipLocation) {
+        setUserLocation(ipLocation);
+        setShowLocationPrompt(false);
+        setHasConsented(true);
+        localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
+        localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(ipLocation));
+
+        console.log('[Location] IP-based location obtained:', ipLocation.city);
+
+        // Fetch weather if we have a city
+        if (ipLocation.city) {
+          const weather = await getWeatherByCoords(
+            ipLocation.lat,
+            ipLocation.lon
+          );
+          setWeatherData(weather);
+        }
+        setIsLoadingLocation(false);
+      } else {
+        setLocationError('Could not detect location. Please enter manually.');
+        setShowLocationPrompt(false);
+        setShowManualLocation(true);
+        setIsLoadingLocation(false);
+      }
+    };
+
+    // Check if we're in a secure context (HTTPS, localhost, or 127.0.0.1)
+    if (!isSecureContext()) {
+      console.warn('[Location] Not in secure context - trying IP fallback');
+      tryIPFallback('not_secure_context');
+      return;
+    }
+
+    if (!('geolocation' in navigator)) {
+      console.warn('[Location] Geolocation not supported - trying IP fallback');
+      tryIPFallback('geolocation_not_supported');
+      return;
+    }
+
+    console.log('[Location] Requesting HTTPS geolocation permission...');
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
+
         const newLocation: UserLocation = {
           lat: latitude,
           lon: longitude,
           isManual: false,
           timestamp: Date.now(),
         };
-        
+
         setUserLocation(newLocation);
         setShowLocationPrompt(false);
         setHasConsented(true);
         localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
-        
-        console.log('[Location] User location obtained:', latitude, longitude);
-        
+
+        console.log('[Location] GPS location obtained:', latitude, longitude);
+
         // Reverse geocode to get full address
         try {
           const response = await fetch(
@@ -247,61 +365,78 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
             { headers: { 'User-Agent': 'Gogga-App/1.0' } }
           );
           const data = await response.json();
-          
-          const city = data.address?.city || data.address?.town || data.address?.suburb || data.address?.village;
+
+          // For display, prefer suburb/town for more specific location
+          const displayCity =
+            data.address?.suburb ||
+            data.address?.town ||
+            data.address?.city ||
+            data.address?.village;
           const street = data.address?.road || data.address?.street;
           const country = data.address?.country;
-          
+
           const updatedLocation: UserLocation = {
             ...newLocation,
-            city,
+            city: displayCity,
             street,
             country,
             displayName: data.display_name,
           };
-          
+
           setUserLocation(updatedLocation);
-          localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(updatedLocation));
-          
-          console.log('[Location] Address detected:', street, city, country);
-          
-          // Fetch weather for location
-          if (city) {
-            const weather = await getWeatherForecast(city);
-            setWeatherData(weather);
-          }
+          localStorage.setItem(
+            LOCATION_DATA_KEY,
+            JSON.stringify(updatedLocation)
+          );
+
+          console.log(
+            '[Location] Address detected:',
+            street,
+            displayCity,
+            country
+          );
+
+          // Fetch weather using coordinates directly (most reliable)
+          const weather = await getWeatherByCoords(latitude, longitude);
+          setWeatherData(weather);
         } catch (err) {
           console.error('[Location] Reverse geocode failed:', err);
           // Still save the coordinates even if geocoding fails
           localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
         }
-        
+
         setIsLoadingLocation(false);
       },
-      (error) => {
-        console.warn('[Location] Geolocation error:', error.code, error.message);
+      async (error) => {
+        console.warn('[Location] GPS error:', error.code, error.message);
+
+        // Try IP fallback for position unavailable or timeout
+        if (
+          error.code === error.POSITION_UNAVAILABLE ||
+          error.code === error.TIMEOUT
+        ) {
+          console.log('[Location] GPS failed, trying IP fallback...');
+          await tryIPFallback(`gps_error_${error.code}`);
+          return;
+        }
+
         setIsLoadingLocation(false);
-        
-        // Handle different error types
+
+        // Permission denied - show manual entry
         if (error.code === error.PERMISSION_DENIED) {
-          setLocationError('Location permission denied. You can enter your location manually.');
+          setLocationError(
+            'Location permission denied. You can enter your location manually.'
+          );
           setShowLocationPrompt(false);
-        } else if (error.code === error.TIMEOUT) {
-          // Timeout - allow retry
-          setRetryCount(prev => prev + 1);
-          setLocationError('Location request timed out. Tap "Retry" to try again.');
-          // Don't close prompt - show retry option
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          setRetryCount(prev => prev + 1);
-          setLocationError('Unable to determine your location. Please try again or enter manually.');
+          setShowManualLocation(true);
         } else {
           setLocationError('Failed to get location. Please try again.');
         }
       },
-      { 
-        enableHighAccuracy: true, 
-        timeout: 15000, // Increased timeout to 15 seconds
-        maximumAge: 0  // No cache - fresh location
+      {
+        enableHighAccuracy: true,
+        timeout: 10000, // 10 second timeout before IP fallback
+        maximumAge: 0, // No cache - fresh location
       }
     );
   }, []);
@@ -310,38 +445,73 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
    * Retry location detection (with reduced accuracy for faster result)
    */
   const retryLocation = useCallback(() => {
+    // Check if we're on a secure origin
+    const isSecureOrigin =
+      window.location.protocol === 'https:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (!isSecureOrigin) {
+      // Try IP-based geolocation instead
+      console.log('[Location] Retrying with IP-based location...');
+      setIsLoadingLocation(true);
+
+      getLocationFromIP().then(async (ipLocation) => {
+        if (ipLocation) {
+          setUserLocation(ipLocation);
+          setShowLocationPrompt(false);
+          setHasConsented(true);
+          setRetryCount(0);
+          localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
+          localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(ipLocation));
+
+          if (ipLocation.city) {
+            const weather = await getWeatherForecast(ipLocation.city);
+            setWeatherData(weather);
+          }
+        } else {
+          setLocationError('Could not detect location. Please enter manually.');
+          setShowManualLocation(true);
+        }
+        setIsLoadingLocation(false);
+      });
+      return;
+    }
+
     if (!('geolocation' in navigator) || retryCount >= MAX_RETRIES) {
-      setLocationError('Maximum retries reached. Please enter your location manually.');
+      setLocationError(
+        'Maximum retries reached. Please enter your location manually.'
+      );
       return;
     }
 
     setIsLoadingLocation(true);
     setLocationError(null);
-    
+
     console.log(`[Location] Retry attempt ${retryCount + 1}/${MAX_RETRIES}`);
-    
+
     // Use lower accuracy for retries - often faster
     const useHighAccuracy = retryCount === 0;
-    
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
+
         const newLocation: UserLocation = {
           lat: latitude,
           lon: longitude,
           isManual: false,
           timestamp: Date.now(),
         };
-        
+
         setUserLocation(newLocation);
         setShowLocationPrompt(false);
         setHasConsented(true);
         setRetryCount(0); // Reset retry count on success
         localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
-        
+
         console.log('[Location] Retry successful:', latitude, longitude);
-        
+
         // Reverse geocode to get full address
         try {
           const response = await fetch(
@@ -349,11 +519,15 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
             { headers: { 'User-Agent': 'Gogga-App/1.0' } }
           );
           const data = await response.json();
-          
-          const city = data.address?.city || data.address?.town || data.address?.suburb || data.address?.village;
+
+          const city =
+            data.address?.city ||
+            data.address?.town ||
+            data.address?.suburb ||
+            data.address?.village;
           const street = data.address?.road || data.address?.street;
           const country = data.address?.country;
-          
+
           const updatedLocation: UserLocation = {
             ...newLocation,
             city,
@@ -361,10 +535,13 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
             country,
             displayName: data.display_name,
           };
-          
+
           setUserLocation(updatedLocation);
-          localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(updatedLocation));
-          
+          localStorage.setItem(
+            LOCATION_DATA_KEY,
+            JSON.stringify(updatedLocation)
+          );
+
           if (city) {
             const weather = await getWeatherForecast(city);
             setWeatherData(weather);
@@ -373,24 +550,28 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
           console.error('[Location] Reverse geocode failed:', err);
           localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
         }
-        
+
         setIsLoadingLocation(false);
       },
       (error) => {
         console.warn('[Location] Retry failed:', error.code, error.message);
         setIsLoadingLocation(false);
-        setRetryCount(prev => prev + 1);
-        
+        setRetryCount((prev) => prev + 1);
+
         if (retryCount + 1 >= MAX_RETRIES) {
-          setLocationError('Could not detect location after multiple attempts. Please enter manually.');
+          setLocationError(
+            'Could not detect location after multiple attempts. Please enter manually.'
+          );
         } else {
-          setLocationError(`Attempt ${retryCount + 1} failed. Tap "Retry" to try again.`);
+          setLocationError(
+            `Attempt ${retryCount + 1} failed. Tap "Retry" to try again.`
+          );
         }
       },
-      { 
+      {
         enableHighAccuracy: useHighAccuracy,
         timeout: useHighAccuracy ? 15000 : 20000, // More time for low accuracy
-        maximumAge: 60000 // Allow 1 minute cache on retries
+        maximumAge: 60000, // Allow 1 minute cache on retries
       }
     );
   }, [retryCount]);
@@ -410,41 +591,47 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
    */
   const setManualLocation = useCallback(async (locationText: string) => {
     if (!locationText.trim()) return;
-    
+
     setIsLoadingLocation(true);
     setLocationError(null);
-    
+
     try {
       // Geocode the manual location using Nominatim
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationText)}&format=json&limit=1&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+          locationText
+        )}&format=json&limit=1&addressdetails=1`,
         { headers: { 'User-Agent': 'Gogga-App/1.0' } }
       );
       const data = await response.json();
-      
+
       if (data && data.length > 0) {
         const result = data[0];
-        
+
         const newLocation: UserLocation = {
           lat: parseFloat(result.lat),
           lon: parseFloat(result.lon),
-          city: result.address?.city || result.address?.town || result.address?.village || result.display_name.split(',')[0],
+          city:
+            result.address?.city ||
+            result.address?.town ||
+            result.address?.village ||
+            result.display_name.split(',')[0],
           street: result.address?.road || locationText,
           country: result.address?.country,
           displayName: result.display_name,
           isManual: true,
           timestamp: Date.now(),
         };
-        
+
         setUserLocation(newLocation);
         setShowManualLocation(false);
         setManualLocationInput('');
         setHasConsented(true);
         localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
         localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
-        
+
         console.log('[Location] Manual location set:', result.display_name);
-        
+
         // Fetch weather for manual location
         const cityName = newLocation.city;
         if (cityName) {
@@ -452,7 +639,9 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
           setWeatherData(weather);
         }
       } else {
-        setLocationError('Location not found. Please try a different address or city name.');
+        setLocationError(
+          'Location not found. Please try a different address or city name.'
+        );
       }
     } catch (error) {
       console.error('[Location] Manual geocoding failed:', error);
@@ -466,61 +655,68 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
    * Set location directly from autocomplete suggestion
    * Uses pre-fetched coordinates to skip geocoding step
    */
-  const setLocationFromSuggestion = useCallback(async (suggestion: {
-    lat: string;
-    lon: string;
-    display_name: string;
-    address?: {
-      city?: string;
-      town?: string;
-      village?: string;
-      road?: string;
-      country?: string;
-    };
-  }) => {
-    setIsLoadingLocation(true);
-    setLocationError(null);
-    
-    try {
-      const cityName = suggestion.address?.city || 
-                       suggestion.address?.town || 
-                       suggestion.address?.village || 
-                       suggestion.display_name.split(',')[0];
-      
-      const newLocation: UserLocation = {
-        lat: parseFloat(suggestion.lat),
-        lon: parseFloat(suggestion.lon),
-        city: cityName,
-        street: suggestion.address?.road,
-        country: suggestion.address?.country,
-        displayName: suggestion.display_name,
-        isManual: true,
-        timestamp: Date.now(),
+  const setLocationFromSuggestion = useCallback(
+    async (suggestion: {
+      lat: string;
+      lon: string;
+      display_name: string;
+      address?: {
+        city?: string;
+        town?: string;
+        village?: string;
+        road?: string;
+        country?: string;
       };
-      
-      setUserLocation(newLocation);
-      setShowManualLocation(false);
-      setManualLocationInput('');
-      setHasConsented(true);
-      localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
-      localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
-      
-      console.log('[Location] Set from suggestion:', suggestion.display_name);
-      
-      // Fetch weather for location
-      if (cityName) {
-        console.log('[Location] Fetching weather for:', cityName);
-        const weather = await getWeatherForecast(cityName);
-        console.log('[Location] Weather data:', weather);
-        setWeatherData(weather);
+    }) => {
+      setIsLoadingLocation(true);
+      setLocationError(null);
+
+      try {
+        const cityName =
+          suggestion.address?.city ||
+          suggestion.address?.town ||
+          suggestion.address?.village ||
+          suggestion.display_name.split(',')[0];
+
+        const newLocation: UserLocation = {
+          lat: parseFloat(suggestion.lat),
+          lon: parseFloat(suggestion.lon),
+          city: cityName,
+          street: suggestion.address?.road,
+          country: suggestion.address?.country,
+          displayName: suggestion.display_name,
+          isManual: true,
+          timestamp: Date.now(),
+        };
+
+        setUserLocation(newLocation);
+        setShowManualLocation(false);
+        setManualLocationInput('');
+        setHasConsented(true);
+        localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
+        localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
+
+        console.log('[Location] Set from suggestion:', suggestion.display_name);
+
+        // Fetch weather for location
+        if (cityName) {
+          console.log('[Location] Fetching weather for:', cityName);
+          const weather = await getWeatherForecast(cityName);
+          console.log('[Location] Weather data:', weather);
+          setWeatherData(weather);
+        }
+      } catch (error) {
+        console.error(
+          '[Location] Failed to set location from suggestion:',
+          error
+        );
+        setLocationError('Failed to set location. Please try again.');
+      } finally {
+        setIsLoadingLocation(false);
       }
-    } catch (error) {
-      console.error('[Location] Failed to set location from suggestion:', error);
-      setLocationError('Failed to set location. Please try again.');
-    } finally {
-      setIsLoadingLocation(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   /**
    * Clear saved location data
@@ -548,9 +744,9 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
    */
   const getLocationContext = useCallback((): string | null => {
     if (!userLocation) return null;
-    
+
     const parts: string[] = [];
-    
+
     if (userLocation.city) {
       parts.push(`City: ${userLocation.city}`);
     }
@@ -560,13 +756,19 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
     if (userLocation.country) {
       parts.push(`Country: ${userLocation.country}`);
     }
-    
-    parts.push(`Coordinates: ${userLocation.lat.toFixed(4)}, ${userLocation.lon.toFixed(4)}`);
-    
+
+    parts.push(
+      `Coordinates: ${userLocation.lat.toFixed(4)}, ${userLocation.lon.toFixed(
+        4
+      )}`
+    );
+
     if (weatherData) {
-      parts.push(`Current weather: ${weatherData.temperature}°C, ${weatherData.description}`);
+      parts.push(
+        `Current weather: ${weatherData.temperature}°C, ${weatherData.description}`
+      );
     }
-    
+
     return `[User Location Context]\n${parts.join('\n')}`;
   }, [userLocation, weatherData]);
 
@@ -581,7 +783,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
     hasConsented,
     retryCount,
     canRetry,
-    
+
     requestLocation,
     retryLocation,
     declineLocation,

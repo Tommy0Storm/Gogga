@@ -11,8 +11,14 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   // Allow dev requests from any origin (for Docker/remote development)
-  // Format: protocol://host (no port) - Next.js 16 syntax
-  allowedDevOrigins: ['http://10.241.135.171', 'http://localhost'],
+  // Next.js: hostnames without protocol, supports wildcards
+  allowedDevOrigins: [
+    'localhost',
+    '127.0.0.1', 
+    '192.168.0.168',
+    '*.local',
+    '10.241.135.171',
+  ],
   // Disable the Next.js dev indicator (floating N button)
   devIndicators: false,
   // Turbopack configuration (equivalent to webpack config below)
@@ -56,8 +62,18 @@ const nextConfig = {
         source: '/health',
         destination: `${BACKEND_URL}/health`,
       },
+      {
+        source: '/ingest/static/:path*',
+        destination: 'https://eu-assets.i.posthog.com/static/:path*',
+      },
+      {
+        source: '/ingest/:path*',
+        destination: 'https://eu.i.posthog.com/:path*',
+      },
     ];
   },
+  // This is required to support PostHog trailing slash API requests
+  skipTrailingSlashRedirect: true,
   // Configure webpack for client-side transformers.js
   webpack: (config, { isServer }) => {
     if (!isServer) {

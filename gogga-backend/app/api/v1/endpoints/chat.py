@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.models.domain import ChatRequest, ChatResponse
 from app.services.ai_service import ai_service
 from app.services.openrouter_service import openrouter_service
+from app.services.posthog_service import posthog_service
 from app.core.router import CognitiveLayer, UserTier, tier_router, is_image_prompt
 from app.core.exceptions import InferenceError
 
@@ -70,6 +71,19 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
             context_tokens=request.context_tokens
         )
         
+        # Track chat event in PostHog (non-blocking)
+        meta = result.get("meta", {})
+        posthog_service.track_chat_message(
+            user_id=request.user_id,
+            tier=request.user_tier.value,
+            model=meta.get("model", "unknown"),
+            input_tokens=meta.get("input_tokens", 0),
+            output_tokens=meta.get("output_tokens", 0),
+            latency_ms=meta.get("latency_ms", 0),
+            layer=meta.get("layer", "unknown"),
+            has_thinking=result.get("thinking") is not None
+        )
+        
         return ChatResponse(
             response=result["response"],
             thinking=result.get("thinking"),  # JIGGA thinking block for UI
@@ -78,11 +92,23 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
         
     except InferenceError as e:
         logger.error("Inference error for user %s: %s", request.user_id, e)
+        posthog_service.capture_error(
+            user_id=request.user_id,
+            error_type="inference_error",
+            error_message=str(e),
+            context={"tier": request.user_tier.value, "endpoint": "chat"}
+        )
         raise HTTPException(status_code=503, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Unexpected error for user %s", request.user_id)
+        posthog_service.capture_error(
+            user_id=request.user_id,
+            error_type="unexpected_error",
+            error_message=str(e),
+            context={"tier": request.user_tier.value, "endpoint": "chat"}
+        )
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 

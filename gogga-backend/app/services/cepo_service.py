@@ -156,11 +156,18 @@ class CepoService:
             content = data["choices"][0]["message"]["content"]
             usage = data.get("usage", {})
             
+            # OptiLLM/CePO doesn't return prompt_tokens, so estimate from messages
+            # Approximation: ~4 chars per token for English text
+            prompt_tokens = usage.get("prompt_tokens")
+            if prompt_tokens is None or prompt_tokens == 0:
+                total_chars = sum(len(m.get("content", "")) for m in messages)
+                prompt_tokens = max(1, total_chars // 4)
+            
+            completion_tokens = usage.get("completion_tokens", 0)
+            
             logger.info(
                 "CePO complete | model=%s | latency=%.2fs | tokens=%d/%d",
-                model_id, latency,
-                usage.get("prompt_tokens", 0),
-                usage.get("completion_tokens", 0)
+                model_id, latency, prompt_tokens, completion_tokens
             )
             
             # Determine layer based on model
@@ -177,8 +184,8 @@ class CepoService:
                     "mode": "fast" if model_id == CEPO_MODEL_FAST else "deep",
                     "latency_seconds": round(latency, 3),
                     "tokens": {
-                        "input": usage.get("prompt_tokens", 0),
-                        "output": usage.get("completion_tokens", 0)
+                        "input": prompt_tokens,
+                        "output": completion_tokens
                     }
                 }
             }

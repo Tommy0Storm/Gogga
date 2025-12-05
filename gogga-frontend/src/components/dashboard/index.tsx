@@ -133,6 +133,10 @@ export { LatencyChart, StorageChart, QueryModePie, PerformanceChart, GaugeChart,
 export { VectorHeatmap, VectorPreview, VectorStats, SimilarityScore } from './VectorHeatmap';
 export { DocumentManager, DocumentPreview, QuickDocList } from './DocumentManager';
 export { MemoryManager } from './MemoryManager';
+export { BuddyPanel } from './BuddyPanel';
+export { DexieMaintenance } from './DexieMaintenance';
+export { LLMMonitor } from './LLMMonitor';
+export { EmbeddingMonitor } from './EmbeddingMonitor';
 export { MobileDashboard } from './MobileDashboard';
 export { DesktopDashboard } from './DesktopDashboard';
 export { useRagDashboard, useContextMemory, useBrowserPerformance } from './useRagDashboard';

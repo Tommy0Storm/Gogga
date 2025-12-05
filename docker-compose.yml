@@ -25,7 +25,7 @@ services:
   frontend:
     build:
       context: ./gogga-frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: gogga_ui
     ports:
       - "3000:3000"
@@ -33,6 +33,7 @@ services:
       - NEXT_PUBLIC_API_URL=
     volumes:
       - ./gogga-frontend:/app
+      - ./gogga-frontend/certs:/app/certs
       - /app/node_modules
     depends_on:
       - backend

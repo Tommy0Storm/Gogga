@@ -1,204 +1,118 @@
 # GOGGA Development Status
 
-## Last Updated: December 4, 2025 (Dashboard Enhancements + Code Cleanup)
+## Last Updated: December 5, 2025 (Dashboard Enhancements + Rate Limit Resilience)
 
 ---
 
-## 🔧 Latest Session (Dec 4, 2025 - PM)
+## 🔧 Latest Session (Dec 5, 2025)
 
-### Dashboard Enhancements
-1. **Data Freshness Indicator** - Color-coded timer showing data staleness:
-   - 🟢 Green: < 10 seconds (fresh, pulsing dot)
-   - 🟡 Yellow: 10-30 seconds (stale)
-   - 🔴 Red: > 30 seconds (outdated)
-   - Shows "(paused)" when auto-refresh is disabled
+### VCB-AI Model Monitor Added
+New dashboard tab for monitoring the ONNX embedding model:
+- **Component**: `EmbeddingMonitor.tsx`
+- **Tab ID**: `embedding-model` (TabId updated in types.ts)
+- **Tab Label**: "VCB-AI Model"
+- **Model Details**:
+  - Name: VCB-AI Micro (based on E5-small-v2)
+  - Size: ~140MB ONNX
+  - Dimension: 384-dim vectors
+  - Quantization: q8 (8-bit)
+  - Backend: WebGPU (preferred) or WASM (fallback)
 
-2. **RagManager Methods Added**:
-   - `getCachedVectors()` - Returns real embedding vectors for dashboard visualization
-   - `hasEmbeddings()` - Check if any embeddings are cached
-   - `isReady()` - Check if engine is initialized
+**Features**:
+1. Model status card (loaded/loading/error, WebGPU vs WASM)
+2. Stats grid (operations, chunks, latency, memory usage)
+3. Success rate and cache hit rate metrics
+4. Processing history chart (5-min intervals)
+5. Recent operations table with timing
+6. Export functionality (JSON/CSV)
 
-3. **Model Status Fixed** - Now correctly shows "Ready" when embeddings have been generated
+### Bug Fix: ai_service.py Duplicate Code Removed
+- Fixed duplicate `@staticmethod` decorator
+- Removed duplicated `_generate_cerebras` method body (~180 lines)
+- Fixed missing import for `is_document_analysis_request`
+- Fixed broken indentation in `_fallback_to_openrouter` import
 
-### Code Quality Fixes (Pylance/Sourcery)
-1. **useChatHistory.ts** - Fixed React Hook dependency warning (moved `initializeSession` to useCallback)
-2. **useRagDashboard.ts** - Removed unused imports (`MetricAggregation`, `TimeSeriesDataPoint`)
-3. **page.tsx** - Used object destructuring for `response.data`
-4. **page.tsx** - Added eslint-disable for `<img>` element (base64 images can't use Next Image)
-5. **rag.ts** - Fixed default export (assign to variable before exporting)
-6. **ai_service.py** - Used walrus operator for `thinking_matches`
-7. **ai_service.py** - Used f-string and inlined return value
+### Rate Limit Resilience Added
+1. **Exponential Backoff Retry** - 3 attempts with 1s→2s→4s delays
+2. **Automatic Fallback** - Falls back to OpenRouter when primary service is rate-limited
+3. **User-Friendly Messaging** - No internal service names shown, only "GOGGA AI"
+4. **Seamless UX** - User doesn't know about fallback, response just works
+
+**Error Messages (User-Facing):**
+- Rate limit: "GOGGA AI is experiencing high demand. Please try again in a moment."
+- Other errors: "GOGGA AI encountered an issue. Please try again."
+
+### Dashboard GOGGA AI Monitor Enhancements
+1. **Renamed from "LLM Monitor" to "GOGGA AI Monitor"** - No LLM terminology
+2. **Insights Panel** - Smart insights based on usage patterns:
+   - Cost efficiency analysis
+   - Token balance (input/output ratio)
+   - Tier usage summary
+   - Latency performance
+3. **Export Logs** - Two formats:
+   - JSON export (full data with activity history)
+   - CSV export (usage data table)
+4. **Activity Log** - Collapsible panel showing recent actions:
+   - Export success/failure
+   - Timestamp for each action
+   - Clear log button
+
+**New UI Elements:**
+- FileText icon (JSON export)
+- Download icon (CSV export)
+- History icon (Activity Log toggle)
+- Info icon (Insights)
+- CheckCircle2/AlertCircle icons for status
 
 ---
 
-## 🎉 RAG SYSTEM FULLY OPERATIONAL (Dec 4, 2025)
+## Previous Session (Dec 4, 2025)
+
+### Dashboard Data Freshness Indicator
+- 🟢 Green: < 10 seconds (fresh)
+- 🟡 Yellow: 10-30 seconds (stale)
+- 🔴 Red: > 30 seconds (outdated)
+
+### RagManager Methods Added
+- `getCachedVectors()` - Returns real embedding vectors
+- `hasEmbeddings()` - Check if embeddings cached
+- `isReady()` - Check if engine initialized
+
+---
+
+## 🎉 RAG SYSTEM FULLY OPERATIONAL
 
 **Status**: ✅ Semantic RAG with E5-small-v2 working in browser
 
-### Final Fixes Applied:
-1. **Webpack Config** - Force browser build via alias:
-   ```javascript
-   '@huggingface/transformers': path.join(__dirname, 'node_modules/@huggingface/transformers/dist/transformers.web.js')
-   ```
-2. **Sharp Module** - Ignored via IgnorePlugin (Node.js dependency)
-3. **JIVE Upload** - Now uses `uploadDocument()` like JIGGA (was just showing alert)
-4. **Cross-Session Docs** - `RagManager.addExternalDocuments()` added
-5. **Memory Integration** - `getMemoryContextForLLM()` injected before RAG context
-
-### Verified Working:
-- ✅ Embedding Engine initializes with WASM backend
-- ✅ Xenova/e5-small-v2 loads successfully
-- ✅ RagManager finds documents (tested with 5 docs)
-- ✅ Long-Term Memory context injected (58 chars)
-- ✅ AI responds with document context
-
-### Model Branding:
-- Internal: E5-small-v2 (Xenova quantized, 384-dim)
-- User-facing: "VCB-AI Micro"
-
 ---
-
-$1
-
-### RAG Dashboard & Long-Term Memory System
-
-**RAG Dashboard** (`/dashboard` route):
-- Desktop layout with 5-tab sidebar (Overview, Model, Performance, Memory, Settings)
-- Mobile responsive layout with collapsible sections
-- Real-time metrics from `ragMetrics` system
-- Recharts-based visualizations (latency, storage, performance, query mode pie)
-- Vector heatmap for embedding visualization
-- Model status panel with WebGPU indicator
-
-**Long-Term Memory System** (NEW):
-- New `memories` table in Dexie (schema v4)
-- Categories: personal, project, reference, custom
-- Priority-based inclusion (1-10, higher = included first)
-- Toggle active/inactive per memory entry
-- Token estimation and limits (max 4000 tokens in context)
-- `MemoryManager` component with full CRUD UI
-- `getMemoryContextForLLM()` function for context injection
-- Persists across ALL chat sessions (unlike session documents)
-
-**Build Fixes Applied**:
-- Webpack config updated to externalize `@huggingface/transformers` and `onnxruntime-node`
-- IgnorePlugin for onnxruntime-node on client builds
-- serverComponentsExternalPackages for SSR compatibility
-- ESLint quote escaping fixes
-
-**Dashboard Components Created**:
-- `StatCard`, `MetricCard`, `ProgressRing`, `StatusBadge`, `TierBadge`
-- `LatencyChart`, `StorageChart`, `QueryModePie`, `PerformanceChart`, `GaugeChart`
-- `VectorHeatmap`, `VectorPreview`, `VectorStats`, `SimilarityScore`
-- `DocumentManager` (session docs), `MemoryManager` (long-term context)
-- `MobileDashboard`, `DesktopDashboard`
-- `useRagDashboard` hook for real-time data
-
----
-
-## Previous Updates (Dec 3, 2025)
-
-### UI/UX Improvements (Latest Session)
-
-**Token Tracking System:**
-- Added `TokenUsage` interface to Dexie (db.ts, schema v3)
-- Created `useTokenTracking` hook for persistence and display
-- Header shows all-time token count with # icon
-- Tracks input/output tokens per tier, daily aggregation
-- Functions: `trackTokenUsage()`, `getTodayTokenUsage()`, `getTotalTokenUsage()`
-
-**Admin Mode:**
-- **Shortcuts: Ctrl+Shift+A or Ctrl+Alt+A** (Fn key cannot be detected - hardware-level)
-- Alternative: Add `?admin=true` to URL
-- PromptManager now only visible in admin mode
-- Uses event capture phase for reliable keyboard detection
-
-**Error Handling:**
-- Added `error.tsx` and `global-error.tsx` for Next.js error boundaries
-
-**Styling:**
-- GoggaLogo animated variant: White (#FFFFFF) background circle
-- Quicksand font: Minimum 400 weight enforced in globals.css
-- Monochrome theme maintained
-
-**GOGGA Personality Overhaul (Dec 3):**
-- USER-FIRST PRIORITY: User is #1 and ONLY priority, never play devil's advocate
-- TRULY LOCAL: SA currency (Rands), services (SASSA, UIF, CCMA), realities (load shedding, e-tolls)
-- SARCASTIC-FRIENDLY: Witty, warm, wonderfully sarcastic by default
-- SERIOUS MODE: Auto-disables sarcasm for legal, medical, financial, trauma situations
-- User can override with "be serious" or "no jokes"
-- Updated: CEPO_IDENTITY_PROMPT, QWEN_IDENTITY_PROMPT, GOGGA_BASE_PROMPT
-
-**Thinking Block (JIGGA Tier):**
-- Collapsible UI with Brain icon
-- Backend THINK_PATTERN supports both `<think>` and `<thinking>` tags
-- Frontend fallback extraction if backend doesn't parse
-
-**Comprehensive Document Mode (Dec 3):**
-- Auto-detects analysis/report/document requests via keywords
-- Appends structured output instruction to message
-- Applies to JIVE CePO and JIGGA thinking modes
-- Generic format: Executive Summary, Analysis, Recommendations, Risks, Conclusion
-- User's explicit format requests ALWAYS override defaults
-- Keywords: analyze, report, document, assessment, proposal, brief, etc.
-
-### RAG System Fixes
-
-**Fixed Issues:**
-1. RAG not finding selected documents from other sessions
-   - Fix: Changed condition to check both `documents.length` and `selectedDocIds.length`
-
-2. Selected documents not being indexed for search
-   - Fix: Added `indexExternalDocument()` function in rag.ts
-
-3. Moved "Browse Docs" button to RAG sidebar
-
-### CePO Status
-
-**Issue:** OptiLLM adds `reasoning_effort` parameter that Cerebras doesn't support.
-- **Workaround:** Use direct Cerebras API calls
-- **Model for CePO:** `llama3.3-70b` at 2,000 tokens/s
 
 ## Tier-Based Architecture
 
 | Tier | Text Model | Speed | Image Generator |
 |------|------------|-------|-----------------|
 | FREE | OpenRouter Llama 3.3 70B | Standard | LongCat Flash |
-| JIVE | Cerebras Llama 3.1 8B (+CePO) | ~2,200 t/s | FLUX 1.1 Pro |
-| JIGGA | Cerebras Qwen 3 235B | ~1,400 t/s | FLUX 1.1 Pro |
+| JIVE | Cerebras Llama 3.3 70B (+CePO) | ~2,200 t/s | FLUX 1.1 Pro |
+| JIGGA | Cerebras Qwen 3 32B | ~1,400 t/s | FLUX 1.1 Pro |
 
-**CePO Model:** `llama3.3-70b` at 2,000 reasoning tokens/s
+**Fallback**: All tiers can fallback to OpenRouter when primary service is rate-limited.
 
-## 🚀 Running Services
-
-| Container | Service | Port | Status |
-|-----------|---------|------|--------|
-| gogga_ui | Frontend (Next.js) | 3000 | ✅ Running |
-| gogga_api | Backend (FastAPI) | 8000 | ✅ Healthy |
-| gogga_cepo | CePO (optillm) | 8080 | ⚠️ Has issues |
-
-## API Endpoints
-
-- `POST /api/v1/chat` - Tier-based text chat
-- `POST /api/v1/chat/enhance` - Universal prompt enhancement
-- `GET /api/v1/prompts/` - List all prompts
-- `GET /api/v1/prompts/{key}` - Full prompt detail
-- `POST /api/v1/images/generate` - Image generation
+---
 
 ## ✅ Completed Features
 
-- [x] Centralized system prompts with SA cultural context
-- [x] 11 SA language support with seamless switching
-- [x] Local RAG with FlexSearch (per-session + cross-session selection)
-- [x] Admin Panel (Ctrl+Alt+A or ?admin=true)
-- [x] Prompt Manager (Admin mode only)
+- [x] Rate limit retry with exponential backoff
+- [x] Automatic fallback to OpenRouter
+- [x] User-friendly error messages (no internal service names)
+- [x] GOGGA AI Monitor dashboard (renamed from LLM Monitor)
+- [x] Usage insights panel
+- [x] Log export (JSON + CSV)
+- [x] Activity log panel
+- [x] Semantic RAG with E5 embeddings
+- [x] Long-Term Memory context
 - [x] Token tracking with Dexie persistence
-- [x] Collapsible thinking blocks for JIGGA
-- [x] Monochrome UI theme with Quicksand font
 
 ## 🔜 Pending
 
-- [ ] Fix CePO OptiLLM reasoning_effort issue
+- [ ] Fix weather API suburb recognition
 - [ ] Azure Container Apps deployment
-- [ ] User authentication
-- [ ] Redis session caching
+- [ ] User authentication (Better Auth)

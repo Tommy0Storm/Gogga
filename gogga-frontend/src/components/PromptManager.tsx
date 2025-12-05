@@ -101,7 +101,7 @@ export function PromptManager() {
           '[PromptManager] Prompts endpoint not available:',
           res.status
         );
-        setPrompts([]);
+        setPrompts(null);
         return;
       }
       const data = await res.json();
@@ -111,7 +111,7 @@ export function PromptManager() {
         '[PromptManager] Failed to fetch prompts (endpoint may not exist):',
         err
       );
-      setPrompts([]); // Set empty array to prevent repeated fetch attempts
+      setPrompts(null); // Set null to prevent repeated fetch attempts
     } finally {
       setIsLoading(false);
     }

@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     OPENROUTER_MODEL_LLAMA: str = Field(default="meta-llama/llama-3.3-70b-instruct:free")
     OPENROUTER_MODEL_LONGCAT: str = Field(default="meituan/longcat-flash-chat:free")
     
+    # PostHog Analytics (EU region)
+    POSTHOG_API_KEY: str = Field(default="", description="PostHog API Key for analytics")
+    POSTHOG_HOST: str = Field(default="https://eu.i.posthog.com")
+    
     # Database
     DATABASE_URL: str = Field(default="sqlite:///./gogga.db")
     

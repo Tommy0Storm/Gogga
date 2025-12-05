@@ -7,6 +7,10 @@ Routes text requests based on user tier:
 - JIGGA: Cerebras Qwen 3 235B (thinking or /no_think)
 
 Universal prompt enhancement: OpenRouter Llama 3.3 70B FREE (all tiers)
+
+Rate Limit Handling:
+- Retry with exponential backoff (3 attempts)
+- Fallback to OpenRouter when Cerebras is rate-limited
 """
 import logging
 import time
@@ -33,6 +37,11 @@ DEFAULT_TEMPERATURE: Final[float] = 0.7
 DEFAULT_MAX_TOKENS: Final[int] = 4096
 JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B max output tokens
 DEFAULT_TOP_P: Final[float] = 0.95
+
+# Retry configuration for rate limits
+MAX_RETRIES: Final[int] = 3
+INITIAL_BACKOFF_SECONDS: Final[float] = 1.0
+BACKOFF_MULTIPLIER: Final[float] = 2.0
 
 # Regex pattern to extract <think>...</think> or <thinking>...</thinking> blocks
 # Qwen 3 may use either format depending on configuration
@@ -198,53 +207,53 @@ class AIService:
     ) -> ResponseDict:
         """
         JIVE/JIGGA tier: Cerebras Llama or Qwen.
-        
+
         Args:
             use_cepo: Route through CePO sidecar (JIVE reasoning)
             thinking_mode: Use Qwen thinking settings (JIGGA)
             append_no_think: Append /no_think to message (JIGGA fast)
-            
+
         Returns:
             ResponseDict with 'response', 'thinking' (if applicable), and 'meta'
         """
+        from app.core.router import is_document_analysis_request, COMPREHENSIVE_OUTPUT_INSTRUCTION
+        
         config = tier_router.get_model_config(layer)
         model_id = config["model"]
         system_prompt = tier_router.get_system_prompt(layer)
-        
+
         # Determine if this is JIGGA tier
         is_jigga = layer in (CognitiveLayer.JIGGA_THINK, CognitiveLayer.JIGGA_FAST)
         tier = "jigga" if is_jigga else "jive"
-        
+
         # Check for document/analysis request - add comprehensive output instruction
-        from app.core.router import is_document_analysis_request, COMPREHENSIVE_OUTPUT_INSTRUCTION
-        
         actual_message = message
         is_doc_request = is_document_analysis_request(message)
-        
+
         if is_doc_request and (thinking_mode or use_cepo):
             # Only add comprehensive instruction for reasoning modes (JIVE CePO or JIGGA thinking)
             actual_message = f"{message}{COMPREHENSIVE_OUTPUT_INSTRUCTION}"
             logger.info("Document/analysis request detected - comprehensive output mode enabled")
-        
+
         # Append /no_think for JIGGA fast mode
         if append_no_think:
             actual_message = f"{actual_message} /no_think"
             logger.info("JIGGA fast mode - appending /no_think")
-        
+
         # Route through CePO if enabled
         if use_cepo:
             return await AIService._generate_with_cepo(
                 user_id, actual_message, history, layer, model_id, system_prompt
             )
-        
+
         start_time = time.perf_counter()
-        
+
         # Build messages
         messages: list[MessageDict] = [{"role": "system", "content": system_prompt}]
         if history:
             messages.extend(history[-MAX_HISTORY_TURNS:])
         messages.append({"role": "user", "content": actual_message})
-        
+
         # Set generation parameters based on tier and mode
         # JIGGA tier uses specific settings for thinking/non-thinking
         # DO NOT use greedy decoding (temp=0) - causes performance degradation
@@ -262,36 +271,71 @@ class AIService:
                 max_tokens = QWEN_FAST_SETTINGS.get("max_tokens", JIGGA_MAX_TOKENS)
                 logger.info("JIGGA fast mode - temp=0.7, top_p=0.8, top_k=20, min_p=0")
         else:
-            # JIVE tier (Llama 3.3 70B)
+            # JIVE tier (Llama 3.1 8B)
             temperature = DEFAULT_TEMPERATURE
             top_p = DEFAULT_TOP_P
             max_tokens = DEFAULT_MAX_TOKENS
-        
+
         try:
             client = get_client()
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                messages=messages,
-                model=model_id,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p
-            )
-            
+
+            # Retry loop with exponential backoff for rate limits
+            last_error = None
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = await asyncio.to_thread(
+                        client.chat.completions.create,
+                        messages=messages,
+                        model=model_id,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        top_p=top_p
+                    )
+                    break  # Success - exit retry loop
+
+                except Exception as e:
+                    error_str = str(e)
+                    # Check for rate limit (429)
+                    if "429" not in error_str and "too_many_requests" not in error_str.lower():
+                        # Non-rate-limit error - raise immediately
+                        raise
+                    last_error = e
+                    if attempt < MAX_RETRIES - 1:
+                        backoff = INITIAL_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER ** attempt)
+                        logger.warning(
+                            "GOGGA AI busy (attempt %d/%d), retrying in %.1fs...",
+                            attempt + 1, MAX_RETRIES, backoff
+                        )
+                        await asyncio.sleep(backoff)
+                        continue
+                    # All retries exhausted - fallback to OpenRouter
+                    logger.warning(
+                        "GOGGA AI temporarily busy, using backup service..."
+                    )
+                    return await AIService._fallback_to_openrouter(
+                        user_id, actual_message, history, layer, tier
+                    )
+            else:
+                # Loop completed without break (shouldn't happen, but safety check)
+                if last_error:
+                    return await AIService._fallback_to_openrouter(
+                        user_id, actual_message, history, layer, tier
+                    )
+
             usage = response.usage
             raw_content = response.choices[0].message.content
             latency = time.perf_counter() - start_time
-            
+
             # Parse thinking block from response (JIGGA thinking mode)
             # Qwen wraps its reasoning in <think>...</think> tags
             main_response, thinking_block = parse_thinking_response(raw_content)
-            
+
             if thinking_block:
                 logger.info(
                     "Parsed thinking block | length=%d chars",
                     len(thinking_block)
                 )
-            
+
             # Track usage with tier for proper pricing
             cost_data = await track_usage(
                 user_id=user_id,
@@ -301,12 +345,12 @@ class AIService:
                 output_tokens=usage.completion_tokens,
                 tier=tier
             )
-            
+
             logger.info(
                 "Cerebras complete | tier=%s | layer=%s | latency=%.2fs | tokens=%d/%d",
                 tier, layer.value, latency, usage.prompt_tokens, usage.completion_tokens
             )
-            
+
             result: ResponseDict = {
                 "response": main_response,
                 "meta": {
@@ -325,17 +369,28 @@ class AIService:
                     "cost_zar": cost_data["zar"]
                 }
             }
-            
+
             # Include thinking block separately if present (for UI to display collapsed)
             if thinking_block:
                 result["thinking"] = thinking_block
                 result["meta"]["has_thinking"] = True
-            
+
             return result
-            
+
         except Exception as e:
-            logger.error("Cerebras error: %s", e)
-            raise InferenceError(str(e)) from e
+            error_str = str(e)
+            # Log internal details but show user-friendly message
+            logger.error("GOGGA AI service error: %s", error_str)
+
+            # Check for rate limit in the outer exception handler too
+            if "429" in error_str or "too_many_requests" in error_str.lower():
+                raise InferenceError(
+                    "GOGGA AI is experiencing high demand. Please try again in a moment."
+                ) from e
+
+            raise InferenceError(
+                "GOGGA AI encountered an issue. Please try again."
+            ) from e
     
     @staticmethod
     async def _generate_with_cepo(
@@ -385,6 +440,57 @@ class AIService:
                 CognitiveLayer.JIVE_SPEED,
                 use_cepo=False
             )
+    
+    @staticmethod
+    async def _fallback_to_openrouter(
+        user_id: str,
+        message: str,
+        history: list[MessageDict] | None,
+        original_layer: CognitiveLayer,
+        original_tier: str
+    ) -> ResponseDict:
+        """
+        Fallback to OpenRouter when primary service is rate-limited.
+        
+        Uses the same Llama 3.3 70B as FREE tier but tracks separately.
+        User sees seamless response without knowing about the fallback.
+        """
+        from app.services.openrouter_service import openrouter_service
+        
+        logger.info(
+            "Fallback to OpenRouter | user=%s | original_tier=%s",
+            user_id, original_tier
+        )
+        
+        # Use a system prompt appropriate for the tier's expected quality
+        system_prompt = tier_router.get_system_prompt(original_layer)
+        
+        try:
+            result = await openrouter_service.chat_free(
+                message=message,
+                system_prompt=system_prompt,
+                history=history,
+                user_id=user_id
+            )
+            
+            # Update meta to reflect the fallback (internal only, not shown to user)
+            result["meta"]["tier"] = original_tier
+            result["meta"]["provider"] = "openrouter_fallback"
+            result["meta"]["fallback_reason"] = "high_traffic"
+            result["meta"]["layer"] = original_layer.value
+            
+            logger.info(
+                "Fallback complete | tier=%s | latency=%.2fs",
+                original_tier, result["meta"].get("latency_seconds", 0)
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error("Fallback also failed: %s", e)
+            raise InferenceError(
+                "GOGGA AI is experiencing high demand. Please try again in a moment."
+            ) from e
     
     @staticmethod
     async def health_check() -> ResponseDict:

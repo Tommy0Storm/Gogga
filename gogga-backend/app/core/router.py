@@ -169,9 +169,15 @@ IMAGE_KEYWORDS: Final[frozenset[str]] = frozenset([
 
 
 def is_image_prompt(prompt: str) -> bool:
-    """Detect if a prompt is requesting image generation."""
-    prompt_lower = prompt.lower()
-    return any(keyword in prompt_lower for keyword in IMAGE_KEYWORDS)
+    """
+    Detect if a prompt is requesting image generation.
+    
+    Only checks the first 200 characters of the message to avoid false positives
+    when RAG context or document content contains image-related words.
+    """
+    # Only check the beginning of the message, not full RAG context
+    prompt_start = prompt[:200].lower()
+    return any(keyword in prompt_start for keyword in IMAGE_KEYWORDS)
 
 
 def is_document_analysis_request(message: str) -> bool:

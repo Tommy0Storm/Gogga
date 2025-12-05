@@ -13,3 +13,4 @@ alembic>=1.13.0
 psutil>=5.9.0
 pytz>=2024.1
 # optillm runs in its own container (cepo service), not needed here
+posthog>=7.0.0

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd Cerebras Vision image generation and enhanced markdown rendering\n\nFeatures Added:\n- Cerebras Vision Graphics Generation Model integration\n  - Detects image generation requests (\"make an image\", etc.)\n  - Routes to Cerebras Vision API endpoint\n  - Displays generated images inline in chat with prompts\n  - Supports image messages in conversation history\n\n- Enhanced Markdown Parser\n  - Code blocks (```) and inline code (`)\n  - Headers (#, ##, ###)\n  - Bold (**text**) and italic (*text*)\n  - Links [text](url)\n  - Lists (ordered and unordered)\n  - Blockquotes (> text)\n  - Horizontal rules (---)\n  - Proper rendering without showing markdown characters\n\n- Google Material Icons Integration\n  - Added Material Icons library\n  - Replaced message output icons (copy, speak) with Material Icons\n  - Consistent icon sizes across UI\n\n- UI Improvements\n  - Standardized top bar button sizes\n  - Mobile playback speed set to 1.2x\n  - Added new Sovereign spinner and icon assets\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd GitHub Actions workflow for automatic Pages deployment\n\n- Automated build and deploy on push to master\n- Configures Node.js 20 environment\n- Builds Vite app with environment variables\n- Deploys to GitHub Pages automatically\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git fetch:*)",
+      "Bash(git commit:*)",
+      "Bash(gh auth status)",
+      "Bash(gh api:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh run list:*)",
+      "Bash(npm run build:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

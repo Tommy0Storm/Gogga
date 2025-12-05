@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from app.core.router import UserTier, IMAGE_LIMITS, is_image_prompt
 from app.services.image_service import image_service
 from app.services.openrouter_service import openrouter_service
+from app.services.posthog_service import posthog_service
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,16 @@ async def generate_image(request: ImageGenerateRequest) -> ImageGenerateResponse
             enhance_prompt=request.enhance_prompt,
         )
         
+        # Track successful image generation (non-blocking)
+        await posthog_service.track_image(
+            user_id=request.user_id or "anonymous",
+            tier=request.user_tier.value,
+            model=result.meta.get("model", "flux-1.1-pro"),
+            prompt_length=len(request.prompt),
+            latency_seconds=result.meta.get("latency_seconds", 0),
+            success=True
+        )
+        
         return ImageGenerateResponse(
             success=True,
             original_prompt=result.original_prompt,
@@ -104,6 +115,12 @@ async def generate_image(request: ImageGenerateRequest) -> ImageGenerateResponse
         
     except Exception as e:
         logger.exception("Image generation error")
+        posthog_service.capture_error(
+            user_id=request.user_id or "anonymous",
+            error_type="image_generation_error",
+            error_message=str(e),
+            context={"tier": request.user_tier.value, "endpoint": "images/generate"}
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Image generation failed: {str(e)}"

@@ -1,10 +1,76 @@
 # GOGGA Tier System
 
-> **Last Updated:** December 4, 2025
+> **Last Updated:** December 5, 2025
 
 ## Overview
 
 GOGGA is a South African AI assistant with a 3-tier subscription model. Each tier offers distinct capabilities, AI models, and features tailored to different user needs.
+
+---
+
+## The Real Stack (Coming Soon)
+
+GOGGA is transitioning to a fully self-contained, cloud-free architecture:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GOGGA SELF-HOSTED STACK                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Next.js 16 (App Router)     │ Frontend + API Routes           │
+│  Better Auth (Auth.js core)  │ Authentication & Sessions       │
+│  Prisma ORM                  │ Type-safe database access       │
+│  SQLite (./prisma/dev.db)    │ Local database file             │
+└─────────────────────────────────────────────────────────────────┘
+              Everything lives inside your repo, no cloud fuss
+```
+
+### Stack Benefits
+
+| Component | Why |
+|-----------|-----|
+| **Next.js App Router** | Server components, streaming, Turbopack |
+| **Better Auth** | Self-hosted auth, no vendor lock-in, social + credentials |
+| **Prisma** | Type-safe queries, migrations, schema-first development |
+| **SQLite** | Zero config, file-based, Git-friendly for dev |
+
+### File Structure (Upcoming)
+
+```
+gogga-frontend/
+├── prisma/
+│   ├── schema.prisma      # User, Session, Subscription models
+│   ├── dev.db             # SQLite database file
+│   └── migrations/        # Version-controlled migrations
+├── src/
+│   ├── lib/
+│   │   ├── auth.ts        # Better Auth config
+│   │   ├── prisma.ts      # Prisma client singleton
+│   │   └── db.ts          # Dexie (client-side RAG)
+│   └── app/
+│       └── api/auth/[...all]/route.ts  # Auth routes
+```
+
+### Auth + Tier Integration
+
+```typescript
+// User model with tier
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  tier          String   @default("free")  // free | jive | jigga
+  subscription  Subscription?
+  // ... Better Auth fields
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  tier          String   // jive | jigga
+  payfastToken  String?  // For cancellation
+  expiresAt     DateTime
+  user          User     @relation(fields: [userId], references: [id])
+}
+```
 
 ---
 
@@ -307,6 +373,31 @@ When you request an **analysis**, **report**, or **professional document**, JIGG
 
 ## Universal Features (All Tiers)
 
+### BuddySystem & Language Detection
+
+**User Relationship Tracking:**
+- Relationship levels: stranger → acquaintance (50pts) → friend (200pts) → bestie (500pts)
+- Buddy points earned through positive interactions
+- Personalized greetings based on relationship level
+- Sarcastic intros (toggleable per user preference)
+
+**SA Language Detection:**
+- Real-time detection of all 11 SA official languages
+- Confidence scoring (0-100%) with weighted keyword matching
+- Languages: English, Afrikaans, isiZulu, isiXhosa, Sepedi, Setswana, Sesotho, Xitsonga, siSwati, Tshivenda, isiNdebele
+- Subtle language badge on user messages (🇿🇦 + code)
+- Auto-updates preferred language based on detected usage
+
+**Time-Aware Greetings:**
+- Morning/afternoon/evening greetings in user's preferred language
+- All 11 languages supported with authentic phrases
+
+**Files:**
+- `lib/buddySystem.ts` - Core BuddySystem class with language detection
+- `hooks/useBuddySystem.ts` - React hook for component integration
+- `components/dashboard/BuddyPanel.tsx` - Dashboard widget
+- `components/LanguageBadge.tsx` - Subtle language indicator
+
 ### Token Tracking
 
 All tiers track token usage with local persistence:
@@ -358,6 +449,34 @@ All tiers understand:
 **Serious Mode (Automatic)**
 - Drops all sarcasm for: legal threats, medical emergencies, financial crisis, trauma
 - Say "be serious" or "no jokes" to switch to professional mode
+
+### Location Detection
+
+**Strategy: HTTPS First + IP Fallback**
+
+```text
+┌─────────────────────────────────────────────────┐
+│  1. Try HTTPS Geolocation (GPS)                 │
+│     - Most accurate (meters)                    │
+│     - Requires user permission                  │
+│     └─ Success? → Use GPS location              │
+│                                                 │
+│  2. On GPS failure → IP Geolocation fallback    │
+│     - Works without permission                  │
+│     - City-level accuracy                       │
+│     - Uses ipapi.co API                         │
+│     └─ Success? → Use IP location               │
+│                                                 │
+│  3. Both fail → Show manual entry               │
+└─────────────────────────────────────────────────┘
+```
+
+**Features:**
+- Automatic weather fetching once location obtained
+- Location badge in chat interface
+- Privacy-first: Always asks for consent
+- Falls back gracefully to IP-based detection
+- Manual entry option always available
 
 ### Admin Mode
 
@@ -481,6 +600,8 @@ Body: { search_id, helpful: boolean, feedback? }
 | Tailwind CSS | 4.1.17 | CSS-first config with @theme |
 | TypeScript | 5.3+ | Strict mode |
 | Lucide React | 0.555.0 | Icon library |
+| Better Auth | latest | Self-hosted auth (coming) |
+| Prisma | latest | SQLite ORM (coming) |
 
 ### UI Theme
 
@@ -807,6 +928,26 @@ The retrieved context is injected into the chat message before sending to the LL
   "react-markdown": "^10.1.0"
 }
 ```
+
+---
+
+## Migration Notes
+
+### Current → Real Stack
+
+| Current | Future | Notes |
+|---------|--------|-------|
+| localStorage (tier) | Prisma User.tier | Server-side tier validation |
+| No auth | Better Auth | Email/password + social providers |
+| Dexie only | Dexie + SQLite | Client RAG + Server user data |
+| PayFast webhook → ? | PayFast → Prisma Subscription | Persistent subscription tracking |
+
+### Why SQLite?
+
+- **Development**: Zero setup, `npx prisma db push` and go
+- **Testing**: Fresh DB per test run, no shared state
+- **Deployment**: Single file, easy backup, works with Docker volumes
+- **Upgrade path**: Prisma makes switching to PostgreSQL trivial
 
 ---
 

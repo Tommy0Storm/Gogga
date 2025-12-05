@@ -7,10 +7,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Database, 
-  Cpu, 
-  BarChart3, 
+import {
+  Database,
+  Cpu,
+  BarChart3,
   FileText,
   RefreshCw,
   Settings,
@@ -25,8 +25,17 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  Wrench,
+  Package,
 } from 'lucide-react';
-import { StatCard, MetricCard, ProgressRing, StatusBadge, TierBadge, InfoRow } from './StatCard';
+import {
+  StatCard,
+  MetricCard,
+  ProgressRing,
+  StatusBadge,
+  TierBadge,
+  InfoRow,
+} from './StatCard';
 import {
   LatencyChart,
   StorageChart,
@@ -45,6 +54,10 @@ import {
 } from './VectorHeatmap';
 import { DocumentManager } from './DocumentManager';
 import { MemoryManager } from './MemoryManager';
+import { BuddyPanel } from './BuddyPanel';
+import { DexieMaintenance } from './DexieMaintenance';
+import { LLMMonitor } from './LLMMonitor';
+import { EmbeddingMonitor } from './EmbeddingMonitor';
 import { useBrowserPerformance } from './useRagDashboard';
 import type { VectorData } from './useRagDashboard';
 import type {
@@ -186,6 +199,21 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     id: 'performance',
     label: 'Performance',
     icon: <Activity className="w-5 h-5" />,
+  },
+  {
+    id: 'llm',
+    label: 'GOGGA AI',
+    icon: <Zap className="w-5 h-5" />,
+  },
+  {
+    id: 'embedding-model',
+    label: 'VCB-AI Model',
+    icon: <Package className="w-5 h-5" />,
+  },
+  {
+    id: 'maintenance',
+    label: 'Maintenance',
+    icon: <Wrench className="w-5 h-5" />,
   },
 ];
 
@@ -419,6 +447,12 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
               scoreDistribution={scoreDistribution}
             />
           )}
+
+          {activeTab === 'llm' && <LLMMonitor />}
+
+          {activeTab === 'embedding-model' && <EmbeddingMonitor />}
+
+          {activeTab === 'maintenance' && <DexieMaintenance />}
         </div>
       </main>
     </div>
@@ -671,6 +705,80 @@ const StorageTab: React.FC<StorageTabProps> = ({ storageStats, documents }) => {
   );
 };
 
+// ============================================================================
+// Embedding Quality Calculator
+// ============================================================================
+
+interface EmbeddingQuality {
+  score: number; // 0-100
+  grade: 'excellent' | 'good' | 'fair' | 'poor';
+  factors: {
+    chunkCoverage: number;
+    vectorDensity: number;
+    documentSize: number;
+  };
+  recommendation?: string;
+}
+
+function calculateEmbeddingQuality(
+  doc: ContextDocument,
+  vectors: number[][],
+  docIndex: number
+): EmbeddingQuality {
+  // Factor 1: Chunk coverage (are all chunks embedded?)
+  const expectedChunks = doc.chunkCount || Math.ceil((doc.size || 1000) / 1500);
+  const actualChunks = vectors.length > docIndex ? 1 : 0; // Simplified - each doc has at least 1 vector
+  const chunkCoverage = Math.min(
+    100,
+    (actualChunks / Math.max(1, expectedChunks)) * 100
+  );
+
+  // Factor 2: Vector density (how information-rich are the vectors?)
+  let vectorDensity = 50; // Default
+  if (vectors[docIndex]) {
+    const vec = vectors[docIndex];
+    const nonZero = vec.filter((v) => Math.abs(v) > 0.001).length;
+    vectorDensity = Math.round((nonZero / vec.length) * 100);
+  }
+
+  // Factor 3: Document size factor (larger docs = more context)
+  const docSize = doc.size || 0;
+  const documentSize =
+    docSize > 50000 ? 100 : docSize > 10000 ? 80 : docSize > 2000 ? 60 : 40;
+
+  // Calculate overall score
+  const score = Math.round(
+    chunkCoverage * 0.4 + vectorDensity * 0.4 + documentSize * 0.2
+  );
+
+  // Determine grade
+  let grade: EmbeddingQuality['grade'];
+  if (score >= 80) grade = 'excellent';
+  else if (score >= 60) grade = 'good';
+  else if (score >= 40) grade = 'fair';
+  else grade = 'poor';
+
+  // Recommendation
+  let recommendation: string | undefined;
+  if (vectorDensity < 50) {
+    recommendation =
+      'Document may have sparse content - consider adding more text';
+  } else if (chunkCoverage < 50) {
+    recommendation =
+      'Some chunks may not be embedded yet - run a query to complete';
+  } else if (documentSize < 50) {
+    recommendation =
+      'Small document - combine with related content for better context';
+  }
+
+  return {
+    score,
+    grade,
+    factors: { chunkCoverage, vectorDensity, documentSize },
+    recommendation,
+  };
+}
+
 // Embeddings Tab
 interface EmbeddingsTabProps {
   modelStatus: ModelStatus | null;
@@ -825,60 +933,223 @@ const EmbeddingsTab: React.FC<EmbeddingsTabProps> = ({
         )}
       </div>
 
-      {/* Embedding Quality Info */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Embedding Quality & Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Document Embedding Quality */}
         <div className="bg-white rounded-xl border border-primary-200 p-5">
-          <h3 className="font-semibold text-primary-800 mb-4">
-            Embedding Status
+          <h3 className="font-semibold text-primary-800 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Embedding Quality
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {documents.length === 0 ? (
               <p className="text-primary-400 text-sm">No documents uploaded</p>
             ) : (
-              documents.slice(0, 4).map((doc, i) => (
-                <div
-                  key={doc.id ?? i}
-                  className="flex items-center justify-between"
-                >
-                  <span className="text-sm text-primary-600 truncate max-w-[200px]">
-                    {doc.filename}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 text-xs rounded ${
-                      doc.embeddingStatus === 'complete'
-                        ? 'bg-sa-green/20 text-sa-green'
-                        : doc.embeddingStatus === 'pending'
-                        ? 'bg-sa-gold/20 text-sa-gold'
-                        : 'bg-primary-200 text-primary-500'
-                    }`}
+              documents.slice(0, 4).map((doc, i) => {
+                const quality = calculateEmbeddingQuality(doc, vectors, i);
+                const gradeColors = {
+                  excellent: 'bg-sa-green text-white',
+                  good: 'bg-sa-green/70 text-white',
+                  fair: 'bg-sa-gold text-white',
+                  poor: 'bg-red-500 text-white',
+                };
+                return (
+                  <div
+                    key={doc.id ?? i}
+                    className="border border-primary-100 rounded-lg p-3"
                   >
-                    {doc.embeddingStatus ?? 'pending'}
-                  </span>
-                </div>
-              ))
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-primary-700 truncate max-w-[180px]">
+                        {doc.filename}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 text-xs rounded font-medium ${
+                            gradeColors[quality.grade]
+                          }`}
+                        >
+                          {quality.score}%
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 text-xs rounded ${
+                            doc.embeddingStatus === 'complete'
+                              ? 'bg-sa-green/20 text-sa-green'
+                              : doc.embeddingStatus === 'error'
+                              ? 'bg-red-100 text-red-600'
+                              : 'bg-sa-gold/20 text-sa-gold'
+                          }`}
+                        >
+                          {doc.embeddingStatus ?? 'pending'}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Quality bar */}
+                    <div className="h-1.5 bg-primary-100 rounded-full overflow-hidden mb-2">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          quality.grade === 'excellent'
+                            ? 'bg-sa-green'
+                            : quality.grade === 'good'
+                            ? 'bg-sa-green/70'
+                            : quality.grade === 'fair'
+                            ? 'bg-sa-gold'
+                            : 'bg-red-400'
+                        }`}
+                        style={{ width: `${quality.score}%` }}
+                      />
+                    </div>
+                    {/* Quality factors */}
+                    <div className="flex gap-3 text-xs text-primary-500">
+                      <span>
+                        Coverage: {Math.round(quality.factors.chunkCoverage)}%
+                      </span>
+                      <span>
+                        Density: {Math.round(quality.factors.vectorDensity)}%
+                      </span>
+                      <span>
+                        Size: {Math.round(quality.factors.documentSize)}%
+                      </span>
+                    </div>
+                    {quality.recommendation && (
+                      <p className="text-xs text-sa-gold mt-2 flex items-start gap-1">
+                        <Info className="w-3 h-3 mt-0.5 shrink-0" />
+                        {quality.recommendation}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
+
+        {/* JIVE vs JIGGA Comparison */}
         <div className="bg-white rounded-xl border border-primary-200 p-5">
-          <h3 className="font-semibold text-primary-800 mb-4">
-            Performance Tips
+          <h3 className="font-semibold text-primary-800 mb-4 flex items-center gap-2">
+            <Zap className="w-5 h-5" />
+            Semantic vs Keyword Search
           </h3>
-          <div className="space-y-2 text-sm text-primary-600">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-sa-green mt-0.5" />
-              <span>WebGPU acceleration available for faster embeddings</span>
+
+          {/* Comparison Table */}
+          <div className="space-y-3 mb-4">
+            <div className="grid grid-cols-3 gap-2 text-xs font-medium text-primary-500 border-b border-primary-100 pb-2">
+              <span>Feature</span>
+              <span className="text-center">JIVE (Keyword)</span>
+              <span className="text-center">JIGGA (Semantic)</span>
             </div>
-            <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-primary-400 mt-0.5" />
-              <span>
-                E5 models use &quot;query:&quot; and &quot;passage:&quot;
-                prefixes
-              </span>
+
+            {[
+              {
+                feature: 'Search Type',
+                jive: 'Exact match',
+                jigga: 'Meaning-based',
+              },
+              { feature: 'Understands Context', jive: '❌', jigga: '✅' },
+              { feature: 'Finds Synonyms', jive: '❌', jigga: '✅' },
+              { feature: 'Multi-language', jive: '❌', jigga: '✅' },
+              {
+                feature: 'Relevance Scoring',
+                jive: 'Basic',
+                jigga: 'Cosine similarity',
+              },
+              {
+                feature: 'Query: "car problems"',
+                jive: 'Finds "car"',
+                jigga: 'Finds "vehicle issues"',
+              },
+            ].map((row, i) => (
+              <div
+                key={i}
+                className="grid grid-cols-3 gap-2 text-xs py-1.5 border-b border-primary-50"
+              >
+                <span className="text-primary-600 font-medium">
+                  {row.feature}
+                </span>
+                <span className="text-center text-primary-500">{row.jive}</span>
+                <span className="text-center text-primary-700 font-medium">
+                  {row.jigga}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Example Comparison */}
+          <div className="bg-primary-50 rounded-lg p-3 mb-4">
+            <p className="text-xs font-medium text-primary-700 mb-2">
+              Example Query: &ldquo;How do I fix the login issue?&rdquo;
+            </p>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-white rounded p-2 border border-primary-200">
+                <span className="font-medium text-primary-600">
+                  JIVE finds:
+                </span>
+                <p className="text-primary-500 mt-1">
+                  Only docs with &ldquo;login&rdquo; or &ldquo;fix&rdquo;
+                </p>
+              </div>
+              <div className="bg-white rounded p-2 border border-sa-gold/30">
+                <span className="font-medium text-sa-gold">JIGGA finds:</span>
+                <p className="text-primary-600 mt-1">
+                  Auth errors, sign-in problems, session timeouts
+                </p>
+              </div>
             </div>
-            <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-primary-400 mt-0.5" />
-              <span>384-dim vectors optimized for semantic similarity</span>
+          </div>
+
+          {/* Upgrade CTA for non-JIGGA */}
+          {tier !== 'jigga' && (
+            <button
+              onClick={() => window.open('/pricing', '_blank')}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-sa-gold to-sa-gold/80 text-white rounded-lg font-medium text-sm hover:from-sa-gold/90 hover:to-sa-gold/70 transition-all flex items-center justify-center gap-2"
+            >
+              <Zap className="w-4 h-4" />
+              Upgrade to JIGGA for Semantic Search
+            </button>
+          )}
+
+          {/* JIGGA user tips */}
+          {tier === 'jigga' && (
+            <div className="space-y-2 text-sm text-primary-600">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-sa-green mt-0.5" />
+                <span>
+                  Semantic search active - finding meaning, not just keywords
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-sa-green mt-0.5" />
+                <span>E5 embeddings capture document context</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-primary-400 mt-0.5" />
+                <span>Tip: Natural language queries work best</span>
+              </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Performance Tips */}
+      <div className="bg-white rounded-xl border border-primary-200 p-5">
+        <h3 className="font-semibold text-primary-800 mb-4">
+          Embedding Performance Tips
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-primary-600">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-sa-green mt-0.5 shrink-0" />
+            <span>
+              WebGPU acceleration available for 3-5x faster embeddings
+            </span>
+          </div>
+          <div className="flex items-start gap-2">
+            <Info className="w-4 h-4 text-primary-400 mt-0.5 shrink-0" />
+            <span>
+              E5 model uses query/passage prefixes for optimal retrieval
+            </span>
+          </div>
+          <div className="flex items-start gap-2">
+            <Info className="w-4 h-4 text-primary-400 mt-0.5 shrink-0" />
+            <span>384-dimension vectors balance accuracy and speed</span>
           </div>
         </div>
       </div>
@@ -904,6 +1175,9 @@ const MemoryTab: React.FC<MemoryTabProps> = ({
 }) => {
   return (
     <div className="space-y-6">
+      {/* Buddy System Panel */}
+      <BuddyPanel />
+
       {/* Long-Term Memory Manager */}
       <MemoryManager
         tier={tier}

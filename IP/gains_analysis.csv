@@ -1,0 +1,33 @@
+Priority,Feature,Impact,Current Status,Effort,Code Quality Grade,ROI Stars,Description,Implementation Notes,Verification Status
+,,,,,,,,,
+=== BIG GAINS (Verified Worth Implementing) ===,,,,,,,,,
+1,PipelineStateMachine,NUCLEAR,Missing,HIGH,A-,5,"Async state machine with 8 states: IDLE→PLANNING→EXECUTING→ANALYZING→SUMMARIZING→COMPLETED→FAILED. Budget guards ($5 max), cost tracking, SSE streaming","Clean Pydantic models, OTel integrated, proper enum states, exception handling with span recording. Located in AMMAP-Code.txt backend/app/orchestrator/state_machine.py",VERIFIED - Full implementation available with proper FSM pattern
+2,SSE Event Streaming,HIGH,Missing,MEDIUM,A,4,"Real-time frontend updates via EventSourceResponse, connection tracking, ping keepalives","Clean async/await, proper cleanup with finally block. Missing 'import json' at top. See AMMAP-Code.txt backend/app/api/stream.py",VERIFIED - Production-ready pattern with minor json import fix needed
+3,OpenTelemetry Telemetry,HIGH,Missing,MEDIUM,A,4,"Prometheus metrics (TOOL_CALLS, MODEL_LATENCY, COST_METER, PIPELINE_ERRORS) + Jaeger tracing","Industry standard pattern, proper resource naming, environment config. See AMMAP-Code.txt backend/app/observability/telemetry.py",VERIFIED - Clean implementation with proper exporters
+4,BuddySystem Class,MASSIVE,Missing,MEDIUM,B+,4,"Dexie IndexedDB persistence for UserProfile, Memory, InteractionLog. Relationship tracking (new→acquaintance→friend→bestie), buddy points, 8K context pruning","Some implicit 'any' types need fixing. See src/utils/buddySystem.ts in extracted zip. ConversationManager exists and exports Message type.",VERIFIED - Full 370+ line implementation reviewed
+5,EnhancedSystemPrompts,HIGH,Partial,LOW,A,4,"Time-aware context (getTimeContext), mood-based intros, SA sarcasm scaling, humor shutdown for serious topics, CePO/Legal mode prompts","Very clean implementation. See src/utils/enhancedSystemPrompts.ts. Includes shouldDisableHumor() helper.",VERIFIED - 280+ lines of production-ready prompts
+,,,,,,,,,
+=== MEDIUM GAINS (Already Have or Cosmetic) ===,,,,,,,,,
+6,EmbeddingEngine (ONNX),HIGH,HAVE IT,N/A,N/A,N/A,"E5-small-v2 via @huggingface/transformers already working",Already implemented in gogga-frontend/src/lib/embeddingEngine.ts,VERIFIED - Gogga has this
+7,RagManager Class,HIGH,HAVE IT,N/A,N/A,N/A,"RagManager exists with JIVE/JIGGA modes",Already implemented in gogga-frontend/src/lib/ragManager.ts,VERIFIED - Gogga has this
+8,CePO Service,HIGH,HAVE IT,N/A,N/A,N/A,"CePO service implemented",Already in gogga-backend/app/services/cepo_service.py,VERIFIED - Gogga has this
+9,TierRouter,HIGH,HAVE IT,N/A,N/A,N/A,"TierRouter + BicameralRouter exist",Already in gogga-backend/app/core/router.py with UserTier and CognitiveLayer classes,VERIFIED - Gogga has this
+10,ConversationManager,MEDIUM,HAVE IT,N/A,N/A,N/A,"Persistent conversation history management","VCB has ConversationManager class (320+ lines). Gogga has ChatSession/ChatMessage in db.ts with Dexie",VERIFIED - Both have implementations
+11,useProgressiveSearch Hook,MEDIUM,Missing,LOW,B+,3,"Streaming search results with AbortController, progress %, cache stats","See src/hooks/useProgressiveSearch.ts. Uses enhancedSearch utility. Clean abort pattern.",VERIFIED - 80 lines, useful for UX
+12,WeatherWidget,LOW,Missing,LOW,B,2,"Floating draggable widget with live time, temp, wind, humidity","Cosmetic feature. 280+ lines. Uses useDraggable custom hook. Hardcoded image paths.",VERIFIED - Nice-to-have only
+13,WeatherCards,LOW,Missing,LOW,B,2,"3-day forecast cards with clickable weather images","Cosmetic feature. Duplicates getWeatherIcon function from WeatherWidget - should be extracted.",VERIFIED - Duplicate code issue noted
+14,WeatherModal,LOW,Missing,LOW,B,2,"Draggable modal with macOS-style header, blur backdrop",Cosmetic feature. Works with useWeatherModal hook.,VERIFIED - Nice-to-have only
+,,,,,,,,,
+=== SKIP (Already Covered or Low ROI) ===,,,,,,,,,
+15,ContextStore (Dexie),MEDIUM,HAVE IT,N/A,N/A,N/A,"IndexedDB persistence for AI context",Gogga has MemoryContext table in db.ts,VERIFIED - Gogga has this
+16,DocumentStore (Dexie),MEDIUM,HAVE IT,N/A,N/A,N/A,"IndexedDB for document storage",Gogga has Document/DocumentChunk tables in db.ts,VERIFIED - Gogga has this
+17,RagMonitorPanel,MEDIUM,HAVE IT,N/A,N/A,N/A,"Live Chart.js analytics",Gogga has RAG Dashboard with Recharts,VERIFIED - Gogga has this
+18,UniversalSpider (Scrapy),LOW,Skip,HIGH,B+,1,"Web scraping with OTel trace context propagation","In AMMAP-Code.txt. Overkill for GOGGA - requires Python Scrapy infrastructure.",VERIFIED - Too complex for current needs
+19,PDFProcessor (Nemotron),LOW,Skip,HIGH,B+,1,"Vision-based PDF extraction with NVIDIA Nemotron","In AMMAP-Code.txt. Already have PDF handling via unpdf. Nemotron API cost adds complexity.",VERIFIED - Not needed
+20,AutoGen Integration,LOW,Phase 2,HIGH,N/A,1,"AG2 UserProxy, AssistantAgent, Guardrails, Handoffs","Future multi-agent orchestration. Mentioned in AMMAP but mocked/demo only.",VERIFIED - Phase 2 complexity
+,,,,,,,,,
+=== NEW DISCOVERIES FROM VERIFICATION ===,,,,,,,,,
+21,TimeUtils with SA Awareness,MEDIUM,Missing,LOW,A,3,"Comprehensive time utilities with SA timezone handling, greeting context","Multiple files: timeUtils.ts, timeUtils.corrected.ts, timeUtils.test.ts in extracted zip",NEW DISCOVERY - Well tested utility
+22,SALanguageDetector,MEDIUM,Missing,LOW,B+,3,"Detect and handle all 11 SA official languages","See src/utils/saLanguageDetector.ts in extracted zip",NEW DISCOVERY - Unique SA feature
+23,SearchOrchestrator,MEDIUM,Missing,MEDIUM,B+,3,"goggaSearchOrchestrator.ts - coordinates multiple search providers","Orchestrates smartSearch, enhancedSearch, webSearch",NEW DISCOVERY - Search coordination layer
+24,SecurityUtils,HIGH,Missing,LOW,A,4,"security.ts and secureMarkdown.ts - input sanitization, XSS prevention","Clean security patterns for user input handling",NEW DISCOVERY - Security hardening

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.v1.endpoints import chat, payments, images, prompts
+from app.services.posthog_service import posthog_service
 from app.core.exceptions import (
     GoggaException,
     gogga_exception_handler,
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("GOGGA API Shutting down...")
+    posthog_service.flush()  # Ensure all PostHog events are sent
 
 
 # Initialize FastAPI application

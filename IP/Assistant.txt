@@ -1,0 +1,1100 @@
+AssistantAgent
+ autogen.AssistantAgent #
+
+AssistantAgent(name, system_message=DEFAULT_SYSTEM_MESSAGE, llm_config=None, is_termination_msg=None, max_consecutive_auto_reply=None, human_input_mode='NEVER', description=None, **kwargs)
+Bases: ConversableAgent
+
+(In preview) Assistant agent, designed to solve a task with LLM.
+
+AssistantAgent is a subclass of ConversableAgent configured with a default system message. The default system message is designed to solve a task with LLM, including suggesting python code blocks and debugging.
+
+human_input_mode is default to "NEVER"
+
+and code_execution_config is default to False.
+
+This agent doesn't execute code by default, and expects the user to execute the code.
+
+Args: - name (str): agent name.
+
+system_message (str): system message for the ChatCompletion inference.
+
+Please override this attribute if you want to reprogram the agent. - llm_config (dict or False or None): llm inference configuration.
+
+Please refer to OpenAIWrapper.create
+
+for available options.
+
+is_termination_msg (function): a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message. The dict can contain the following keys: "content", "role", "name", "function_call".
+
+max_consecutive_auto_reply (int): the maximum number of consecutive auto replies. default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case). The limit only plays a role when human_input_mode is not "ALWAYS".
+
+**kwargs (dict): Please refer to other kwargs in ConversableAgent.
+
+Source code in autogen/agentchat/assistant_agent.py
+ name property #
+
+name
+Get the name of the agent.
+
+ system_message property #
+
+system_message
+Return the system message.
+
+ DEFAULT_CONFIG class-attribute instance-attribute #
+
+DEFAULT_CONFIG = False
+ MAX_CONSECUTIVE_AUTO_REPLY class-attribute instance-attribute #
+
+MAX_CONSECUTIVE_AUTO_REPLY = 100
+ DEFAULT_SUMMARY_PROMPT class-attribute instance-attribute #
+
+DEFAULT_SUMMARY_PROMPT = 'Summarize the takeaway from the conversation. Do not add any introductory phrases.'
+ DEFAULT_SUMMARY_METHOD class-attribute instance-attribute #
+
+DEFAULT_SUMMARY_METHOD = 'last_msg'
+ llm_config instance-attribute #
+
+llm_config = _validate_llm_config(llm_config)
+ handoffs instance-attribute #
+
+handoffs = handoffs if handoffs is not None else Handoffs()
+ input_guardrails instance-attribute #
+
+input_guardrails = []
+ output_guardrails instance-attribute #
+
+output_guardrails = []
+ silent instance-attribute #
+
+silent = silent
+ run_executor instance-attribute #
+
+run_executor = None
+ client instance-attribute #
+
+client = _create_client(llm_config)
+ client_cache instance-attribute #
+
+client_cache = None
+ human_input_mode instance-attribute #
+
+human_input_mode = human_input_mode
+ reply_at_receive instance-attribute #
+
+reply_at_receive = defaultdict(bool)
+ context_variables instance-attribute #
+
+context_variables = context_variables if context_variables is not None else ContextVariables()
+ hook_lists instance-attribute #
+
+hook_lists = {'process_last_received_message': [], 'process_all_messages_before_reply': [], 'process_message_before_send': [], 'update_agent_state': [], 'safeguard_tool_inputs': [], 'safeguard_tool_outputs': [], 'safeguard_llm_inputs': [], 'safeguard_llm_outputs': [], 'safeguard_human_inputs': []}
+ code_executor property #
+
+code_executor
+The code executor used by this agent. Returns None if code execution is disabled.
+
+ chat_messages property #
+
+chat_messages
+A dictionary of conversations from agent to list of messages.
+
+ use_docker property #
+
+use_docker
+Bool value of whether to use docker to execute the code, or str value of the docker image name to use, or None when code execution is disabled.
+
+ tools property #
+
+tools
+Get the agent's tools (registered for LLM)
+
+Note this is a copy of the tools list, use add_tool and remove_tool to modify the tools list.
+
+ function_map property #
+
+function_map
+Return the function map.
+
+ DEFAULT_SYSTEM_MESSAGE class-attribute instance-attribute #
+
+DEFAULT_SYSTEM_MESSAGE = 'You are a helpful AI assistant.\nSolve tasks using your coding and language skills.\nIn the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.\n    1. When you need to collect info, use the code to output the info you need, for example, browse or search the web, download/read a file, print the content of a webpage or a file, get the current date/time, check the operating system. After sufficient info is printed and the task is ready to be solved based on your language skill, you can solve the task by yourself.\n    2. When you need to perform some task with code, use the code to perform the task and output the result. Finish the task smartly.\nSolve the task step by step if you need to. If a plan is not provided, explain your plan first. Be clear which step uses code, and which step uses your language skill.\nWhen using code, you must indicate the script type in the code block. The user cannot provide any other feedback or perform any other action beyond executing the code you suggest. The user can\'t modify your code. So do not suggest incomplete code which requires users to modify. Don\'t use a code block if it\'s not intended to be executed by the user.\nIf you want the user to save the code in a file before executing it, put # filename: <filename> inside the code block as the first line. Don\'t include multiple code blocks in one response. Do not ask users to copy and paste the result. Instead, use \'print\' function for the output when relevant. Check the execution result returned by the user.\nIf the result indicates there is an error, fix the error and output the code again. Suggest the full code instead of partial code or code changes. If the error can\'t be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.\nWhen you find an answer, verify the answer carefully. Include verifiable evidence in your response if possible.\nReply "TERMINATE" in the end when everything is done.\n    '
+ DEFAULT_DESCRIPTION class-attribute instance-attribute #
+
+DEFAULT_DESCRIPTION = 'A helpful and general-purpose AI assistant that has strong language skills, Python skills, and Linux command line skills.'
+ description instance-attribute #
+
+description = DEFAULT_DESCRIPTION
+ send #
+
+send(message, recipient, request_reply=None, silent=False)
+Send a message to another agent.
+
+PARAMETER	DESCRIPTION
+message	message to be sent. The message could contain the following fields: - content (str or List): Required, the content of the message. (Can be None) - function_call (str): the name of the function to be called. - name (str): the name of the function to be called. - role (str): the role of the message, any role that is not "function" will be modified to "assistant". - context (dict): the context of the message, which will be passed to OpenAIWrapper.create. For example, one agent can send a message A as:
+TYPE: dict or str
+
+
+{
+    "content": lambda context: context["use_tool_msg"],
+    "context": {"use_tool_msg": "Use tool X if they are relevant."},
+}
+Next time, one agent can send a message B with a different "use_tool_msg". Then the content of message A will be refreshed to the new "use_tool_msg". So effectively, this provides a way for an agent to send a "link" and modify the content of the "link" later. recipient (Agent): the recipient of the message. request_reply (bool or None): whether to request a reply from the recipient. silent (bool or None): (Experimental) whether to print the message sent.
+RAISES	DESCRIPTION
+ValueError	if the message can't be converted into a valid ChatCompletion message.
+Source code in autogen/agentchat/conversable_agent.py
+ a_send async #
+
+a_send(message, recipient, request_reply=None, silent=False)
+(async) Send a message to another agent.
+
+PARAMETER	DESCRIPTION
+message	message to be sent. The message could contain the following fields: - content (str or List): Required, the content of the message. (Can be None) - function_call (str): the name of the function to be called. - name (str): the name of the function to be called. - role (str): the role of the message, any role that is not "function" will be modified to "assistant". - context (dict): the context of the message, which will be passed to OpenAIWrapper.create. For example, one agent can send a message A as:
+TYPE: dict or str
+
+
+{
+    "content": lambda context: context["use_tool_msg"],
+    "context": {"use_tool_msg": "Use tool X if they are relevant."},
+}
+Next time, one agent can send a message B with a different "use_tool_msg". Then the content of message A will be refreshed to the new "use_tool_msg". So effectively, this provides a way for an agent to send a "link" and modify the content of the "link" later. recipient (Agent): the recipient of the message. request_reply (bool or None): whether to request a reply from the recipient. silent (bool or None): (Experimental) whether to print the message sent.
+RAISES	DESCRIPTION
+ValueError	if the message can't be converted into a valid ChatCompletion message.
+Source code in autogen/agentchat/conversable_agent.py
+ receive #
+
+receive(message, sender, request_reply=None, silent=False)
+Receive a message from another agent.
+
+Once a message is received, this function sends a reply to the sender or stop. The reply can be generated automatically or entered manually by a human.
+
+PARAMETER	DESCRIPTION
+message	message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). 1. "content": content of the message, can be None. 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls") 3. "tool_calls": a list of dictionaries containing the function name and arguments. 4. "role": role of the message, can be "assistant", "user", "function", "tool". This field is only needed to distinguish between "function" or "assistant"/"user". 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name. 6. "context" (dict): the context of the message, which will be passed to OpenAIWrapper.create.
+TYPE: dict or str
+
+sender	sender of an Agent instance.
+TYPE: Agent
+
+request_reply	whether a reply is requested from the sender. If None, the value is determined by self.reply_at_receive[sender].
+TYPE: bool or NoneDEFAULT: None
+
+silent	(Experimental) whether to print the message received.
+TYPE: bool or NoneDEFAULT: False
+
+RAISES	DESCRIPTION
+ValueError	if the message can't be converted into a valid ChatCompletion message.
+Source code in autogen/agentchat/conversable_agent.py
+ a_receive async #
+
+a_receive(message, sender, request_reply=None, silent=False)
+(async) Receive a message from another agent.
+
+Once a message is received, this function sends a reply to the sender or stop. The reply can be generated automatically or entered manually by a human.
+
+PARAMETER	DESCRIPTION
+message	message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). 1. "content": content of the message, can be None. 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls") 3. "tool_calls": a list of dictionaries containing the function name and arguments. 4. "role": role of the message, can be "assistant", "user", "function". This field is only needed to distinguish between "function" or "assistant"/"user". 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name. 6. "context" (dict): the context of the message, which will be passed to OpenAIWrapper.create.
+TYPE: dict or str
+
+sender	sender of an Agent instance.
+TYPE: Agent
+
+request_reply	whether a reply is requested from the sender. If None, the value is determined by self.reply_at_receive[sender].
+TYPE: bool or NoneDEFAULT: None
+
+silent	(Experimental) whether to print the message received.
+TYPE: bool or NoneDEFAULT: False
+
+RAISES	DESCRIPTION
+ValueError	if the message can't be converted into a valid ChatCompletion message.
+Source code in autogen/agentchat/conversable_agent.py
+ generate_reply #
+
+generate_reply(messages=None, sender=None, exclude=())
+Reply based on the conversation history and the sender.
+
+Either messages or sender must be provided. Register a reply_func with None as one trigger for it to be activated when messages is non-empty and sender is None. Use registered auto reply functions to generate replies. By default, the following functions are checked in order: 1. check_termination_and_human_reply 2. generate_function_call_reply (deprecated in favor of tool_calls) 3. generate_tool_calls_reply 4. generate_code_execution_reply 5. generate_oai_reply Every function returns a tuple (final, reply). When a function returns final=False, the next function will be checked. So by default, termination and human reply will be checked first. If not terminating and human reply is skipped, execute function or code and return the result. AI replies are generated only when no code execution is performed.
+
+PARAMETER	DESCRIPTION
+messages	a list of messages in the conversation history.
+TYPE: list[dict[str, Any]] | NoneDEFAULT: None
+
+sender	sender of an Agent instance.
+TYPE: Optional[Agent]DEFAULT: None
+
+exclude	A list of reply functions to exclude from the reply generation process. Functions in this list will be skipped even if they would normally be triggered.
+TYPE: Container[Any]DEFAULT: ()
+
+RETURNS	DESCRIPTION
+str | dict[str, Any] | None	str or dict or None: reply. None if no reply is generated.
+Source code in autogen/agentchat/conversable_agent.py
+ a_generate_reply async #
+
+a_generate_reply(messages=None, sender=None, exclude=())
+(async) Reply based on the conversation history and the sender.
+
+Either messages or sender must be provided. Register a reply_func with None as one trigger for it to be activated when messages is non-empty and sender is None. Use registered auto reply functions to generate replies. By default, the following functions are checked in order: 1. check_termination_and_human_reply 2. generate_function_call_reply 3. generate_tool_calls_reply 4. generate_code_execution_reply 5. generate_oai_reply Every function returns a tuple (final, reply). When a function returns final=False, the next function will be checked. So by default, termination and human reply will be checked first. If not terminating and human reply is skipped, execute function or code and return the result. AI replies are generated only when no code execution is performed.
+
+PARAMETER	DESCRIPTION
+messages	a list of messages in the conversation history.
+TYPE: list[dict[str, Any]] | NoneDEFAULT: None
+
+sender	sender of an Agent instance.
+TYPE: Optional[Agent]DEFAULT: None
+
+exclude	A list of reply functions to exclude from the reply generation process. Functions in this list will be skipped even if they would normally be triggered.
+TYPE: Container[Any]DEFAULT: ()
+
+RETURNS	DESCRIPTION
+str | dict[str, Any] | None	str or dict or None: reply. None if no reply is generated.
+Source code in autogen/agentchat/conversable_agent.py
+ set_ui_tools #
+
+set_ui_tools(tools)
+Set the UI tools for the agent.
+
+PARAMETER	DESCRIPTION
+tools	a list of tools to be set.
+TYPE: list[Tool]
+
+Source code in autogen/agentchat/conversable_agent.py
+ unset_ui_tools #
+
+unset_ui_tools(tools)
+Unset the UI tools for the agent.
+
+PARAMETER	DESCRIPTION
+tools	a list of tools to be unset.
+TYPE: list[Tool]
+
+Source code in autogen/agentchat/conversable_agent.py
+ update_system_message #
+
+update_system_message(system_message)
+Update the system message.
+
+PARAMETER	DESCRIPTION
+system_message	system message for the ChatCompletion inference.
+TYPE: str
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_reply #
+
+register_reply(trigger, reply_func, position=0, config=None, reset_config=None, *, ignore_async_in_sync_chat=False, remove_other_reply_funcs=False)
+Register a reply function.
+
+The reply function will be called when the trigger matches the sender. The function registered later will be checked earlier by default. To change the order, set the position to a positive integer.
+
+Both sync and async reply functions can be registered. The sync reply function will be triggered from both sync and async chats. However, an async reply function will only be triggered from async chats (initiated with ConversableAgent.a_initiate_chat). If an async reply function is registered and a chat is initialized with a sync function, ignore_async_in_sync_chat determines the behaviour as follows: if ignore_async_in_sync_chat is set to False (default value), an exception will be raised, and if ignore_async_in_sync_chat is set to True, the reply function will be ignored.
+
+PARAMETER	DESCRIPTION
+trigger	the trigger. If a class is provided, the reply function will be called when the sender is an instance of the class. If a string is provided, the reply function will be called when the sender's name matches the string. If an agent instance is provided, the reply function will be called when the sender is the agent instance. If a callable is provided, the reply function will be called when the callable returns True. If a list is provided, the reply function will be called when any of the triggers in the list is activated. If None is provided, the reply function will be called only when the sender is None. Note: Be sure to register None as a trigger if you would like to trigger an auto-reply function with non-empty messages and sender=None.
+TYPE: Agent class, str, Agent instance, callable, or list
+
+reply_func	the reply function. The function takes a recipient agent, a list of messages, a sender agent and a config as input and returns a reply message.
+
+def reply_func(
+    recipient: ConversableAgent,
+    messages: Optional[List[Dict]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[Any] = None,
+) -> Tuple[bool, Union[str, Dict, None]]:
+TYPE: Callable
+
+position	the position of the reply function in the reply function list. The function registered later will be checked earlier by default. To change the order, set the position to a positive integer.
+TYPE: intDEFAULT: 0
+
+config	the config to be passed to the reply function. When an agent is reset, the config will be reset to the original value.
+TYPE: AnyDEFAULT: None
+
+reset_config	the function to reset the config. The function returns None. Signature: def reset_config(config: Any)
+TYPE: CallableDEFAULT: None
+
+ignore_async_in_sync_chat	whether to ignore the async reply function in sync chats. If False, an exception will be raised if an async reply function is registered and a chat is initialized with a sync function.
+TYPE: boolDEFAULT: False
+
+remove_other_reply_funcs	whether to remove other reply functions when registering this reply function.
+TYPE: boolDEFAULT: False
+
+Source code in autogen/agentchat/conversable_agent.py
+ replace_reply_func #
+
+replace_reply_func(old_reply_func, new_reply_func)
+Replace a registered reply function with a new one.
+
+PARAMETER	DESCRIPTION
+old_reply_func	the old reply function to be replaced.
+TYPE: Callable
+
+new_reply_func	the new reply function to replace the old one.
+TYPE: Callable
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_nested_chats #
+
+register_nested_chats(chat_queue, trigger, reply_func_from_nested_chats='summary_from_nested_chats', position=2, use_async=None, **kwargs)
+Register a nested chat reply function.
+
+PARAMETER	DESCRIPTION
+chat_queue	a list of chat objects to be initiated. If use_async is used, then all messages in chat_queue must have a chat-id associated with them.
+TYPE: list
+
+trigger	refer to register_reply for details.
+TYPE: Agent class, str, Agent instance, callable, or list
+
+reply_func_from_nested_chats	the reply function for the nested chat. The function takes a chat_queue for nested chat, recipient agent, a list of messages, a sender agent and a config as input and returns a reply message. Default to "summary_from_nested_chats", which corresponds to a built-in reply function that get summary from the nested chat_queue.
+
+def reply_func_from_nested_chats(
+    chat_queue: List[Dict],
+    recipient: ConversableAgent,
+    messages: Optional[List[Dict]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[Any] = None,
+) -> Tuple[bool, Union[str, Dict, None]]:
+TYPE: (Callable, str)DEFAULT: 'summary_from_nested_chats'
+
+position	Ref to register_reply for details. Default to 2. It means we first check the termination and human reply, then check the registered nested chat reply.
+TYPE: intDEFAULT: 2
+
+use_async	Uses a_initiate_chats internally to start nested chats. If the original chat is initiated with a_initiate_chats, you may set this to true so nested chats do not run in sync.
+TYPE: bool | NoneDEFAULT: None
+
+kwargs	Ref to register_reply for details.
+TYPE: AnyDEFAULT: {}
+
+Source code in autogen/agentchat/conversable_agent.py
+ update_max_consecutive_auto_reply #
+
+update_max_consecutive_auto_reply(value, sender=None)
+Update the maximum number of consecutive auto replies.
+
+PARAMETER	DESCRIPTION
+value	the maximum number of consecutive auto replies.
+TYPE: int
+
+sender	when the sender is provided, only update the max_consecutive_auto_reply for that sender.
+TYPE: AgentDEFAULT: None
+
+Source code in autogen/agentchat/conversable_agent.py
+ max_consecutive_auto_reply #
+
+max_consecutive_auto_reply(sender=None)
+The maximum number of consecutive auto replies.
+
+Source code in autogen/agentchat/conversable_agent.py
+ chat_messages_for_summary #
+
+chat_messages_for_summary(agent)
+A list of messages as a conversation to summarize.
+
+Source code in autogen/agentchat/conversable_agent.py
+ last_message #
+
+last_message(agent=None)
+The last message exchanged with the agent.
+
+PARAMETER	DESCRIPTION
+agent	The agent in the conversation. If None and more than one agent's conversations are found, an error will be raised. If None and only one conversation is found, the last message of the only conversation will be returned.
+TYPE: AgentDEFAULT: None
+
+RETURNS	DESCRIPTION
+dict[str, Any] | None	The last message exchanged with the agent.
+Source code in autogen/agentchat/conversable_agent.py
+ initiate_chat #
+
+initiate_chat(recipient, clear_history=True, silent=False, cache=None, max_turns=None, summary_method=DEFAULT_SUMMARY_METHOD, summary_args={}, message=None, **kwargs)
+Initiate a chat with the recipient agent.
+
+Reset the consecutive auto reply counter. If clear_history is True, the chat history with the recipient agent will be cleared.
+
+PARAMETER	DESCRIPTION
+recipient	the recipient agent.
+TYPE: ConversableAgent
+
+clear_history	whether to clear the chat history with the agent. Default is True.
+TYPE: boolDEFAULT: True
+
+silent	(Experimental) whether to print the messages for this conversation. Default is False.
+TYPE: bool or NoneDEFAULT: False
+
+cache	the cache client to be used for this conversation. Default is None.
+TYPE: AbstractCache or NoneDEFAULT: None
+
+max_turns	the maximum number of turns for the chat between the two agents. One turn means one conversation round trip. Note that this is different from max_consecutive_auto_reply which is the maximum number of consecutive auto replies; and it is also different from max_rounds in GroupChat which is the maximum number of rounds in a group chat session. If max_turns is set to None, the chat will continue until a termination condition is met. Default is None.
+TYPE: int or NoneDEFAULT: None
+
+summary_method	a method to get a summary from the chat. Default is DEFAULT_SUMMARY_METHOD, i.e., "last_msg". Supported strings are "last_msg" and "reflection_with_llm": - when set to "last_msg", it returns the last message of the dialog as the summary. - when set to "reflection_with_llm", it returns a summary extracted using an llm client. llm_config must be set in either the recipient or sender.
+A callable summary_method should take the recipient and sender agent in a chat as input and return a string of summary. E.g.,
+
+
+def my_summary_method(
+    sender: ConversableAgent,
+    recipient: ConversableAgent,
+    summary_args: dict,
+):
+    return recipient.last_message(sender)["content"]
+TYPE: str or callableDEFAULT: DEFAULT_SUMMARY_METHOD
+
+summary_args	a dictionary of arguments to be passed to the summary_method. One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect on the conversation and extract a summary when summary_method is "reflection_with_llm". The default summary_prompt is DEFAULT_SUMMARY_PROMPT, i.e., "Summarize takeaway from the conversation. Do not add any introductory phrases. If the intended request is NOT properly addressed, please point it out." Another available key is "summary_role", which is the role of the message sent to the agent in charge of summarizing. Default is "system".
+TYPE: dictDEFAULT: {}
+
+message	the initial message to be sent to the recipient. Needs to be provided. Otherwise, input() will be called to get the initial message. - If a string or a dict is provided, it will be used as the initial message. generate_init_message is called to generate the initial message for the agent based on this string and the context. If dict, it may contain the following reserved fields (either content or tool_calls need to be provided).
+
+    1. "content": content of the message, can be None.
+    2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
+    3. "tool_calls": a list of dictionaries containing the function name and arguments.
+    4. "role": role of the message, can be "assistant", "user", "function".
+        This field is only needed to distinguish between "function" or "assistant"/"user".
+    5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
+    6. "context" (dict): the context of the message, which will be passed to
+        `OpenAIWrapper.create`.
+If a callable is provided, it will be called to get the initial message in the form of a string or a dict. If the returned type is dict, it may contain the reserved fields mentioned above.
+
+Example of a callable message (returning a string):
+
+
+def my_message(
+    sender: ConversableAgent, recipient: ConversableAgent, context: dict
+) -> Union[str, Dict]:
+    carryover = context.get("carryover", "")
+    if isinstance(message, list):
+        carryover = carryover[-1]
+    final_msg = "Write a blogpost." + "\nContext: \n" + carryover
+    return final_msg
+Example of a callable message (returning a dict):
+
+
+def my_message(
+    sender: ConversableAgent, recipient: ConversableAgent, context: dict
+) -> Union[str, Dict]:
+    final_msg = {}
+    carryover = context.get("carryover", "")
+    if isinstance(message, list):
+        carryover = carryover[-1]
+    final_msg["content"] = "Write a blogpost." + "\nContext: \n" + carryover
+    final_msg["context"] = {"prefix": "Today I feel"}
+    return final_msg
+TYPE: (str, dict or Callable)DEFAULT: None
+
+**kwargs	any additional information. It has the following reserved fields: - "carryover": a string or a list of string to specify the carryover information to be passed to this chat. If provided, we will combine this carryover (by attaching a "context: " string and the carryover content after the message content) with the "message" content when generating the initial chat message in generate_init_message. - "verbose": a boolean to specify whether to print the message and carryover in a chat. Default is False.
+TYPE: AnyDEFAULT: {}
+
+RAISES	DESCRIPTION
+RuntimeError	if any async reply functions are registered and not ignored in sync chat.
+RETURNS	DESCRIPTION
+ChatResult	an ChatResult object.
+TYPE: ChatResult
+
+Source code in autogen/agentchat/conversable_agent.py
+ run #
+
+run(recipient=None, clear_history=True, silent=False, cache=None, max_turns=None, summary_method=DEFAULT_SUMMARY_METHOD, summary_args={}, message=None, executor_kwargs=None, tools=None, user_input=False, msg_to='agent', **kwargs)
+Source code in autogen/agentchat/conversable_agent.py
+ a_initiate_chat async #
+
+a_initiate_chat(recipient, clear_history=True, silent=False, cache=None, max_turns=None, summary_method=DEFAULT_SUMMARY_METHOD, summary_args={}, message=None, **kwargs)
+(async) Initiate a chat with the recipient agent.
+
+Reset the consecutive auto reply counter. If clear_history is True, the chat history with the recipient agent will be cleared. a_generate_init_message is called to generate the initial message for the agent.
+
+Args: Please refer to initiate_chat.
+
+RETURNS	DESCRIPTION
+ChatResult	an ChatResult object.
+TYPE: ChatResult
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_run async #
+
+a_run(recipient=None, clear_history=True, silent=False, cache=None, max_turns=None, summary_method=DEFAULT_SUMMARY_METHOD, summary_args={}, message=None, executor_kwargs=None, tools=None, user_input=False, msg_to='agent', **kwargs)
+Source code in autogen/agentchat/conversable_agent.py
+ initiate_chats #
+
+initiate_chats(chat_queue)
+(Experimental) Initiate chats with multiple agents.
+
+PARAMETER	DESCRIPTION
+chat_queue	a list of dictionaries containing the information of the chats. Each dictionary should contain the input arguments for initiate_chat
+TYPE: List[Dict]
+
+Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+
+Source code in autogen/agentchat/conversable_agent.py
+ sequential_run #
+
+sequential_run(chat_queue)
+(Experimental) Initiate chats with multiple agents sequentially.
+
+PARAMETER	DESCRIPTION
+chat_queue	a list of dictionaries containing the information of the chats. Each dictionary should contain the input arguments for initiate_chat
+TYPE: List[Dict]
+
+Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_initiate_chats async #
+
+a_initiate_chats(chat_queue)
+Source code in autogen/agentchat/conversable_agent.py
+ a_sequential_run async #
+
+a_sequential_run(chat_queue)
+(Experimental) Initiate chats with multiple agents sequentially.
+
+PARAMETER	DESCRIPTION
+chat_queue	a list of dictionaries containing the information of the chats. Each dictionary should contain the input arguments for initiate_chat
+TYPE: List[Dict]
+
+Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+
+Source code in autogen/agentchat/conversable_agent.py
+ get_chat_results #
+
+get_chat_results(chat_index=None)
+A summary from the finished chats of particular agents.
+
+Source code in autogen/agentchat/conversable_agent.py
+ reset #
+
+reset()
+Reset the agent.
+
+Source code in autogen/agentchat/conversable_agent.py
+ stop_reply_at_receive #
+
+stop_reply_at_receive(sender=None)
+Reset the reply_at_receive of the sender.
+
+Source code in autogen/agentchat/conversable_agent.py
+ reset_consecutive_auto_reply_counter #
+
+reset_consecutive_auto_reply_counter(sender=None)
+Reset the consecutive_auto_reply_counter of the sender.
+
+Source code in autogen/agentchat/conversable_agent.py
+ clear_history #
+
+clear_history(recipient=None, nr_messages_to_preserve=None)
+Clear the chat history of the agent.
+
+PARAMETER	DESCRIPTION
+recipient	the agent with whom the chat history to clear. If None, clear the chat history with all agents.
+TYPE: Agent | NoneDEFAULT: None
+
+nr_messages_to_preserve	the number of newest messages to preserve in the chat history.
+TYPE: int | NoneDEFAULT: None
+
+Source code in autogen/agentchat/conversable_agent.py
+ generate_oai_reply #
+
+generate_oai_reply(messages=None, sender=None, config=None, **kwargs)
+Generate a reply using autogen.oai.
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_generate_oai_reply async #
+
+a_generate_oai_reply(messages=None, sender=None, config=None, **kwargs)
+Generate a reply using autogen.oai asynchronously.
+
+Source code in autogen/agentchat/conversable_agent.py
+ generate_code_execution_reply #
+
+generate_code_execution_reply(messages=None, sender=None, config=None)
+Generate a reply using code execution.
+
+Source code in autogen/agentchat/conversable_agent.py
+ generate_function_call_reply #
+
+generate_function_call_reply(messages=None, sender=None, config=None)
+Generate a reply using function call.
+
+"function_call" replaced by "tool_calls" as of OpenAI API v1.1.0 See https://platform.openai.com/docs/api-reference/chat/create#chat-create-functions
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_generate_function_call_reply async #
+
+a_generate_function_call_reply(messages=None, sender=None, config=None)
+Generate a reply using async function call.
+
+"function_call" replaced by "tool_calls" as of OpenAI API v1.1.0 See https://platform.openai.com/docs/api-reference/chat/create#chat-create-functions
+
+Source code in autogen/agentchat/conversable_agent.py
+ generate_tool_calls_reply #
+
+generate_tool_calls_reply(messages=None, sender=None, config=None)
+Generate a reply using tool call.
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_generate_tool_calls_reply async #
+
+a_generate_tool_calls_reply(messages=None, sender=None, config=None)
+Generate a reply using async function call.
+
+Source code in autogen/agentchat/conversable_agent.py
+ check_termination_and_human_reply #
+
+check_termination_and_human_reply(messages=None, sender=None, config=None, iostream=None)
+Check if the conversation should be terminated, and if human reply is provided.
+
+This method checks for conditions that require the conversation to be terminated, such as reaching a maximum number of consecutive auto-replies or encountering a termination message. Additionally, it prompts for and processes human input based on the configured human input mode, which can be 'ALWAYS', 'NEVER', or 'TERMINATE'. The method also manages the consecutive auto-reply counter for the conversation and prints relevant messages based on the human input received.
+
+PARAMETER	DESCRIPTION
+messages	A list of message dictionaries, representing the conversation history.
+TYPE: Optional[List[Dict]]DEFAULT: None
+
+sender	The agent object representing the sender of the message.
+TYPE: Optional[Agent]DEFAULT: None
+
+config	Configuration object, defaults to the current instance if not provided.
+TYPE: Optional[Any]DEFAULT: None
+
+iostream	The IOStream object to use for sending messages.
+TYPE: Optional[IOStreamProtocol]DEFAULT: None
+
+RETURNS	DESCRIPTION
+bool	A tuple containing a boolean indicating if the conversation
+str | None	should be terminated, and a human reply which can be a string, a dictionary, or None.
+Source code in autogen/agentchat/conversable_agent.py
+ a_check_termination_and_human_reply async #
+
+a_check_termination_and_human_reply(messages=None, sender=None, config=None, iostream=None)
+(async) Check if the conversation should be terminated, and if human reply is provided.
+
+This method checks for conditions that require the conversation to be terminated, such as reaching a maximum number of consecutive auto-replies or encountering a termination message. Additionally, it prompts for and processes human input based on the configured human input mode, which can be 'ALWAYS', 'NEVER', or 'TERMINATE'. The method also manages the consecutive auto-reply counter for the conversation and prints relevant messages based on the human input received.
+
+PARAMETER	DESCRIPTION
+messages	A list of message dictionaries, representing the conversation history.
+TYPE: Optional[List[Dict]]DEFAULT: None
+
+sender	The agent object representing the sender of the message.
+TYPE: Optional[Agent]DEFAULT: None
+
+config	Configuration object, defaults to the current instance if not provided.
+TYPE: Optional[Any]DEFAULT: None
+
+iostream	The AsyncIOStreamProtocol object to use for sending messages.
+TYPE: Optional[AsyncIOStreamProtocol]DEFAULT: None
+
+Returns: Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation should be terminated, and a human reply which can be a string, a dictionary, or None.
+
+Source code in autogen/agentchat/conversable_agent.py
+ get_human_input #
+
+get_human_input(prompt, *, iostream=None)
+Get human input.
+
+Override this method to customize the way to get human input.
+
+PARAMETER	DESCRIPTION
+prompt	prompt for the human input.
+TYPE: str
+
+iostream	The InputStream object to use for sending messages.
+TYPE: Optional[InputStream]DEFAULT: None
+
+Returns: str: human input.
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_get_human_input async #
+
+a_get_human_input(prompt, *, iostream=None)
+(Async) Get human input.
+
+Override this method to customize the way to get human input.
+
+PARAMETER	DESCRIPTION
+prompt	prompt for the human input.
+TYPE: str
+
+iostream	The AsyncInputStream object to use for sending messages.
+TYPE: Optional[AsyncInputStream]DEFAULT: None
+
+Returns: str: human input.
+
+Source code in autogen/agentchat/conversable_agent.py
+ run_code #
+
+run_code(code, **kwargs)
+Run the code and return the result.
+
+Override this function to modify the way to run the code.
+
+PARAMETER	DESCRIPTION
+code	the code to be executed.
+TYPE: str
+
+**kwargs	other keyword arguments.
+TYPE: AnyDEFAULT: {}
+
+RETURNS	DESCRIPTION
+int	A tuple of (exitcode, logs, image).
+exitcode	the exit code of the code execution.
+TYPE: int
+
+logs	the logs of the code execution.
+TYPE: str
+
+image	the docker image used for the code execution.
+TYPE: str or None
+
+Source code in autogen/agentchat/conversable_agent.py
+ execute_code_blocks #
+
+execute_code_blocks(code_blocks)
+Execute the code blocks and return the result.
+
+Source code in autogen/agentchat/conversable_agent.py
+ execute_function #
+
+execute_function(func_call, call_id=None, verbose=False)
+Execute a function call and return the result.
+
+Override this function to modify the way to execute function and tool calls.
+
+PARAMETER	DESCRIPTION
+func_call	a dictionary extracted from openai message at "function_call" or "tool_calls" with keys "name" and "arguments".
+TYPE: dict[str, Any]
+
+call_id	a string to identify the tool call.
+TYPE: str | NoneDEFAULT: None
+
+verbose	Whether to send messages about the execution details to the output stream. When True, both the function call arguments and the execution result will be displayed. Defaults to False.
+TYPE: boolDEFAULT: False
+
+RETURNS	DESCRIPTION
+bool	A tuple of (is_exec_success, result_dict).
+is_exec_success	whether the execution is successful.
+TYPE: boolean
+
+result_dict	a dictionary with keys "name", "role", and "content". Value of "role" is "function".
+TYPE: tuple[bool, dict[str, Any]]
+
+"function_call" deprecated as of OpenAI API v1.1.0 See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
+
+Source code in autogen/agentchat/conversable_agent.py
+ a_execute_function async #
+
+a_execute_function(func_call, call_id=None, verbose=False)
+Execute an async function call and return the result.
+
+Override this function to modify the way async functions and tools are executed.
+
+PARAMETER	DESCRIPTION
+func_call	a dictionary extracted from openai message at key "function_call" or "tool_calls" with keys "name" and "arguments".
+TYPE: dict[str, Any]
+
+call_id	a string to identify the tool call.
+TYPE: str | NoneDEFAULT: None
+
+verbose	Whether to send messages about the execution details to the output stream. When True, both the function call arguments and the execution result will be displayed. Defaults to False.
+TYPE: boolDEFAULT: False
+
+RETURNS	DESCRIPTION
+bool	A tuple of (is_exec_success, result_dict).
+is_exec_success	whether the execution is successful.
+TYPE: boolean
+
+result_dict	a dictionary with keys "name", "role", and "content". Value of "role" is "function".
+TYPE: tuple[bool, dict[str, Any]]
+
+"function_call" deprecated as of OpenAI API v1.1.0 See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
+
+Source code in autogen/agentchat/conversable_agent.py
+ generate_init_message #
+
+generate_init_message(message, **kwargs)
+Generate the initial message for the agent. If message is None, input() will be called to get the initial message.
+
+PARAMETER	DESCRIPTION
+message	the message to be processed.
+TYPE: str or None
+
+**kwargs	any additional information. It has the following reserved fields: "carryover": a string or a list of string to specify the carryover information to be passed to this chat. It can be a string or a list of string. If provided, we will combine this carryover with the "message" content when generating the initial chat message.
+TYPE: AnyDEFAULT: {}
+
+RETURNS	DESCRIPTION
+str | dict[str, Any]	str or dict: the processed message.
+Source code in autogen/agentchat/conversable_agent.py
+ a_generate_init_message async #
+
+a_generate_init_message(message, **kwargs)
+Generate the initial message for the agent. If message is None, input() will be called to get the initial message.
+
+PARAMETER	DESCRIPTION
+message	the message to be processed.
+TYPE: str or None
+
+**kwargs	any additional information. It has the following reserved fields: "carryover": a string or a list of string to specify the carryover information to be passed to this chat. It can be a string or a list of string. If provided, we will combine this carryover with the "message" content when generating the initial chat message.
+TYPE: AnyDEFAULT: {}
+
+RETURNS	DESCRIPTION
+str | dict[str, Any]	str or dict: the processed message.
+Source code in autogen/agentchat/conversable_agent.py
+ remove_tool_for_llm #
+
+remove_tool_for_llm(tool)
+Remove a tool (register for LLM tool)
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_function #
+
+register_function(function_map, silent_override=False)
+Register functions to the agent.
+
+PARAMETER	DESCRIPTION
+function_map	a dictionary mapping function names to functions. if function_map[name] is None, the function will be removed from the function_map.
+TYPE: dict[str, Callable[..., Any]]
+
+silent_override	whether to print warnings when overriding functions.
+TYPE: boolDEFAULT: False
+
+Source code in autogen/agentchat/conversable_agent.py
+ update_function_signature #
+
+update_function_signature(func_sig, is_remove=False, silent_override=False)
+Update a function_signature in the LLM configuration for function_call.
+
+PARAMETER	DESCRIPTION
+func_sig	description/name of the function to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat/create-functions
+TYPE: str or dict
+
+is_remove	whether removing the function from llm_config with name 'func_sig'
+TYPE: boolDEFAULT: False
+
+silent_override	whether to print warnings when overriding functions.
+TYPE: boolDEFAULT: False
+
+Deprecated as of OpenAI API v1.1.0 See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
+
+Source code in autogen/agentchat/conversable_agent.py
+ update_tool_signature #
+
+update_tool_signature(tool_sig, is_remove, silent_override=False)
+Update a tool_signature in the LLM configuration for tool_call.
+
+PARAMETER	DESCRIPTION
+tool_sig	description/name of the tool to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tools
+TYPE: str or dict
+
+is_remove	whether removing the tool from llm_config with name 'tool_sig'
+TYPE: bool
+
+silent_override	whether to print warnings when overriding functions.
+TYPE: boolDEFAULT: False
+
+Source code in autogen/agentchat/conversable_agent.py
+ can_execute_function #
+
+can_execute_function(name)
+Whether the agent can execute the function.
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_for_llm #
+
+register_for_llm(*, name=None, description=None, api_style='tool', silent_override=False)
+Decorator factory for registering a function to be used by an agent.
+
+It's return value is used to decorate a function to be registered to the agent. The function uses type hints to specify the arguments and return type. The function name is used as the default name for the function, but a custom name can be provided. The function description is used to describe the function in the agent's configuration.
+
+PARAMETER	DESCRIPTION
+name	name of the function. If None, the function name will be used (default: None).
+TYPE: optional(str)DEFAULT: None
+
+description	description of the function (default: None). It is mandatory for the initial decorator, but the following ones can omit it.
+TYPE: optional(str)DEFAULT: None
+
+api_style	(literal): the API style for function call. For Azure OpenAI API, use version 2023-12-01-preview or later. "function" style will be deprecated. For earlier version use "function" if "tool" doesn't work. See Azure OpenAI documentation for details.
+TYPE: Literal['function', 'tool']DEFAULT: 'tool'
+
+silent_override	whether to suppress any override warning messages.
+TYPE: boolDEFAULT: False
+
+RETURNS	DESCRIPTION
+Callable[[F | Tool], Tool]	The decorator for registering a function to be used by an agent.
+Examples:
+
+
+@user_proxy.register_for_execution()
+@agent2.register_for_llm()
+@agent1.register_for_llm(description="This is a very useful function")
+def my_function(a: Annotated[str, "description of a parameter"] = "a", b: int, c=3.14) -> str:
+     return a + str(b * c)
+For Azure OpenAI versions prior to 2023-12-01-preview, set api_style to "function" if "tool" doesn't work:
+
+
+@agent2.register_for_llm(api_style="function")
+def my_function(a: Annotated[str, "description of a parameter"] = "a", b: int, c=3.14) -> str:
+     return a + str(b * c)
+Source code in autogen/agentchat/conversable_agent.py
+ register_for_execution #
+
+register_for_execution(name=None, description=None, *, serialize=True, silent_override=False)
+Decorator factory for registering a function to be executed by an agent.
+
+It's return value is used to decorate a function to be registered to the agent.
+
+PARAMETER	DESCRIPTION
+name	name of the function. If None, the function name will be used (default: None).
+TYPE: str | NoneDEFAULT: None
+
+description	description of the function (default: None).
+TYPE: str | NoneDEFAULT: None
+
+serialize	whether to serialize the return value
+TYPE: boolDEFAULT: True
+
+silent_override	whether to suppress any override warning messages
+TYPE: boolDEFAULT: False
+
+RETURNS	DESCRIPTION
+Callable[[Tool | F], Tool]	The decorator for registering a function to be used by an agent.
+Examples:
+
+
+@user_proxy.register_for_execution()
+@agent2.register_for_llm()
+@agent1.register_for_llm(description="This is a very useful function")
+def my_function(a: Annotated[str, "description of a parameter"] = "a", b: int, c=3.14):
+     return a + str(b * c)
+Source code in autogen/agentchat/conversable_agent.py
+ register_model_client #
+
+register_model_client(model_client_cls, **kwargs)
+Register a model client.
+
+PARAMETER	DESCRIPTION
+model_client_cls	A custom client class that follows the Client interface
+TYPE: ModelClient
+
+**kwargs	The kwargs for the custom client class to be initialized with
+TYPE: AnyDEFAULT: {}
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_hook #
+
+register_hook(hookable_method, hook)
+Registers a hook to be called by a hookable method, in order to add a capability to the agent. Registered hooks are kept in lists (one per hookable method), and are called in their order of registration.
+
+PARAMETER	DESCRIPTION
+hookable_method	A hookable method name implemented by ConversableAgent.
+TYPE: str
+
+hook	A method implemented by a subclass of AgentCapability.
+TYPE: Callable
+
+Source code in autogen/agentchat/conversable_agent.py
+ update_agent_state_before_reply #
+
+update_agent_state_before_reply(messages)
+Calls any registered capability hooks to update the agent's state. Primarily used to update context variables. Will, potentially, modify the messages.
+
+Source code in autogen/agentchat/conversable_agent.py
+ process_all_messages_before_reply #
+
+process_all_messages_before_reply(messages)
+Calls any registered capability hooks to process all messages, potentially modifying the messages.
+
+Source code in autogen/agentchat/conversable_agent.py
+ process_last_received_message #
+
+process_last_received_message(messages)
+Calls any registered capability hooks to use and potentially modify the text of the last message, as long as the last message is not a function call or exit command.
+
+Source code in autogen/agentchat/conversable_agent.py
+ print_usage_summary #
+
+print_usage_summary(mode=['actual', 'total'])
+Print the usage summary.
+
+Source code in autogen/agentchat/conversable_agent.py
+ get_actual_usage #
+
+get_actual_usage()
+Get the actual usage summary.
+
+Source code in autogen/agentchat/conversable_agent.py
+ get_total_usage #
+
+get_total_usage()
+Get the total usage summary.
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_handoff #
+
+register_handoff(condition)
+Register a single handoff condition (OnContextCondition or OnCondition).
+
+PARAMETER	DESCRIPTION
+condition	The condition to add (OnContextCondition, OnCondition)
+TYPE: Union[OnContextCondition, OnCondition]
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_handoffs #
+
+register_handoffs(conditions)
+Register multiple handoff conditions (OnContextCondition or OnCondition).
+
+PARAMETER	DESCRIPTION
+conditions	List of conditions to add
+TYPE: list[Union[OnContextCondition, OnCondition]]
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_input_guardrail #
+
+register_input_guardrail(guardrail)
+Register a guardrail to be used for input validation.
+
+PARAMETER	DESCRIPTION
+guardrail	The guardrail to register.
+TYPE: Guardrail
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_input_guardrails #
+
+register_input_guardrails(guardrails)
+Register multiple guardrails to be used for input validation.
+
+PARAMETER	DESCRIPTION
+guardrails	List of guardrails to register.
+TYPE: list[Guardrail]
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_output_guardrail #
+
+register_output_guardrail(guardrail)
+Register a guardrail to be used for output validation.
+
+PARAMETER	DESCRIPTION
+guardrail	The guardrail to register.
+TYPE: Guardrail
+
+Source code in autogen/agentchat/conversable_agent.py
+ register_output_guardrails #
+
+register_output_guardrails(guardrails)
+Register multiple guardrails to be used for output validation.
+
+PARAMETER	DESCRIPTION
+guardrails	List of guardrails to register.
+TYPE: list[Guardrail]
+
+Source code in autogen/agentchat/conversable_agent.py
+ run_input_guardrails #
+
+run_input_guardrails(messages=None)
+Run input guardrails for an agent before the reply is generated.
+
+PARAMETER	DESCRIPTION
+messages	The messages to check against the guardrails.
+TYPE: Optional[list[dict[str, Any]]]DEFAULT: None
+
+Source code in autogen/agentchat/conversable_agent.py
+ run_output_guardrails #
+
+run_output_guardrails(reply)
+Run output guardrails for an agent after the reply is generated.
+
+PARAMETER	DESCRIPTION
+reply	The reply generated by the agent.
+TYPE: str | dict[str, Any]
+
+Source code in autogen/agentchat/conversable_agent.py

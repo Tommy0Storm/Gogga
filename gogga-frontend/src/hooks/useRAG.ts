@@ -311,39 +311,61 @@ export function useRAG(tier: Tier): UseRAGReturn {
         throw new Error(limitCheck.reason || 'Storage limit exceeded');
       }
 
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+      setState((prev) => ({
+        ...prev,
+        isLoading: true,
+        isEmbedding: tier === 'jigga',
+        error: null,
+      }));
 
       try {
         const doc = await rag.addDocument(sessionIdRef.current, file);
 
-        // For JIGGA tier, pre-generate embeddings so they show in dashboard
+        // For JIGGA tier, pre-generate embeddings immediately
+        // This ensures semantic search works and dashboard stats update
         if (tier === 'jigga' && doc) {
-          try {
-            // Initialize the engine if needed (first upload scenario)
-            if (!ragManagerInstance.isReady()) {
-              console.log(
-                '[RAG] Initializing semantic engine for first upload...'
-              );
-              await ragManagerInstance.initializeSemanticEngine();
-            }
-            await ragManagerInstance.preloadDocument(doc);
-            console.log('[RAG] Pre-generated embeddings for:', doc.filename);
+          console.log(
+            '[RAG] JIGGA tier - generating embeddings for:',
+            doc.filename
+          );
 
-            // Update semantic state
-            const status = ragManagerInstance.getStatus();
-            setState((prev) => ({
-              ...prev,
-              semanticReady: status.initialized,
-              semanticStats: {
-                engineReady: status.initialized,
-                cachedSessions: status.cachedSessions,
-                totalCachedDocs: status.totalCachedDocs,
-              },
-            }));
-          } catch (e) {
-            console.warn('[RAG] Failed to pre-generate embeddings:', e);
-            // Non-fatal - embeddings will be generated on first query
+          // Initialize the engine if needed (first upload scenario)
+          if (!ragManagerInstance.isReady()) {
+            console.log(
+              '[RAG] Initializing semantic engine for first upload...'
+            );
+            await ragManagerInstance.initializeSemanticEngine();
           }
+
+          // Generate embeddings - this now returns detailed result
+          const embeddingResult = await ragManagerInstance.preloadDocument(doc);
+
+          if (embeddingResult.success) {
+            console.log('[RAG] Embeddings generated successfully:', {
+              filename: doc.filename,
+              chunkCount: embeddingResult.chunkCount,
+              latencyMs: Math.round(embeddingResult.latencyMs),
+            });
+          } else {
+            console.warn(
+              '[RAG] Embedding generation failed:',
+              embeddingResult.error
+            );
+            // Continue anyway - document is saved, embeddings can be generated on query
+          }
+
+          // Update semantic state
+          const status = ragManagerInstance.getStatus();
+          setState((prev) => ({
+            ...prev,
+            isEmbedding: false,
+            semanticReady: status.initialized,
+            semanticStats: {
+              engineReady: status.initialized,
+              cachedSessions: status.cachedSessions,
+              totalCachedDocs: status.totalCachedDocs,
+            },
+          }));
         }
 
         await refreshDocuments();
@@ -353,6 +375,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
         setState((prev) => ({
           ...prev,
           isLoading: false,
+          isEmbedding: false,
           error: errorMessage,
         }));
         throw new Error(errorMessage);

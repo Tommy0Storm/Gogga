@@ -179,7 +179,15 @@ export interface DashboardState {
 }
 
 export type ViewMode = 'desktop' | 'mobile';
-export type TabId = 'overview' | 'storage' | 'embeddings' | 'memory' | 'performance';
+export type TabId =
+  | 'overview'
+  | 'storage'
+  | 'embeddings'
+  | 'memory'
+  | 'performance'
+  | 'llm'
+  | 'embedding-model'
+  | 'maintenance';
 
 // ============================================================================
 // Component Props Types

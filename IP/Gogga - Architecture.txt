@@ -1,0 +1,59 @@
+GOGGA Tier Architecture
+FREE TIER
+Feature	Provider	Model
+Text Chat	OpenRouter (FREE)	Llama 3.3 70B :free
+Prompt Enhancement	OpenRouter (FREE)	Llama 3.3 70B :free
+Image Generation	OpenRouter (FREE)	LongCat Flash :free
+Flow:
+
+
+Text: User → Llama 3.3 FREE → ResponseImage: User → Llama 3.3 FREE (enhance) → LongCat FREE → Image
+JIVE TIER (Pro)
+Feature	Provider	Model
+Text Chat	Cerebras	Llama 3.1 8B + CePO
+Prompt Enhancement	OpenRouter (FREE)	Llama 3.3 70B :free
+Image Generation	DeepInfra	FLUX 1.1 Pro (capped)
+Flow:
+
+
+Text: User → CePO Router → Llama 3.1 8B + CePO → ResponseImage: User → Llama 3.3 FREE (enhance) → FLUX 1.1 Pro → Image
+JIGGA TIER (Advanced)
+Feature	Provider	Model	Notes
+Text Chat (Thinking)	Cerebras	Qwen 3 235B	temp=0.6, top_p=0.95
+Text Chat (Fast)	Cerebras	Qwen 3 235B	Append /no_think
+Prompt Enhancement	OpenRouter (FREE)	Llama 3.3 70B :free	
+Image Generation	DeepInfra	FLUX 1.1 Pro (higher cap)	
+Flow:
+
+
+Text (thinking): User → Qwen 3 235B (temp=0.6, top_p=0.95) → Deep reasoningText (fast): User → Qwen 3 235B + /no_think → Fast responseImage: User → Llama 3.3 FREE (enhance) → FLUX 1.1 Pro → Image
+Routing Logic
+┌─────────────────────────────────────────────────────────────────┐
+│                         USER REQUEST                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+                    is_image_prompt()?
+                    ┌────────┴────────┐
+                   YES               NO
+                    ↓                 ↓
+        ┌───────────────────┐  ┌───────────────────┐
+        │ Llama 3.3 FREE    │  │   Check User Tier  │
+        │ (Prompt Enhance)  │  └───────────────────┘
+        └───────────────────┘           ↓
+                 ↓            ┌─────────┼─────────┐
+        Check User Tier      FREE    JIVE     JIGGA
+         ↓         ↓          ↓        ↓         ↓
+       FREE    JIVE/JIGGA   Llama   Llama    Qwen 3
+         ↓         ↓        3.3     3.1 8B   235B
+     LongCat    FLUX 1.1    FREE    +CePO    think/
+      FREE       Pro                        no_think
+	  
+	  
+Qwen Thinking Mode Rules (JIGGA)
+Default: Thinking ON (temp=0.6, top_p=0.95)
+Fast mode: Append /no_think to disable reasoning
+Never use: temperature=0 (causes repetitions)
+Long context (131k+): Use /no_think to avoid accuracy issues
+Does this look correct? If yes, I'll implement it.
+
+Claude Opus 4.5 (Preview) • 1x

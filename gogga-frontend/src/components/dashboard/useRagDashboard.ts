@@ -218,10 +218,18 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
   }, []);
 
   const fetchEmbeddingStats = useCallback((): EmbeddingStats => {
-    const metrics = getRecentMetrics({ type: 'embedding_generated' });
+    const allEmbeddingMetrics = getRecentMetrics({
+      type: 'embedding_generated',
+    });
+    // Filter to only actual document embeddings (have docId and chunkCount > 0)
+    const metrics = allEmbeddingMetrics.filter(
+      (m) => m.docId !== undefined && m.value?.chunkCount > 0
+    );
     const cacheHits = getRecentMetrics({ type: 'cache_hit' }).length;
     const cacheMisses = getRecentMetrics({ type: 'cache_miss' }).length;
-    const errors = getRecentMetrics({ type: 'error' }).length;
+    const errors = getRecentMetrics({ type: 'error' }).filter(
+      (m) => m.value?.operation === 'embedding_generation'
+    ).length;
 
     if (metrics.length === 0) {
       return {
@@ -235,14 +243,20 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
       };
     }
 
-    const latencies = metrics.map((m) => m.value?.latencyMs ?? 0);
+    const latencies = metrics
+      .map((m) => m.value?.latencyMs ?? 0)
+      .filter((l) => l > 0);
     const totalTime = latencies.reduce((a, b) => a + b, 0);
+    const totalChunks = metrics.reduce(
+      (sum, m) => sum + (m.value?.chunkCount ?? 0),
+      0
+    );
 
     return {
-      totalEmbeddings: metrics.length,
-      avgLatencyMs: totalTime / metrics.length,
-      maxLatencyMs: Math.max(...latencies),
-      minLatencyMs: Math.min(...latencies),
+      totalEmbeddings: totalChunks, // Report total chunks embedded, not just documents
+      avgLatencyMs: latencies.length > 0 ? totalTime / latencies.length : 0,
+      maxLatencyMs: latencies.length > 0 ? Math.max(...latencies) : 0,
+      minLatencyMs: latencies.length > 0 ? Math.min(...latencies) : 0,
       totalProcessingTimeMs: totalTime,
       cachHitRate:
         cacheHits + cacheMisses > 0 ? cacheHits / (cacheHits + cacheMisses) : 0,
@@ -278,17 +292,49 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
     const cachedVectors = ragManager.getCachedVectors();
     const cachedDocIds = new Set(cachedVectors.docIds);
 
+    // Also check embedding metrics for documents that may have been processed
+    const embeddingMetrics = getRecentMetrics({ type: 'embedding_generated' });
+    const embeddedDocIds = new Set(
+      embeddingMetrics
+        .filter((m) => m.docId !== undefined && m.value?.chunkCount > 0)
+        .map((m) => m.docId!)
+    );
+
+    // Check for error metrics (failed embeddings)
+    const errorMetrics = getRecentMetrics({ type: 'error' });
+    const errorDocIds = new Set(
+      errorMetrics
+        .filter(
+          (m) =>
+            m.docId !== undefined &&
+            m.value?.operation === 'embedding_generation'
+        )
+        .map((m) => m.docId!)
+    );
+
     return docs
       .filter((doc: Document) => doc.id !== undefined)
       .map((doc: Document) => {
-        const hasEmbeddings = cachedDocIds.has(doc.id!);
+        const inCache = cachedDocIds.has(doc.id!);
+        const hasMetric = embeddedDocIds.has(doc.id!);
+        const hasError = errorDocIds.has(doc.id!);
+        const hasEmbeddings = inCache || hasMetric;
+
+        // Determine status: complete if embeddings exist, error if failed, pending otherwise
+        let embeddingStatus: 'complete' | 'pending' | 'error' | 'none';
+        if (hasEmbeddings) {
+          embeddingStatus = 'complete';
+        } else if (hasError) {
+          embeddingStatus = 'error';
+        } else {
+          embeddingStatus = 'pending';
+        }
+
         return {
           ...doc,
           id: doc.id!,
           hasEmbeddings,
-          embeddingStatus: hasEmbeddings
-            ? ('complete' as const)
-            : ('pending' as const),
+          embeddingStatus,
         };
       });
   }, []);

@@ -52,11 +52,16 @@ import {
   Hash,
 } from 'lucide-react';
 import axios from 'axios';
+import { useBuddySystem } from '@/hooks/useBuddySystem';
+import { LanguageBadge } from '@/components/LanguageBadge';
+import type { SALanguage } from '@/lib/buddySystem';
 
 // Extended message with image and thinking support
 interface ChatMessage extends Message {
   imageId?: number;
   thinking?: string; // JIGGA thinking block (collapsible in UI)
+  detectedLanguage?: SALanguage; // Auto-detected SA language
+  languageConfidence?: number;
 }
 
 const TIER_DISPLAY = {
@@ -162,17 +167,34 @@ export default function ChatPage() {
     getLocationContext,
   } = useLocation(true); // Auto-prompt for location on first load
 
+  // BuddySystem hook (language detection, relationship tracking)
+  const {
+    processMessage: processBuddyMessage,
+    detectLanguage: detectMessageLanguage,
+    getAIContext: getBuddyContext,
+  } = useBuddySystem();
+
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
 
   // Use appropriate messages based on tier
   const displayMessages = isPersistenceEnabled ? messages : freeMessages;
 
-  // Load saved tier from localStorage
+  // Load saved tier from localStorage (and fix any corrupted values)
   useEffect(() => {
-    const savedTier = localStorage.getItem('gogga_tier') as Tier | null;
+    const rawTier = localStorage.getItem('gogga_tier');
+    const savedTier = rawTier?.trim() as Tier | null;
     if (savedTier && ['free', 'jive', 'jigga'].includes(savedTier)) {
       setTier(savedTier);
+      // Fix corrupted value if it had whitespace
+      if (rawTier !== savedTier) {
+        localStorage.setItem('gogga_tier', savedTier);
+        console.log('[GOGGA] Fixed corrupted tier value in localStorage');
+      }
+    } else if (rawTier) {
+      // Invalid tier value - reset to free
+      localStorage.setItem('gogga_tier', 'free');
+      console.log('[GOGGA] Reset invalid tier value to free');
     }
   }, []);
 
@@ -245,8 +267,17 @@ export default function ChatPage() {
       }
     }
 
-    // Create user message
-    const userMsg: ChatMessage = { role: 'user', content: text };
+    // Create user message with language detection
+    const langDetection = detectMessageLanguage(text);
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: text,
+      detectedLanguage: langDetection.language,
+      languageConfidence: langDetection.confidence,
+    };
+
+    // Process message for BuddySystem (updates profile, relationship, etc.)
+    await processBuddyMessage(text);
 
     // Add to appropriate message store
     if (isPersistenceEnabled) {
@@ -305,11 +336,22 @@ export default function ChatPage() {
         'chars'
       );
 
-      const response = await axios.post('/api/v1/chat', {
+      // Build conversation history for context (last 10 messages max to avoid token limits)
+      const historyForAPI = displayMessages.slice(-10).map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      const requestPayload = {
         message: messageToSend,
         user_id: 'demo_user_123',
-        user_tier: tier,
-      });
+        user_tier: tier.trim(),
+        history: historyForAPI.length > 0 ? historyForAPI : undefined,
+      };
+      console.log('[GOGGA] Request payload:', JSON.stringify(requestPayload));
+      console.log('[GOGGA] History messages:', historyForAPI.length);
+
+      const response = await axios.post('/api/v1/chat', requestPayload);
 
       const { data } = response;
 
@@ -1020,6 +1062,18 @@ export default function ChatPage() {
                     }`}
                   >
                     {renderMessageContent(m as ChatMessage, i)}
+
+                    {/* Language Badge for user messages (shows detected SA language) */}
+                    {m.role === 'user' &&
+                      (m as ChatMessage).detectedLanguage &&
+                      (m as ChatMessage).detectedLanguage !== 'en' && (
+                        <div className="mt-1 flex justify-end">
+                          <LanguageBadge
+                            language={(m as ChatMessage).detectedLanguage!}
+                            confidence={(m as ChatMessage).languageConfidence}
+                          />
+                        </div>
+                      )}
 
                     {/* Metadata Display - Clean button indicators */}
                     {m.meta && (

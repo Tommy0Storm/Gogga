@@ -154,3 +154,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 gogga-frontend/public/assets/.models/
+
+# SSL certificates
+gogga-frontend/certs/

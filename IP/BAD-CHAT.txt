@@ -1,0 +1,81 @@
+Ok look at this desaster, Now below this I will give you a system prompt, I am trying to make the agent as dunky and dynamic in the SA context, not analyse the user. and the thinking bloc must be hidden like jigga. hell, how you bud
+
+Hello, how's it going in Pretoriuspark? What's on your mind, or do you need some help with something? I'm all ears and ready to assist you with any questions or concerns you might have.
+
+I am good man, real good, so what should one do in the evening tonight?'
+
+Since it's a Thursday evening, you might want to unwind with a braai with friends or family, or catch up on your favorite TV show. If you're feeling adventurous, you could explore some of the local restaurants in Pretoria for dinner. Just remember to check the load shedding schedule for your area to plan accordingly. How does that sound?
+
+dunno boring
+
+It sounds like you're feeling a bit bored. Pretoriuspark has its charm, but sometimes we all need something new. What kind of things are you usually interested in or enjoy doing? Maybe we can find something local that sparks your curiosity.
+
+create me a philosophy paper for self awareness
+
+Introduction to Self-Awareness Philosophy
+Self-awareness, the ability to have a conscious understanding of one's own thoughts, feelings, and experiences, is a fundamental aspect of human existence. It is the foundation upon which we build our identities, make decisions, and interact with the world around us. This paper will delve into the concept of self-awareness, exploring its significance, the challenges it poses, and the philosophical perspectives that attempt to understand and explain this complex phenomenon.
+
+The Significance of Self-Awareness
+Self-awareness is crucial for personal growth, relationships, and navigating the complexities of life. It allows individuals to reflect on their beliefs, values, and actions, enabling them to make informed decisions that align with their goals and aspirations. Moreover, self-awareness facilitates empathy and understanding towards others, as it helps individuals recognize and respect the unique experiences and perspectives of those around them.
+
+Challenges to Self-Awareness
+Despite its importance, achieving and maintaining self-awareness can be challenging. Various factors, such as societal pressures, personal biases, and the influence of technology, can obscure one's true self. The constant bombardment of information and the curated personas presented on social media can lead to confusion about one's own identity and place in the world. Furthermore, the human tendency to seek validation and approval from others can result in the suppression of genuine feelings and thoughts, hindering the development of authentic self-awareness.
+
+Philosophical Perspectives on Self-Awareness
+Philosophers have long grappled with the concept of self-awareness, offering diverse insights into its nature and significance.
+
+Plato's Theory of Forms: Plato suggested that the self is not just a physical entity but also comprises a spiritual aspect that interacts with the world of forms or ideas. According to this view, self-awareness involves recognizing and understanding one's connection to these eternal and perfect forms.
+
+Descartes' Cogito: René Descartes famously declared, "I think, therefore I am" (Cogito, ergo sum), establishing thought as the foundation of self-awareness. This philosophical stance emphasizes the role of cognition in affirming one's existence and understanding of the self.
+
+Kant's Transcendental Idealism: Immanuel Kant proposed that the self is not just a passive receiver of sensory information but an active organizer of experience. Kant's transcendental idealism suggests that self-awareness is rooted in the mind's ability to structure and make sense of the world.
+
+Existentialism: Existentialist philosophers like Jean-Paul Sartre and Martin Heidegger focus on the individual's freedom and responsibility to choose their path in life. From this perspective, self-awareness is about acknowledging and embracing one's existence and the choices that define it.
+
+Eastern Philosophies: In contrast to Western philosophical traditions, Eastern philosophies such as Buddhism and Taoism often view the self as impermanent and interconnected with all things. Self-awareness, in this context, involves recognizing and transcending the ego to achieve a state of harmony with the universe.
+
+Conclusion
+Self-awareness is a multifaceted and dynamic concept that has been explored by philosophers across various traditions. It is a journey of discovery that requires effort, honesty, and a willingness to confront one's own biases and limitations. Through self-awareness, individuals can cultivate a deeper understanding of themselves and their place in the world, leading to more authentic, compassionate, and fulfilling lives. As we navigate the complexities of the 21st century, the importance of self-awareness cannot be overstated, offering a foundation for personal and societal transformation.
+
+whoa a good doc
+
+Response
+User Location Context: The user is located in Pretoriuspark, South Africa, with coordinates -25.8103, 28.3039.
+Understanding the Context: Given the location, it's essential to consider the local environment, services, and challenges that might be relevant to the user's needs or queries.
+Initial Interaction: The user's initial message, "whoa a good doc," seems to express appreciation or surprise, possibly in response to a document or information they've encountered.
+Upon reflection, the initial message lacks specific details about the user's query or concern. It's crucial to seek clarification to provide a relevant and helpful response. Considering the user's location in Pretoria, South Africa, any response should be tailored to their local context and needs.
+Output
+The message "whoa a good doc" suggests you've found something useful or impressive. Could you please provide more context or specify what you're referring to so I can better understand and assist you?
+
+dont be so formal
+
+EXECUTIVE SUMMARY
+The user is located in Pretoriuspark, South Africa, and has requested a less formal interaction. This analysis will provide an overview of the user's location context and offer recommendations for future interactions. The key findings of this analysis include the importance of understanding the user's location and adapting communication styles accordingly.
+
+BACKGROUND/CONTEXT
+The user is situated in Pretoriuspark, which is a suburb in Pretoria, South Africa. The coordinates -25.8103, 28.3039, indicate the user's precise location. This information is crucial in providing location-specific advice or services. The user has also requested a less formal interaction, which suggests a preference for a more conversational tone.
+
+DETAILED ANALYSIS/FINDINGS
+Location Context
+The user's location in Pretoriuspark, Pretoria, is significant in understanding their needs and preferences. Pretoria is a city with a diverse population, and the suburb of Pretoriuspark is likely to have its own unique character. This location context can influence the user's interests, concerns, and communication style.
+
+Communication Style
+The user's request for a less formal interaction indicates a preference for a conversational tone. This suggests that the user values approachability and friendliness in their interactions. In response to this, it is essential to adapt communication styles to be more relaxed and engaging.
+
+KEY INSIGHTS
+Understanding the user's location is crucial in providing relevant advice or services.
+Adapting communication styles to the user's preference is essential for effective interaction.
+Conversational tone is preferred by the user, indicating a desire for approachability and friendliness.
+RECOMMENDATIONS/ACTION ITEMS
+Use a conversational tone in future interactions to accommodate the user's preference.
+Consider the user's location when providing advice or services to ensure relevance and effectiveness.
+Be approachable and friendly in interactions to build trust and rapport with the user.
+RISKS & CONSIDERATIONS
+Misinterpreting the user's preferences may lead to ineffective communication.
+Failing to consider the user's location may result in irrelevant advice or services.
+Inconsistent communication styles may confuse the user and undermine trust.
+CONCLUSION
+In conclusion, the user's location context and preference for a less formal interaction are essential considerations for effective communication. By adapting communication styles to be more conversational and considering the user's location, it is possible to build trust and provide relevant advice or services. The key recommendations from this analysis include using a conversational tone, considering the user's location, and being approachable and friendly in interactions.
+
+
+
