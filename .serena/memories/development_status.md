@@ -1,10 +1,56 @@
 # GOGGA Development Status
 
-## Last Updated: December 5, 2025 (Dashboard Enhancements + Rate Limit Resilience)
+## Last Updated: December 6, 2025 (Authentication System Complete)
 
 ---
 
-## 🔧 Latest Session (Dec 5, 2025)
+## 🔧 Latest Session (Dec 6, 2025)
+
+### ✅ Authentication System Implemented
+
+**Full passwordless token-based auth now working!**
+
+**Stack:**
+- NextAuth.js v5.0.0-beta.30 (latest App Router compatible)
+- Prisma v5.22.0 with SQLite
+- EmailJS REST API (service_q6alymo, template_k9ugryd)
+- PostHog analytics (EU region)
+
+**Auth Flow:**
+1. User enters email at `/login`
+2. POST to `/api/auth/request-token` generates 32-byte token
+3. Token stored in LoginToken table (15 min expiry)
+4. Magic link sent via EmailJS REST API
+5. User clicks link or pastes token
+6. NextAuth Credentials provider validates token
+7. User upserted, token marked used
+8. JWT session created (30 days)
+9. Events logged to AuthLog table
+
+**Key Files Created:**
+- `src/auth.ts` - NextAuth v5 config
+- `src/app/login/page.tsx` - Two-step login UI
+- `src/app/api/auth/request-token/route.ts` - Token generation
+- `src/app/api/auth/[...nextauth]/route.ts` - NextAuth handlers
+- `src/components/AuthProvider.tsx` - SessionProvider wrapper
+- `prisma/schema.prisma` - User, LoginToken, AuthLog, Subscription
+
+**Important Design Decisions:**
+1. LoginToken has NO foreign key to User - allows signup flow
+2. EmailJS REST API used directly (not @emailjs/nodejs library)
+3. Template variable is `{{email}}` not `to_email`
+4. Dev server on HTTPS :3005 (not :3000)
+
+**AuthLog Events:**
+- `token_requested` - When magic link requested
+- `login_success` - Successful authentication
+- `login_failed` - Invalid/expired token
+- `session_created` - JWT session established
+- `logout` - User signs out
+
+---
+
+## 🔧 Previous Session (Dec 5, 2025)
 
 ### VCB-AI Model Monitor Added
 New dashboard tab for monitoring the ONNX embedding model:
@@ -115,4 +161,6 @@ New dashboard tab for monitoring the ONNX embedding model:
 
 - [ ] Fix weather API suburb recognition
 - [ ] Azure Container Apps deployment
-- [ ] User authentication (Better Auth)
+- [ ] PayFast subscription flow (frontend integration)
+- [ ] Tier enforcement from database
+- [ ] Protected routes (middleware.ts)

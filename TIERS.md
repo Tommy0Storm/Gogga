@@ -8,20 +8,20 @@ GOGGA is a South African AI assistant with a 3-tier subscription model. Each tie
 
 ---
 
-## The Real Stack (Coming Soon)
+## The Self-Hosted Stack (Implemented)
 
-GOGGA is transitioning to a fully self-contained, cloud-free architecture:
+GOGGA runs on a fully self-contained, cloud-free architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    GOGGA SELF-HOSTED STACK                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  Next.js 16 (App Router)     │ Frontend + API Routes           │
-│  Better Auth (Auth.js core)  │ Authentication & Sessions       │
+│  NextAuth.js v5 (beta.30)    │ Passwordless token auth         │
 │  Prisma ORM                  │ Type-safe database access       │
 │  SQLite (./prisma/dev.db)    │ Local database file             │
 └─────────────────────────────────────────────────────────────────┘
-              Everything lives inside your repo, no cloud fuss
+              Everything lives inside the repo, no cloud dependencies
 ```
 
 ### Stack Benefits
@@ -29,12 +29,33 @@ GOGGA is transitioning to a fully self-contained, cloud-free architecture:
 | Component | Why |
 |-----------|-----|
 | **Next.js App Router** | Server components, streaming, Turbopack |
-| **Better Auth** | Self-hosted auth, no vendor lock-in, social + credentials |
+| **NextAuth.js v5** | Passwordless token-based auth, JWT sessions |
 | **Prisma** | Type-safe queries, migrations, schema-first development |
 | **SQLite** | Zero config, file-based, Git-friendly for dev |
 
 ### File Structure (Implemented)
 
+```
+gogga-frontend/
+├── prisma/
+│   ├── schema.prisma      # User, LoginToken, AuthLog, Subscription models
+│   ├── dev.db             # SQLite database file
+│   └── migrations/        # Version-controlled migrations
+├── src/
+│   ├── auth.ts            # NextAuth v5 configuration (root level)
+│   ├── lib/
+│   │   ├── prisma.ts      # Prisma client singleton
+│   │   └── db.ts          # Dexie (client-side RAG)
+│   ├── components/
+│   │   └── AuthProvider.tsx  # NextAuth SessionProvider wrapper
+│   └── app/
+│       ├── login/page.tsx    # Two-step login (email → token entry)
+│       └── api/
+│           ├── auth/
+│           │   ├── [...nextauth]/route.ts  # NextAuth v5 handlers
+│           │   └── request-token/route.ts  # Magic token generator + EmailJS
+│           └── payfast/
+│               └── notify/route.ts         # PayFast ITN webhook
 ```
 gogga-frontend/
 ├── prisma/
@@ -62,6 +83,11 @@ gogga-frontend/
 
 ### Auth + Tier Integration
 
+**Tech Stack:**
+- NextAuth.js v5.0.0-beta.30 (App Router compatible)
+- Prisma v5.22.0 with SQLite
+- EmailJS REST API (service_q6alymo)
+
 ```prisma
 // Prisma Schema (gogga-frontend/prisma/schema.prisma)
 
@@ -79,6 +105,7 @@ model User {
   subscription Subscription?
 }
 
+// NOTE: No foreign key to User - allows token creation before user exists
 model LoginToken {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -86,13 +113,12 @@ model LoginToken {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
-  user      User?    @relation(fields: [email], references: [email])
 }
 
 model AuthLog {
   id        String   @id @default(cuid())
   email     String?  // Only for dispute investigation
-  action    String   // token_requested, login_success, subscription_activated
+  action    String   // token_requested, login_success, session_created
   ip        String?  // Connection logging for security
   meta      String?  // JSON string (non-personal data)
   createdAt DateTime @default(now())
@@ -119,29 +145,111 @@ model Subscription {
 │                    GOGGA TOKEN-BASED AUTH                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  1. USER ENTERS EMAIL                                           │
+│  1. USER ENTERS EMAIL (at /login)                               │
 │     └─→ POST /api/auth/request-token                            │
-│         └─→ Generate 64-char hex token                          │
-│         └─→ Store in LoginToken (15 min expiry)                 │
-│         └─→ Send magic link via EmailJS                         │
+│         └─→ Generate 32-byte hex token (crypto.randomBytes)     │
+│         └─→ Store in LoginToken table (15 min expiry)           │
+│         └─→ Send magic link via EmailJS REST API                │
+│         └─→ Log 'token_requested' to AuthLog                    │
 │                                                                 │
-│  2. USER CLICKS LINK OR PASTES TOKEN                            │
-│     └─→ /login?token=xxx OR paste token manually                │
-│     └─→ signIn('email-token', { token })                        │
+│  2. USER RECEIVES EMAIL                                         │
+│     └─→ Email contains magic link: /login?token=xxx             │
+│     └─→ Or user can paste 64-char token manually                │
 │                                                                 │
-│  3. NEXTAUTH VALIDATES                                          │
-│     └─→ Credentials provider authorize()                        │
-│     └─→ Check token exists, not used, not expired               │
-│     └─→ Mark token as used                                      │
-│     └─→ Upsert User                                             │
-│     └─→ Create JWT session                                      │
+│  3. NEXTAUTH VALIDATES (signIn('email-token', { token }))       │
+│     └─→ Credentials provider authorize() checks:                │
+│         • Token exists in LoginToken table                      │
+│         • Token not marked as used                              │
+│         • Token not expired (15 min limit)                      │
+│     └─→ Mark token as used (prevents replay)                    │
+│     └─→ Upsert User (create if new, update if returning)        │
+│     └─→ Log 'login_success' to AuthLog                          │
 │                                                                 │
-│  4. SESSION ACTIVE                                              │
-│     └─→ JWT stored in cookie (30 days)                          │
+│  4. SESSION CREATED                                             │
+│     └─→ JWT created and stored in secure cookie (30 days)       │
+│     └─→ Log 'session_created' to AuthLog                        │
+│     └─→ Redirect to / (main app)                                │
 │     └─→ useSession() hook available throughout app              │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Session Management
+
+| Aspect | Value |
+|--------|-------|
+| Strategy | JWT (stateless) |
+| Max Age | 30 days |
+| Cookie | `authjs.session-token` (secure, httpOnly) |
+| Refresh | Automatic on activity |
+
+**Access Patterns:**
+```typescript
+// Client-side (React components)
+import { useSession } from 'next-auth/react'
+const { data: session, status } = useSession()
+
+// Server-side (App Router actions/pages)
+import { auth } from '@/auth'
+const session = await auth()
+```
+
+### Route Protection (Server-Side)
+
+GOGGA uses server-side route protection for security. All protected routes check session on the server before rendering.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SERVER-SIDE ROUTE PROTECTION                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  / (Main App)                                                   │
+│  ├─→ Server: await auth()                                       │
+│  ├─→ No session? → redirect('/login')                           │
+│  └─→ Has session? → render ChatClient                           │
+│                                                                 │
+│  /login                                                         │
+│  ├─→ Server: await auth()                                       │
+│  ├─→ Has session? → redirect('/')                               │
+│  └─→ No session? → render LoginClient                           │
+│                                                                 │
+│  /dashboard                                                     │
+│  └─→ Currently unprotected (JIGGA-only features)                │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Why Server-Side?**
+- No flash of protected content
+- No client-side redirect delays
+- More secure (can't bypass with JS disabled)
+- SEO-friendly (proper HTTP redirects)
+
+**File Structure:**
+```
+src/app/
+├── page.tsx           # Server component - auth check → ChatClient
+├── ChatClient.tsx     # Client component - actual chat UI
+├── login/
+│   ├── page.tsx       # Server component - auth check → LoginClient
+│   └── LoginClient.tsx # Client component - login form
+```
+
+### AuthLog Events (SQLite Logging)
+
+All essential authentication events are logged to the `AuthLog` table for security and dispute investigation:
+
+| Action | When | Logged Data |
+|--------|------|-------------|
+| `token_requested` | User requests magic link | email, IP, timestamp |
+| `login_success` | Valid token verified | email, IP, isNewUser |
+| `login_failed` | Invalid/expired token | email, IP, reason |
+| `session_created` | JWT session established | email, sessionMaxAge |
+| `logout` | User signs out | email, IP |
+| `subscription_activated` | PayFast payment confirmed | email, tier |
+| `subscription_cancelled` | User cancels | email, tier |
+
+**Privacy Note:** Only connection-type logs are stored. No personal data beyond email (for dispute resolution) is logged.
 
 ### Privacy & Data Policy
 
@@ -159,11 +267,26 @@ model Subscription {
 - Auth logs contain connection info only (IP, action type, timestamp)
 - No personal data logging beyond what's needed for disputes
 
-### EmailJS Templates (service_q6alymo)
+### EmailJS Configuration
+
+**API Settings:**
+| Setting | Value |
+|---------|-------|
+| Service ID | `service_q6alymo` |
+| Template ID | `template_k9ugryd` |
+| API Method | REST API (`https://api.emailjs.com/api/v1.0/email/send`) |
+| From Email | hello@vcb-ai.online (via Outlook) |
+
+**Template Variables:**
+- `{{email}}` - Recipient email address (used in "To Email" field)
+- `{{token}}` - 64-character login token
+- `{{magic_link}}` - Full magic link URL
+
+### Email Templates
 
 | Template ID | Purpose |
 |-------------|---------|
-| `template_magic_token` | Magic link + token for sign-in |
+| `template_k9ugryd` | Magic link for passwordless sign-in |
 | `vcb_welcome_free` | Welcome email (FREE tier) |
 | `vcb_subscription_activation_with_privacy` | Subscription confirmed |
 | `vcb_payment_success` | Payment processed |
@@ -178,18 +301,24 @@ model Subscription {
 # Base URL
 NEXT_PUBLIC_BASE_URL=https://gogga.vcb-ai.online
 
-# EmailJS (service_q6alymo via Outlook)
-EMAILJS_PUBLIC_KEY=xxx
-EMAILJS_PRIVATE_KEY=xxx
-EMAIL_FROM_NAME="VCB-AI Support"
-EMAIL_FROM=hello@vcb-ai.online
-
-# NextAuth
-NEXTAUTH_SECRET=xxx  # openssl rand -base64 32
+# NextAuth v5
+AUTH_SECRET=xxx  # openssl rand -base64 32
 NEXTAUTH_URL=https://gogga.vcb-ai.online
 
 # Database
 DATABASE_URL="file:./dev.db"
+
+# EmailJS (REST API - not SDK)
+EMAILJS_PUBLIC_KEY=Z6bj2q-HzyhKlxNEA
+EMAILJS_PRIVATE_KEY=xxx
+EMAILJS_SERVICE_ID=service_q6alymo
+EMAILJS_TEMPLATE_ID=template_k9ugryd
+EMAIL_FROM_NAME="VCB-AI Support"
+EMAIL_FROM=hello@vcb-ai.online
+
+# PostHog Analytics (EU region)
+NEXT_PUBLIC_POSTHOG_KEY=phc_yZekB4PmawZNhcDehM9C1hcjMtMcqG36xHZu6AveT33
+NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 
 # PayFast (ZAR payments)
 PAYFAST_MERCHANT_ID=xxx
@@ -726,8 +855,8 @@ Body: { search_id, helpful: boolean, feedback? }
 | Tailwind CSS | 4.1.17 | CSS-first config with @theme |
 | TypeScript | 5.3+ | Strict mode |
 | Lucide React | 0.555.0 | Icon library |
-| Better Auth | latest | Self-hosted auth (coming) |
-| Prisma | latest | SQLite ORM (coming) |
+| NextAuth.js | 5.0.0-beta.30 | Passwordless token auth |
+| Prisma | 5.22.0 | SQLite ORM |
 
 ### UI Theme
 
@@ -1057,16 +1186,27 @@ The retrieved context is injected into the chat message before sending to the LL
 
 ---
 
-## Migration Notes
+## Implementation Status
 
-### Current → Real Stack
+### Completed ✅
 
-| Current | Future | Notes |
-|---------|--------|-------|
-| localStorage (tier) | Prisma User.tier | Server-side tier validation |
-| No auth | Better Auth | Email/password + social providers |
-| Dexie only | Dexie + SQLite | Client RAG + Server user data |
-| PayFast webhook → ? | PayFast → Prisma Subscription | Persistent subscription tracking |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **NextAuth.js v5** | ✅ Implemented | Passwordless token-based auth working |
+| **Prisma + SQLite** | ✅ Implemented | User, LoginToken, AuthLog, Subscription models |
+| **EmailJS Integration** | ✅ Implemented | Magic link delivery via REST API |
+| **Login Flow** | ✅ Implemented | Email → Token → Session |
+| **AuthLog Events** | ✅ Implemented | Security logging to SQLite |
+| **Session Management** | ✅ Implemented | 30-day JWT sessions |
+| **PostHog Analytics** | ✅ Implemented | EU region, privacy-first |
+
+### Coming Soon 🔜
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **PayFast Subscriptions** | 🔜 In Progress | ITN webhook ready, needs frontend flow |
+| **Tier Enforcement** | 🔜 Planned | Server-side tier validation from DB |
+| **Social Auth** | 🔜 Optional | Google/GitHub OAuth providers |
 
 ### Why SQLite?
 

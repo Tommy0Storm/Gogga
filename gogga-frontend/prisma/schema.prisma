@@ -17,19 +17,19 @@ model User {
   email        String        @unique
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  tokens       LoginToken[]
   subscription Subscription?
 }
 
 // One-time magic link tokens (15 min expiry)
+// Note: Tokens can exist without a user (for new signups)
 model LoginToken {
   id        String   @id @default(cuid())
   token     String   @unique
-  email     String
+  email     String   // Email to send token to - user may not exist yet
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
-  user      User?    @relation(fields: [email], references: [email])
+  // No foreign key - tokens can be created for new emails
 }
 
 // Connection-type logging for audit/disputes only
