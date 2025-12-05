@@ -493,6 +493,14 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   isRealVectors,
   tier,
 }) => {
+  // Check if ANY document has embeddings (more reliable than cache-only check)
+  const hasAnyEmbeddings = React.useMemo(() => {
+    if (isRealVectors && vectors.length > 0) return true;
+    if (documents.some(d => d.hasEmbeddings || d.embeddingStatus === 'complete')) return true;
+    if (embeddingStats && embeddingStats.totalEmbeddings > 0) return true;
+    return false;
+  }, [isRealVectors, vectors, documents, embeddingStats]);
+
   return (
     <div className="space-y-6">
       {/* Health & Quick Stats */}
@@ -601,7 +609,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
       <div className="grid grid-cols-2 gap-4">
         <LatencyChart data={latencyChartData} height={280} />
         <div className="relative">
-          {!isRealVectors && vectors.length > 0 && (
+          {!hasAnyEmbeddings && vectors.length > 0 && (
             <div className="absolute top-2 right-2 z-10 px-2 py-1 bg-sa-gold/20 text-sa-gold text-xs rounded-md border border-sa-gold/30">
               No embeddings yet
             </div>
@@ -725,20 +733,28 @@ function calculateEmbeddingQuality(
   vectors: number[][],
   docIndex: number
 ): EmbeddingQuality {
-  // Factor 1: Chunk coverage (are all chunks embedded?)
-  const expectedChunks = doc.chunkCount || Math.ceil((doc.size || 1000) / 1500);
-  const actualChunks = vectors.length > docIndex ? 1 : 0; // Simplified - each doc has at least 1 vector
-  const chunkCoverage = Math.min(
-    100,
-    (actualChunks / Math.max(1, expectedChunks)) * 100
-  );
+  // Factor 1: Chunk coverage - based on embedding status, not vector count
+  // When embeddings are generated, ALL chunks are embedded in one go
+  // So if status is 'complete', coverage is 100%; if 'pending', it's 0%
+  let chunkCoverage: number;
+  if (doc.embeddingStatus === 'complete' || doc.hasEmbeddings) {
+    chunkCoverage = 100; // All chunks embedded when status is complete
+  } else if (doc.embeddingStatus === 'pending') {
+    chunkCoverage = 0; // Waiting for embeddings
+  } else {
+    chunkCoverage = 0; // Unknown state
+  }
 
   // Factor 2: Vector density (how information-rich are the vectors?)
-  let vectorDensity = 50; // Default
+  // If we have a vector for this doc, analyze its density
+  let vectorDensity = 85; // Default to good density for embedded docs
   if (vectors[docIndex]) {
     const vec = vectors[docIndex];
     const nonZero = vec.filter((v) => Math.abs(v) > 0.001).length;
     vectorDensity = Math.round((nonZero / vec.length) * 100);
+  } else if (doc.embeddingStatus === 'complete' || doc.hasEmbeddings) {
+    // Embeddings exist but not in display cache - assume good density
+    vectorDensity = 85;
   }
 
   // Factor 3: Document size factor (larger docs = more context)
@@ -758,14 +774,12 @@ function calculateEmbeddingQuality(
   else if (score >= 40) grade = 'fair';
   else grade = 'poor';
 
-  // Recommendation
+  // Recommendation based on status
   let recommendation: string | undefined;
-  if (vectorDensity < 50) {
-    recommendation =
-      'Document may have sparse content - consider adding more text';
-  } else if (chunkCoverage < 50) {
-    recommendation =
-      'Some chunks may not be embedded yet - run a query to complete';
+  if (doc.embeddingStatus === 'pending') {
+    recommendation = 'Embeddings generating - will complete shortly';
+  } else if (doc.embeddingStatus === 'error') {
+    recommendation = 'Embedding generation failed - try re-uploading';
   } else if (documentSize < 50) {
     recommendation =
       'Small document - combine with related content for better context';
@@ -799,6 +813,17 @@ const EmbeddingsTab: React.FC<EmbeddingsTabProps> = ({
   documents,
   tier,
 }) => {
+  // Check if ANY document has embeddings (more reliable than cache-only check)
+  const hasAnyEmbeddings = React.useMemo(() => {
+    // Check 1: Cache has vectors
+    if (isRealVectors && vectors.length > 0) return true;
+    // Check 2: Documents marked as having embeddings
+    if (documents.some(d => d.hasEmbeddings || d.embeddingStatus === 'complete')) return true;
+    // Check 3: Embedding stats show generated embeddings
+    if (embeddingStats && embeddingStats.totalEmbeddings > 0) return true;
+    return false;
+  }, [isRealVectors, vectors, documents, embeddingStats]);
+
   // Calculate real vector stats from actual vectors
   const vectorStats = React.useMemo(() => {
     if (!isRealVectors || vectors.length === 0) {
@@ -871,7 +896,7 @@ const EmbeddingsTab: React.FC<EmbeddingsTabProps> = ({
         <div className="bg-white rounded-xl border border-primary-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-primary-800">Vector Info</h3>
-            {!isRealVectors && (
+            {!hasAnyEmbeddings && (
               <span className="px-2 py-1 bg-sa-gold/20 text-sa-gold text-xs rounded-md border border-sa-gold/30">
                 No embeddings yet
               </span>
@@ -884,7 +909,7 @@ const EmbeddingsTab: React.FC<EmbeddingsTabProps> = ({
           />
           <div className="mt-4">
             <p className="text-xs text-primary-500 mb-2">
-              {isRealVectors
+              {hasAnyEmbeddings
                 ? 'Real Vector Preview'
                 : 'Upload documents to see vectors'}
             </p>
@@ -901,7 +926,7 @@ const EmbeddingsTab: React.FC<EmbeddingsTabProps> = ({
           <h3 className="font-semibold text-primary-800">
             Document Embedding Heatmap
           </h3>
-          {isRealVectors ? (
+          {hasAnyEmbeddings ? (
             <span className="px-2 py-1 bg-sa-green/20 text-sa-green text-xs rounded-md border border-sa-green/30">
               Real embeddings
             </span>

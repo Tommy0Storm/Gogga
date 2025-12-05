@@ -345,7 +345,7 @@ export function ChatClient() {
       const requestPayload = {
         message: messageToSend,
         user_id: 'demo_user_123',
-        user_tier: tier.trim(),
+        user_tier: tier.trim().toLowerCase(),
         history: historyForAPI.length > 0 ? historyForAPI : undefined,
       };
       console.log('[GOGGA] Request payload:', JSON.stringify(requestPayload));

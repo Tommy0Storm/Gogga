@@ -15,9 +15,9 @@ const nextConfig = {
   allowedDevOrigins: [
     'localhost',
     '127.0.0.1', 
-    '192.168.0.168',
+    '192.168.0.*',  // Allow all local network IPs
+    '10.*',         // Allow all 10.x.x.x IPs
     '*.local',
-    '10.241.135.171',
   ],
   // Disable the Next.js dev indicator (floating N button)
   devIndicators: false,

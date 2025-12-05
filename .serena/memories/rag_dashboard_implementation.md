@@ -94,62 +94,23 @@ const PIE_COLORS = ['#2d2d2d', '#5a5a5a'];
 
 ## Key Files
 
-### Recent Fixes (Dec 2024)
+### Recent Fixes (December 2024)
 
-1. **Embedding Pre-generation on Upload**
+1. **Dashboard Embedding Quality Calculation Fix**
+   - Location: `calculateEmbeddingQuality()` function in `DesktopDashboard.tsx`
+   - OLD BUG: Used `vectors.length > docIndex ? 1 : 0` which gave 1/63 = 1.5% coverage
+   - NEW FIX: Uses `doc.hasEmbeddings ? 100 : 0` for proper 100% when complete
+   - Root cause: The `vectors` array was only for heatmap visualization (1 per doc), not actual chunks
+
+2. **"No embeddings yet" Badge Logic Fix**
+   - Added `hasAnyEmbeddings` variable that checks:
+     - `embeddingStats?.totalEmbeddings > 0` (Dexie-stored metrics)
+     - `documents.some(doc => doc.hasEmbeddings)` (document status)
+     - `isRealVectors` (in-memory cache for visualization)
+   - Applied to both OverviewTab and EmbeddingsTab
+   - Key insight: `doc.hasEmbeddings` in Dexie is the source of truth, not in-memory cache
+
+3. **Embedding Pre-generation on Upload**
    - `useRAG.ts` now initializes semantic engine on first JIGGA upload
    - Embeddings generated immediately (not lazily on query)
    - Status updates from "pending" to "complete" after upload
-
-2. **Chart Animations on First Mount Only**
-   - All charts use `useAnimateOnMount()` hook
-   - Animates on initial load (1 second duration)
-   - Disables animation on 5-second refresh (no "video-like" effect)
-   - Affects: LatencyChart, StorageChart, QueryModePie, PerformanceChart, ScoreHistogram, Sparkline, GaugeChart, BrowserLoadChart
-
-3. **Document Delete Flow Fixed**
-   - `DocumentManager.tsx` now uses `ragRemoveDocument()` instead of direct Dexie delete
-   - `useRagDashboard.ts` `deleteDocument` also uses `ragRemoveDocument()`
-   - Properly removes from FlexSearch index
-   - Emits `document_removed` metric for dashboard updates
-   - Added "Delete All" button with confirmation
-
-4. **Real Vector Display**
-   - Dashboard shows actual 384-dimension E5-small-v2 embeddings
-   - Green "Real embeddings" badge indicates authentic data
-   - VectorStats computes real magnitude/sparsity
-
-5. **Complete Metrics System (Dec 2024)**
-   - Added `cache_hit` / `cache_miss` metrics to `ensureEmbeddings()`
-   - Added `error` metric on embedding generation failure
-   - All metrics now emitted properly for dashboard consumption
-
----
-
-## Complete Metrics Reference
-
-### Metrics Emitted
-
-| Metric Type | Location | Trigger | Data |
-|-------------|----------|---------|------|
-| `embedding_generated` | `ragManager.ts` | Embedding creation | chunkCount, dimension, latencyMs, filename |
-| `retrieval` (basic) | `ragManager.ts` | Keyword search | mode, queryLength, docsRetrieved, latencyMs |
-| `retrieval` (semantic) | `ragManager.ts` | Vector search | mode, chunksRetrieved, topScore, averageScore, latencyMs |
-| `query` (document_added) | `rag.ts` | Doc upload | filename, size, chunkCount, mimeType |
-| `query` (document_removed) | `rag.ts` | Doc delete | filename |
-| `cache_hit` | `ragManager.ts` | Cache found | source, filename |
-| `cache_miss` | `ragManager.ts` | Cache miss | source, filename |
-| `error` | `ragManager.ts` | Embedding fails | operation, message, filename |
-
-### Chart Data Sources
-
-| Chart | Function | Metric Types |
-|-------|----------|--------------|
-| LatencyChart | getTimeSeriesMetrics() | retrieval |
-| StorageChart | getStorageStats() | Dexie |
-| QueryModePie | getModeStats() | retrieval |
-| PerformanceChart | getTimeSeriesMetrics() | retrieval |
-| ScoreHistogram | getScoreDistribution() | retrieval (semantic) |
-| GaugeChart | Computed | Multiple |
-| BrowserLoadChart | Browser API | performance.memory |
-| VectorHeatmap | getCachedVectors() | Embeddings cache |
