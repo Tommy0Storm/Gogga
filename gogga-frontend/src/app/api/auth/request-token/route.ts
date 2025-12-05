@@ -16,7 +16,7 @@ import prisma from '@/lib/prisma'
 
 // EmailJS service ID (Outlook connected)
 const EMAILJS_SERVICE_ID = 'service_q6alymo'
-const EMAILJS_TEMPLATE_ID = 'template_magic_token'
+const EMAILJS_TEMPLATE_ID = 'template_k9ugryd'
 
 // Token expiry: 15 minutes
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000
