@@ -155,10 +155,21 @@ COMPLEX_KEYWORDS: Final[frozenset[str]] = frozenset([
 
 # Image intent keywords
 IMAGE_KEYWORDS: Final[frozenset[str]] = frozenset([
-    "draw", "create an image", "make a picture", "generate an image",
-    "illustration", "logo", "design", "render", "art", "artwork",
-    "picture of", "image of", "photo of", "photograph", "visualize",
-    "sketch", "paint", "painting", "portrait", "landscape", "scene",
+    # Explicit image generation requests - must be specific to avoid false positives
+    "draw me", "draw a", "draw an", "draw the",
+    "create an image", "create a picture", "create artwork",
+    "make a picture", "make an image", "make me a",
+    "generate an image", "generate a picture", "generate artwork",
+    "design a logo", "design me a", "design a",
+    "render a", "render an", "render the",
+    "sketch a", "sketch me", "sketch the",
+    "paint a", "paint me", "paint the",
+    # Specific image types - with context words
+    "illustration of", "logo for", "artwork of", "art of",
+    "picture of", "image of", "photo of", "photograph of",
+    "portrait of", "landscape of", "scene of",
+    # Direct requests
+    "visualize this", "show me a picture", "can you draw",
 ])
 
 
