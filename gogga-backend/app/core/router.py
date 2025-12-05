@@ -73,36 +73,30 @@ QWEN_FAST_SETTINGS: Final[dict] = {
 
 
 # Keywords that trigger comprehensive document/analysis output
+# IMPORTANT: Only use EXPLICIT document request phrases to avoid false positives
+# Single words like "paper", "doc", "formal" are too generic and trigger on casual chat
 DOCUMENT_ANALYSIS_KEYWORDS: Final[frozenset[str]] = frozenset([
-    # Analysis requests
-    "analyze", "analyse", "analysis", "assessment", "evaluate", "evaluation",
-    "review", "examine", "investigation", "investigate", "audit", "scrutinize",
+    # Explicit document creation requests (multi-word to reduce false positives)
+    "write me a report", "create a report", "draft a report", "prepare a report",
+    "write me a document", "create a document", "draft a document",
+    "write me an analysis", "create an analysis", "provide an analysis",
+    "write me a proposal", "create a proposal", "draft a proposal",
+    "write me a memo", "create a memo", "draft a memo",
+    "write me a brief", "create a brief", "prepare a brief",
     
-    # Report types
-    "report", "summary report", "detailed report", "comprehensive report",
-    "executive summary", "briefing", "brief me", "overview", "breakdown",
+    # Explicit professional document types (multi-word only)
+    "business case", "white paper", "research paper", "legal opinion",
+    "legal analysis", "case study", "contract review", "compliance report",
+    "due diligence report", "technical specification", "architecture document",
+    "design document", "requirements document", "feasibility study",
+    "market analysis", "swot analysis", "risk assessment",
+    "business plan", "marketing plan", "strategic plan", "project plan",
+    "implementation plan", "action plan",
     
-    # Document types
-    "document", "write a document", "draft", "prepare", "compile",
-    "memo", "memorandum", "proposal", "business case", "white paper",
-    "research paper", "study", "findings", "recommendation",
-    
-    # Professional outputs
-    "professional", "formal", "structured", "comprehensive", "thorough",
-    "in-depth", "detailed", "complete", "full", "exhaustive",
-    
-    # Business documents
-    "business plan", "marketing plan", "strategy", "strategic plan",
-    "project plan", "implementation plan", "action plan", "roadmap",
-    "feasibility study", "market analysis", "swot analysis", "risk assessment",
-    
-    # Legal documents
-    "legal opinion", "legal analysis", "case study", "contract review",
-    "compliance report", "due diligence", "legal brief",
-    
-    # Technical documents
-    "technical specification", "technical report", "architecture document",
-    "design document", "requirements document", "documentation",
+    # Explicit format requests
+    "give me a detailed report", "provide a comprehensive analysis",
+    "i need a formal document", "write this formally", "make it formal",
+    "executive summary format", "structured analysis",
 ])
 
 
@@ -191,65 +185,21 @@ def is_document_analysis_request(message: str) -> bool:
 
 # Comprehensive output format instruction for document/analysis requests
 # This is appended to the user's message when document analysis is detected
+# IMPORTANT: Preserve GOGGA personality - formal structure but SA voice
 COMPREHENSIVE_OUTPUT_INSTRUCTION: Final[str] = """
 
 ---
-[SYSTEM: Document/Analysis Request Detected - Comprehensive Output Mode]
+[SYSTEM: Formal Document Requested]
 
-CRITICAL: The user is requesting a professional document, analysis, or report. 
-You MUST provide comprehensive, verbose, well-structured output UNLESS the user 
-explicitly requests something shorter (e.g., "brief", "quick", "summary only").
+The user has explicitly requested a formal document, report, or analysis.
+Provide well-structured, comprehensive output BUT maintain your GOGGA personality:
+- Keep your SA voice and context (Rands, local references, etc.)
+- You can still be warm and helpful, just more structured
+- Use clear headings and sections appropriate to the document type
+- Be thorough but don't lose your personality
+- User's explicit format requests ALWAYS override these defaults
 
-USER'S REQUEST ALWAYS TAKES PRIORITY - if they specify a format or length, follow that.
-
-DEFAULT COMPREHENSIVE OUTPUT FORMAT:
-
-1. EXECUTIVE SUMMARY
-   - 2-3 sentence overview of key findings/recommendations
-   - Highlight the most critical points upfront
-
-2. BACKGROUND/CONTEXT
-   - Relevant context for the analysis
-   - Key assumptions or constraints
-   - Scope of the analysis
-
-3. DETAILED ANALYSIS/FINDINGS
-   - Structured breakdown of main points
-   - Use clear headings and subheadings
-   - Include supporting evidence/reasoning
-   - Present multiple perspectives where relevant
-
-4. KEY INSIGHTS
-   - Numbered list of important observations
-   - Connect findings to practical implications
-   - Highlight patterns or trends
-
-5. RECOMMENDATIONS/ACTION ITEMS
-   - Prioritized list of recommendations
-   - Practical, actionable steps
-   - Include timelines where appropriate
-
-6. RISKS & CONSIDERATIONS
-   - Potential challenges or limitations
-   - Mitigating factors or alternatives
-   - Important caveats
-
-7. CONCLUSION
-   - Synthesize main points
-   - Restate key recommendations
-   - Next steps or follow-up items
-
-FORMATTING GUIDELINES:
-- Use clear section headers with appropriate formatting
-- Use bullet points and numbered lists for readability
-- Include tables where data comparison is useful
-- Bold key terms and important points
-- Keep paragraphs focused and digestible
-- Use professional, clear language
-- Maintain SA context where relevant (Rands, local regulations, etc.)
-
-REMEMBER: Be VERBOSE and THOROUGH. The user wants comprehensive output.
-If you're unsure whether to include something, INCLUDE IT.
+If the user asks for something "brief" or "quick" - give them that instead.
 ---
 """
 

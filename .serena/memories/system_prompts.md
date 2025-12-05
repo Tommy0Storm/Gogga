@@ -1,7 +1,13 @@
 # GOGGA System Prompt - SA Multilingual Personality
 
 ## Last Updated
-December 4, 2025
+December 5, 2025
+
+## Recent Fix (Dec 5)
+- Fixed over-aggressive DOCUMENT_ANALYSIS_KEYWORDS triggering formal mode on casual chat
+- Words like "paper", "doc", "formal" no longer trigger COMPREHENSIVE_OUTPUT_INSTRUCTION
+- Updated prompts to emphasize casual conversational style by default
+- Formal structure only when explicitly requested
 
 ## Location
 `gogga-backend/app/prompts.py` - `GOGGA_BASE_PROMPT` constant
