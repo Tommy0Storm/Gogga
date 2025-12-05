@@ -1,13 +1,15 @@
 # Task Completion Log
 
-## 2025-12-05 - BuddySystem Memory Integration Complete
+## 2025-12-05 - BuddySystem Memory + Material Icons Complete
 
 ### Completed Tasks:
-1. **MEMORY_AWARENESS Prompt** - Added to prompts.py (lines 39-70)
+1. **MEMORY_AWARENESS Prompt** - Added to prompts.py (lines 40-70)
 2. **Prompt Injection** - MEMORY_AWARENESS injected into all 4 JIVE/JIGGA prompts
 3. **Frontend Context Injection** - ChatClient.tsx fetches buddyContext for paid tiers
 4. **Context Format** - `USER CONTEXT:\n{buddyContext}\n\n---\n\n{userMessage}`
-5. **IDENTITY_FIREWALL** - Previously added to protect GOGGA persona
+5. **IDENTITY_FIREWALL** - Protects GOGGA persona from prompt injection
+6. **No Emojis in Prompts** - Replaced 18+ emoji section headers with `[SECTION_NAME]`
+7. **TIERS.md Updated** - Added Memory & Personalization + Response Formatting sections
 
 ### Memory Features:
 - USER NAME recognition and usage
@@ -16,12 +18,19 @@
 - LOCATION/INTERESTS context
 - USER MEMORIES from Dexie
 
+### Material Icons Fix:
+- Prompts now use `[SECTION_NAME]` format instead of emojis
+- AI should use `[icon_name]` format in responses (e.g., `[check]`, `[warning]`)
+- No more confusion between prompt emojis and "NO EMOJIS" rule
+
 ### Files Modified:
-- `gogga-backend/app/prompts.py` - Added MEMORY_AWARENESS constant
-- `gogga-frontend/src/app/ChatClient.tsx` - Added buddyContext injection
+- `gogga-backend/app/prompts.py` - MEMORY_AWARENESS + emoji removal
+- `gogga-frontend/src/app/ChatClient.tsx` - buddyContext injection
+- `TIERS.md` - Memory & Personalization + Response Formatting sections
 
 ### Verification:
 - All 4 prompts include MEMORY_AWARENESS: ✓
+- All prompts use [SECTION_NAME] format: ✓
 - BuddySystem context fetched for JIVE/JIGGA: ✓
 - Context prepended to user messages: ✓
 

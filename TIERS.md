@@ -823,6 +823,44 @@ When you request an **analysis**, **report**, or **professional document**, JIGG
 - `components/dashboard/BuddyPanel.tsx` - Dashboard widget
 - `components/LanguageBadge.tsx` - Subtle language indicator
 
+### Memory & Personalization (JIVE/JIGGA)
+
+GOGGA remembers you across conversations via the BuddySystem context injection:
+
+**What GOGGA Remembers:**
+| Field | Description | Example |
+|-------|-------------|---------|
+| USER NAME | Your name (if shared) | "Hey Tanya! Back with another question?" |
+| RELATIONSHIP | How well GOGGA knows you | stranger → acquaintance → friend → bestie |
+| PREFERRED LANGUAGE | Your SA language preference | Responds in isiZulu if you prefer |
+| TONE | Communication style | formal, casual, or sarcastic |
+| LOCATION | City/province for local context | "Since you're in Joburg..." |
+| INTERESTS | Topics you've discussed | "Since you're into coding..." |
+| USER MEMORIES | Things you asked GOGGA to remember | Custom notes and preferences |
+
+**How It Works:**
+1. BuddySystem profile stored in localStorage
+2. Long-term memories stored in Dexie (IndexedDB)
+3. Context injected into chat messages for JIVE/JIGGA tiers
+4. GOGGA uses your name naturally (not every sentence, but when appropriate)
+
+**Memory Context Format:**
+```
+USER CONTEXT:
+USER NAME: Tanya
+RELATIONSHIP: friend (215 buddy points)
+PREFERRED LANGUAGE: English (en)
+TONE: sarcastic, humor welcome
+LOCATION: Johannesburg, Gauteng
+INTERESTS: coding, photography, legal questions
+
+---
+
+[Your actual message here]
+```
+
+**Note:** FREE tier does not receive memory context - GOGGA treats you as a new user each time.
+
 ### Token Tracking
 
 All tiers track token usage with local persistence:
@@ -857,6 +895,24 @@ All tiers understand:
 - Local business practices
 - Cultural nuances
 - 11 official languages
+
+### Response Formatting
+
+GOGGA follows consistent formatting rules:
+
+| Rule | Description |
+|------|-------------|
+| **No Emojis** | Uses Material Icons `[icon_name]` format instead |
+| **Bold** | For emphasis on key terms |
+| **Numbered Lists** | For steps, options, procedures |
+| **Headers** | Only for long structured content (reports, analysis) |
+| **Casual Chat** | No headers, no structure - just natural conversation |
+
+**Material Icons Examples:**
+- `[check]` instead of ✅
+- `[warning]` instead of ⚠️
+- `[info]` instead of ℹ️
+- `[error]` instead of ❌
 
 ### GOGGA Personality
 
