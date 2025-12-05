@@ -53,6 +53,13 @@ IMAGE_LIMITS: Final[dict[UserTier, int]] = {
 
 
 # Qwen thinking mode settings (JIGGA tier)
+# Token limits
+# NOTE: Llama 3.3 70B supports up to 40,000 output tokens on Cerebras
+# Currently limited to 8,000 for cost control - increase to 40,000 when ready
+JIVE_MAX_TOKENS: Final[int] = 8000  # Llama 3.3 70B extended output (max: 40,000)
+JIVE_DEFAULT_TOKENS: Final[int] = 4096  # Default for normal requests
+JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B (max: 8,000)
+
 # DO NOT use greedy decoding (temp=0) - causes performance degradation and endless repetitions
 QWEN_THINKING_SETTINGS: Final[dict] = {
     "temperature": 0.6,
@@ -71,6 +78,28 @@ QWEN_FAST_SETTINGS: Final[dict] = {
     "max_tokens": 8000,
 }
 
+
+# Keywords that trigger extended output (8000 tokens for JIVE, 8000+ for JIGGA)
+# These explicitly request long-form, detailed output
+EXTENDED_OUTPUT_KEYWORDS: Final[frozenset[str]] = frozenset([
+    # Explicit length requests
+    "long format", "extended format", "detailed format",
+    "add more words", "more detail", "more details",
+    "elaborate more", "expand on this", "go deeper",
+    "full explanation", "thorough explanation", "complete explanation",
+    "in depth", "in-depth", "extensively",
+    
+    # Document length indicators
+    "at least 1000 words", "at least 2000 words", "at least 3000 words",
+    "minimum 1000", "minimum 2000", "minimum 3000",
+    "very detailed", "extremely detailed", "highly detailed",
+    
+    # Professional output requests
+    "comprehensive report", "detailed report", "full report",
+    "comprehensive analysis", "detailed analysis", "full analysis",
+    "comprehensive review", "detailed review", "full review",
+    "draft a full", "write a full", "create a full",
+])
 
 # Keywords that trigger comprehensive document/analysis output
 # IMPORTANT: Only use EXPLICIT document request phrases to avoid false positives
@@ -183,6 +212,15 @@ def is_image_prompt(prompt: str) -> bool:
     # Only check the beginning of the message, not full RAG context
     prompt_start = prompt[:200].lower()
     return any(keyword in prompt_start for keyword in IMAGE_KEYWORDS)
+
+
+def is_extended_output_request(message: str) -> bool:
+    """
+    Detect if user is requesting extended/long-form output.
+    Triggers 8000 token max for JIVE tier.
+    """
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in EXTENDED_OUTPUT_KEYWORDS)
 
 
 def is_document_analysis_request(message: str) -> bool:

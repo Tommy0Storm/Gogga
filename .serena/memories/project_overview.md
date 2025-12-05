@@ -1,5 +1,8 @@
 # GOGGA Project Overview
 
+> **Persona**: See `PERSONA.md` for complete personality documentation
+> **Prompts**: See `system_prompts` memory for implementation details
+
 ## Purpose
 GOGGA (named after the South African colloquial term for "insect") is a **Sovereign Bicameral AI Architecture** for the South African digital ecosystem. It's a high-performance, cost-optimized conversational AI chat application that implements:
 
@@ -15,13 +18,21 @@ GOGGA (named after the South African colloquial term for "insect") is a **Sovere
 - Multilingual support for 11 official SA languages
 
 ## Key Features
-1. Automatic intent classification for model routing
-2. Cost tracking with ZAR conversion
-3. Subscription tiers (Starter R49, Professional R149, Enterprise R499)
-4. Voice recording and transcription
-5. Real-time cost transparency
+1. **BuddySystem Emotional Intelligence** - Detects user emotional state and responds appropriately
+2. **11 SA Languages** - Native-level support for all official languages
+3. **User-First Loyalty** - Champion, not neutral party
+4. Automatic intent classification for model routing
+5. Cost tracking with ZAR conversion
+6. Subscription tiers (FREE, JIVE R49, JIGGA R149)
+7. Voice recording and transcription
+8. Local RAG with semantic search (JIGGA tier)
 
-## Current Status (Updated: December 3, 2025)
+## Key Documentation
+- `PERSONA.md` - Complete personality specification
+- `TIERS.md` - Tier system and capabilities
+- `copilot-instructions.md` - Architecture overview for AI assistants
+
+## Current Status (Updated: December 5, 2025)
 
 ✅ **Backend**: Running on http://localhost:8000
 ✅ **Frontend**: Running on http://localhost:3000  

@@ -96,7 +96,8 @@ class CepoService:
         system_prompt: str,
         history: list[dict[str, str]] | None = None,
         model: str | None = None,
-        mode: str = "fast"
+        mode: str = "fast",
+        max_tokens: int = 4096
     ) -> dict[str, Any]:
         """
         Generate a response using CePO optimization.
@@ -112,7 +113,8 @@ class CepoService:
             system_prompt: System prompt for context
             history: Optional conversation history
             model: Model to use (overrides mode if provided)
-            mode: "fast" for Llama 3.1 8B, "deep" for Qwen 3 235B
+            mode: "fast" for Llama 3.3 70B, "deep" for Qwen 3 235B
+            max_tokens: Max output tokens (default: 4096, extended: 8000)
             
         Returns:
             Dict containing response and metadata
@@ -146,7 +148,7 @@ class CepoService:
                     "model": model_id,
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 4096,
+                    "max_tokens": max_tokens,
                 }
             )
             response.raise_for_status()

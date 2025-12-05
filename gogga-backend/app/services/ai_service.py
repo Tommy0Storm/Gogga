@@ -23,7 +23,9 @@ from cerebras.cloud.sdk import Cerebras
 from app.config import settings
 from app.core.router import (
     tier_router, CognitiveLayer, UserTier,
-    QWEN_THINKING_SETTINGS, QWEN_FAST_SETTINGS
+    QWEN_THINKING_SETTINGS, QWEN_FAST_SETTINGS,
+    is_extended_output_request, is_document_analysis_request,
+    JIVE_MAX_TOKENS, JIVE_DEFAULT_TOKENS, COMPREHENSIVE_OUTPUT_INSTRUCTION
 )
 from app.services.cost_tracker import track_usage
 from app.core.exceptions import InferenceError
@@ -216,8 +218,6 @@ class AIService:
         Returns:
             ResponseDict with 'response', 'thinking' (if applicable), and 'meta'
         """
-        from app.core.router import is_document_analysis_request, COMPREHENSIVE_OUTPUT_INSTRUCTION
-        
         config = tier_router.get_model_config(layer)
         model_id = config["model"]
         system_prompt = tier_router.get_system_prompt(layer)
@@ -229,11 +229,20 @@ class AIService:
         # Check for document/analysis request - add comprehensive output instruction
         actual_message = message
         is_doc_request = is_document_analysis_request(message)
+        is_extended_request = is_extended_output_request(message)
 
         if is_doc_request and (thinking_mode or use_cepo):
             # Only add comprehensive instruction for reasoning modes (JIVE CePO or JIGGA thinking)
             actual_message = f"{message}{COMPREHENSIVE_OUTPUT_INSTRUCTION}"
             logger.info("Document/analysis request detected - comprehensive output mode enabled")
+
+        # Determine max_tokens based on request type
+        # NOTE: Llama 3.3 70B supports up to 40,000 output tokens - increase when ready
+        if is_extended_request or is_doc_request:
+            cepo_max_tokens = JIVE_MAX_TOKENS  # 8000 tokens for extended output
+            logger.info(f"Extended output mode - max_tokens={cepo_max_tokens}")
+        else:
+            cepo_max_tokens = JIVE_DEFAULT_TOKENS  # 4096 tokens default
 
         # Append /no_think for JIGGA fast mode
         if append_no_think:
@@ -243,7 +252,8 @@ class AIService:
         # Route through CePO if enabled
         if use_cepo:
             return await AIService._generate_with_cepo(
-                user_id, actual_message, history, layer, model_id, system_prompt
+                user_id, actual_message, history, layer, model_id, system_prompt,
+                max_tokens=cepo_max_tokens
             )
 
         start_time = time.perf_counter()
@@ -271,10 +281,16 @@ class AIService:
                 max_tokens = QWEN_FAST_SETTINGS.get("max_tokens", JIGGA_MAX_TOKENS)
                 logger.info("JIGGA fast mode - temp=0.7, top_p=0.8, top_k=20, min_p=0")
         else:
-            # JIVE tier (Llama 3.1 8B)
+            # JIVE tier (Llama 3.3 70B)
             temperature = DEFAULT_TEMPERATURE
             top_p = DEFAULT_TOP_P
-            max_tokens = DEFAULT_MAX_TOKENS
+            
+            # Use extended tokens for document/analysis or explicit long-form requests
+            if is_extended_output_request(message) or is_document_analysis_request(message):
+                max_tokens = JIVE_MAX_TOKENS  # 8000 tokens (max: 40,000 when ready)
+                logger.info(f"JIVE extended output mode - max_tokens={max_tokens}")
+            else:
+                max_tokens = JIVE_DEFAULT_TOKENS  # 4096 tokens (default)
 
         try:
             client = get_client()
@@ -399,7 +415,8 @@ class AIService:
         history: list[MessageDict] | None,
         layer: CognitiveLayer,
         model_id: str,
-        system_prompt: str
+        system_prompt: str,
+        max_tokens: int = 4096
     ) -> ResponseDict:
         """
         JIVE reasoning: Llama 3.1 8B + CePO.
@@ -413,7 +430,8 @@ class AIService:
                 message=message,
                 system_prompt=system_prompt,
                 history=history,
-                model=model_id
+                model=model_id,
+                max_tokens=max_tokens
             )
             
             # Add tier info

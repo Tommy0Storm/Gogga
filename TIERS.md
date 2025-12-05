@@ -539,12 +539,27 @@ IMAGE: User → Prompt Enhancement → LongCat Flash → Text Description
 
 ### Capabilities
 
-- **Text Chat**: Cerebras Llama 3.1 8B with automatic complexity routing
+- **Text Chat**: Cerebras Llama 3.3 70B with automatic complexity routing
 - **Speed**: ~2,200 tokens/second
-- **CePO Integration**: Chain-of-thought planning for complex queries (using Llama 3.3 70B)
+- **CePO Integration**: Chain-of-thought planning for complex queries (using Llama 3.3 70B via OptiLLM)
 - **Image Generation**: Full FLUX 1.1 Pro images (200/month)
 - **Document Upload**: Up to 5 documents per chat session
 - **Chat Persistence**: All conversations saved locally via Dexie
+
+### Token Limits
+
+| Mode | Max Tokens | Notes |
+|------|------------|-------|
+| Standard | 4,096 | Default for casual chat |
+| Extended | 8,000 | Auto-triggers for reports, analysis, documents |
+| Model Max | 40,000 | Available when ready (cost-controlled) |
+
+**Extended output auto-triggers for:**
+- Reports, drafts, analysis requests
+- Legal documents, contracts, agreements
+- Comprehensive explanations, detailed breakdowns
+- Long-form content, essays, articles
+- Use keywords like: "detailed", "comprehensive", "long format", "full report"
 
 ### Pipeline
 
@@ -941,11 +956,11 @@ Access developer features:
 
 ### AI Text Models
 
-| Tier | Model | Provider | Speed | Context | Specialty |
-|------|-------|----------|-------|---------|-----------|
-| FREE | Llama 3.3 70B | OpenRouter | Standard | 128k | General purpose |
-| JIVE | Llama 3.1 8B | Cerebras | ~2,200 t/s | 128k | Speed + CePO reasoning |
-| JIGGA | Qwen 3 32B | Cerebras | ~1,400 t/s | 131k+ | Deep thinking, analysis |
+| Tier | Model | Provider | Speed | Context | Max Output | Specialty |
+|------|-------|----------|-------|---------|------------|-----------|
+| FREE | Llama 3.3 70B | OpenRouter | Standard | 128k | - | General purpose |
+| JIVE | Llama 3.3 70B | Cerebras | ~2,200 t/s | 128k | 8k (40k ready) | Speed + CePO reasoning |
+| JIGGA | Qwen 3 32B | Cerebras | ~1,400 t/s | 131k+ | 8k | Deep thinking, analysis |
 
 ### CePO Reasoning Model
 

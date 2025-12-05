@@ -7,21 +7,30 @@ It provides enhanced chain-of-thought planning and reasoning capabilities.
 ## Current Status (Dec 3, 2025)
 
 ### JIVE Configuration Confirmed
-**JIVE tier now ONLY uses `llama3.3-70b` for ALL Cerebras calls:**
+**JIVE tier uses `llama3.3-70b` for ALL Cerebras calls via OptiLLM CePO:**
 
 | Layer | Model | Speed | Config |
 |-------|-------|-------|--------|
-| JIVE_SPEED | `llama3.3-70b` | 2,000 tokens/s | Direct API, max_tokens=2000 |
-| JIVE_REASONING | `llama3.3-70b` | 2,000 tokens/s | Direct API, max_tokens=2000 |
+| JIVE_SPEED | `llama3.3-70b` | 2,200 tokens/s | CePO, max_tokens=4096 |
+| JIVE_REASONING | `llama3.3-70b` | 2,200 tokens/s | CePO, max_tokens=8000 (extended) |
 
-**Key Settings in router.py:**
-- `model: settings.MODEL_CEPO` (llama3.3-70b)
-- `use_cepo: False` (direct Cerebras API, bypasses OptiLLM)
-- `append_no_think: False`
+### Token Limits (Dec 2025)
+| Mode | Max Tokens | Trigger |
+|------|------------|---------|
+| Standard | 4,096 | Default casual chat |
+| Extended | 8,000 | Reports, analysis, documents, "detailed", "comprehensive" |
+| Model Max | 40,000 | Available when ready (cost-controlled) |
 
-### OptiLLM CePO Issue (Fixed by Bypassing)
-The OptiLLM CePO approach adds `reasoning_effort` parameter which Cerebras doesn't support.
-**Solution:** Use direct Cerebras API calls instead of OptiLLM CePO.
+**Extended Output Keywords:** (router.py `EXTENDED_OUTPUT_KEYWORDS`)
+- "detailed report", "comprehensive analysis", "full breakdown"
+- "long format", "extended analysis", "thorough review"
+- "in-depth", "professional document", "formal document"
+- "draft a", "complete analysis", "full explanation"
+
+**Files:**
+- `router.py`: `is_extended_output_request()`, `JIVE_MAX_TOKENS=8000`, `JIVE_DEFAULT_TOKENS=4096`
+- `ai_service.py`: Detects extended requests, passes max_tokens to CePO
+- `cepo_service.py`: `generate_with_cepo(max_tokens=4096)` accepts dynamic max_tokens
 
 ## Cerebras Inference Models for CePO
 
