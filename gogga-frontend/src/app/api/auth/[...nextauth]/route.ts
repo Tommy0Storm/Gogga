@@ -1,15 +1,8 @@
 /**
- * GOGGA - NextAuth Route Handler
+ * GOGGA - NextAuth v5 Route Handler
  * 
- * Handles all /api/auth/* routes:
- * - /api/auth/signin
- * - /api/auth/signout
- * - /api/auth/callback/email-token
- * - /api/auth/session
+ * Handles all /api/auth/* routes using the new v5 pattern
  */
-import NextAuth from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { handlers } from '@/auth';
 
-const handler = NextAuth(authOptions)
-
-export { handler as GET, handler as POST }
+export const { GET, POST } = handlers;

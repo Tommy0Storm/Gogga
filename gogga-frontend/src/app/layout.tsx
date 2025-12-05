@@ -59,7 +59,9 @@ export default function RootLayout({
         className="font-quicksand font-normal antialiased"
         suppressHydrationWarning
       >
-        <AuthProvider>{children}</AuthProvider>
+        {/* AuthProvider disabled until NextAuth route issues resolved */}
+        {/* <AuthProvider>{children}</AuthProvider> */}
+        {children}
       </body>
     </html>
   );

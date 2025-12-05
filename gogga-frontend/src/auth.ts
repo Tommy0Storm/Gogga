@@ -1,32 +1,32 @@
 /**
- * GOGGA - NextAuth Configuration
+ * GOGGA - NextAuth v5 Configuration
  * 
  * Token-based passwordless authentication:
  * 1. User enters email
- * 2. Server generates one-time token, sends magic link
+ * 2. Server generates one-time token, sends via EmailJS
  * 3. User clicks link or pastes token
  * 4. NextAuth validates and creates session
  * 
  * Connection-type logging only - no personal data beyond email
  */
-import { NextAuthOptions } from 'next-auth'
-import CredentialsProvider from 'next-auth/providers/credentials'
+import NextAuth from 'next-auth'
+import Credentials from 'next-auth/providers/credentials'
 import prisma from '@/lib/prisma'
 
-export const authOptions: NextAuthOptions = {
+export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    CredentialsProvider({
+    Credentials({
       id: 'email-token',
       name: 'Email Token',
       credentials: {
         token: { label: 'Token', type: 'text' }
       },
-      async authorize(credentials, req) {
+      async authorize(credentials) {
         if (!credentials?.token) {
           return null
         }
 
-        const token = credentials.token.trim()
+        const token = (credentials.token as string).trim()
         
         try {
           // Find the token
@@ -82,17 +82,11 @@ export const authOptions: NextAuthOptions = {
             create: { email: tokenRecord.email }
           })
 
-          // Get IP from headers if available (connection logging)
-          const ip = req?.headers?.['x-forwarded-for'] || 
-                     req?.headers?.['x-real-ip'] || 
-                     'unknown'
-
           // Log successful login
           await prisma.authLog.create({
             data: {
               email: user.email,
               action: 'login_success',
-              ip: typeof ip === 'string' ? ip : ip[0],
               meta: JSON.stringify({ method: 'email_token' })
             }
           })
@@ -138,7 +132,7 @@ export const authOptions: NextAuthOptions = {
     }
   },
 
-  secret: process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   
   debug: process.env.NODE_ENV === 'development',
-}
+})

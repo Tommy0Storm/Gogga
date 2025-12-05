@@ -54,9 +54,10 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      // Proxy backend API routes EXCEPT auth (handled by NextAuth)
       {
-        source: '/api/:path*',
-        destination: `${BACKEND_URL}/api/:path*`,
+        source: '/api/v1/:path*',
+        destination: `${BACKEND_URL}/api/v1/:path*`,
       },
       {
         source: '/health',
