@@ -39,12 +39,21 @@
 useRagDashboard (hook)
   ├── fetchStorageStats() → Dexie db stats
   ├── fetchModelStatus() → RagManager state + metrics
-  ├── fetchEmbeddingStats() → ragMetrics buffer
+  ├── fetchEmbeddingStats() → getRecentMetricsAsync() (Dexie)  ← ASYNC NOW
   ├── fetchRetrievalStats() → getModeStats(), getAggregatedMetrics()
   ├── fetchDocuments() → getAllDocuments()
   ├── fetchLatencyChartData() → getTimeSeriesMetrics()
   └── vectorData → ragManager.getCachedVectors()
 ```
+
+## Metrics Persistence (December 5, 2025)
+
+RAG metrics are now persisted to Dexie to survive page navigation:
+
+- **Table**: `ragMetrics` (schema version 6)
+- **Retention**: 3 days (automatic cleanup on startup)
+- **Dashboard**: Uses `getRecentMetricsAsync()` for persistent data
+- **Real-time**: Still uses `subscribeToMetrics()` for live updates
 
 ---
 

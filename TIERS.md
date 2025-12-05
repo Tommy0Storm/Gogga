@@ -1018,6 +1018,70 @@ Body: { search_id, helpful: boolean, feedback? }
 - Generated images
 - Token usage tracking
 - User preferences
+- RAG metrics (3-day retention)
+- System logs (7-day retention)
+
+### Metrics & Logs Persistence (Dexie)
+
+GOGGA persists RAG metrics and system logs to IndexedDB for dashboard visibility across page navigation:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 METRICS & LOGS PERSISTENCE                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Table          │ Retention  │ Purpose                         │
+├─────────────────┼────────────┼─────────────────────────────────┤
+│  ragMetrics     │ 3 days     │ Embedding stats, retrieval,     │
+│                 │            │ queries, cache hits/misses      │
+├─────────────────┼────────────┼─────────────────────────────────┤
+│  systemLogs     │ 7 days     │ Debug/info/warn/error logs      │
+│                 │            │ by category (rag, auth, chat)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Metric Types
+
+| Type | Description | Dashboard Use |
+|------|-------------|---------------|
+| `embedding_generated` | Document embeddings created | Embedding stats panel |
+| `retrieval` | RAG retrieval operations | Retrieval latency charts |
+| `query` | Search queries executed | Query count metrics |
+| `cache_hit` | Embedding cache hits | Cache efficiency rate |
+| `cache_miss` | Embedding cache misses | Cache efficiency rate |
+| `error` | Processing errors | Error rate tracking |
+
+#### Log Categories
+
+| Category | Description |
+|----------|-------------|
+| `rag` | RAG operations (embeddings, retrieval, chunking) |
+| `auth` | Authentication events |
+| `chat` | Chat session events |
+| `image` | Image generation events |
+| `system` | General system events |
+
+#### Retention Cleanup
+
+Automatic cleanup runs on app startup via `runRetentionCleanup()`:
+
+```typescript
+import { runRetentionCleanup } from '@/lib/db';
+
+// Called automatically on ragMetrics.ts initialization
+await runRetentionCleanup();
+// Returns: { metricsDeleted: number, logsDeleted: number }
+```
+
+#### Dashboard Integration
+
+The JIGGA dashboard fetches persisted metrics using async functions:
+
+```typescript
+import { getRecentMetricsAsync } from '@/lib/ragMetrics';
+
+// Get embedding stats from Dexie (survives page navigation)
+const embeddings = await getRecentMetricsAsync({ type: 'embedding_generated' });
+```
 
 ### Error Handling
 

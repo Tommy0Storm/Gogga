@@ -24,6 +24,7 @@ import { removeDocument as ragRemoveDocument } from '@/lib/rag';
 import {
   subscribeToMetrics,
   getRecentMetrics,
+  getRecentMetricsAsync,
   getAggregatedMetrics,
   getTimeSeriesMetrics,
   getModeStats,
@@ -217,17 +218,22 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
     };
   }, []);
 
-  const fetchEmbeddingStats = useCallback((): EmbeddingStats => {
-    const allEmbeddingMetrics = getRecentMetrics({
+  const fetchEmbeddingStats = useCallback(async (): Promise<EmbeddingStats> => {
+    // Use async version to get full history from Dexie
+    const allEmbeddingMetrics = await getRecentMetricsAsync({
       type: 'embedding_generated',
     });
     // Filter to only actual document embeddings (have docId and chunkCount > 0)
     const metrics = allEmbeddingMetrics.filter(
       (m) => m.docId !== undefined && m.value?.chunkCount > 0
     );
-    const cacheHits = getRecentMetrics({ type: 'cache_hit' }).length;
-    const cacheMisses = getRecentMetrics({ type: 'cache_miss' }).length;
-    const errors = getRecentMetrics({ type: 'error' }).filter(
+    const cacheHitsMetrics = await getRecentMetricsAsync({ type: 'cache_hit' });
+    const cacheMissesMetrics = await getRecentMetricsAsync({ type: 'cache_miss' });
+    const errorMetrics = await getRecentMetricsAsync({ type: 'error' });
+    
+    const cacheHits = cacheHitsMetrics.length;
+    const cacheMisses = cacheMissesMetrics.length;
+    const errors = errorMetrics.filter(
       (m) => m.value?.operation === 'embedding_generation'
     ).length;
 
@@ -371,21 +377,23 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      const [storage, model, tokenData, docs] = await Promise.all([
+      const [storage, model, tokenData, docs, embedding] = await Promise.all([
         fetchStorageStats(),
         fetchModelStatus(),
         getTodayTokenUsage(),
         fetchDocuments(),
+        fetchEmbeddingStats(),
       ]);
 
       console.log(
         '[Dashboard] Refresh - docs:',
         docs.length,
         'storage:',
-        storage
+        storage,
+        'embeddings:',
+        embedding.totalEmbeddings
       );
 
-      const embedding = fetchEmbeddingStats();
       const retrieval = fetchRetrievalStats();
       const chartData = fetchLatencyChartData();
       const recent = getRecentMetrics({ limit: 50 });
@@ -451,8 +459,8 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
     // Subscribe to real-time metrics
     const unsubscribe = subscribeToMetrics((metric: Metric) => {
       setRecentMetrics((prev) => [...prev.slice(-49), metric]);
-      // Update stats on new metrics
-      setEmbeddingStats(fetchEmbeddingStats());
+      // Update stats on new metrics (async)
+      fetchEmbeddingStats().then(setEmbeddingStats);
       setRetrievalStats(fetchRetrievalStats());
 
       // Refresh document list and storage stats when documents are added or removed

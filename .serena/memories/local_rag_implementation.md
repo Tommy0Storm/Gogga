@@ -108,6 +108,42 @@ const memoryContext = await getMemoryContextForLLM(); // Returns formatted conte
 
 Memory is injected before RAG context in `page.tsx:sendMessage()`.
 
+## Metrics & Logs Persistence (December 5, 2025)
+
+RAG metrics and system logs are now persisted to Dexie (IndexedDB) for dashboard visibility across page navigation:
+
+### New Dexie Tables (Version 6)
+
+| Table | Retention | Purpose |
+|-------|-----------|---------|
+| `ragMetrics` | 3 days | Embedding stats, retrieval, queries, cache hits/misses |
+| `systemLogs` | 7 days | Debug/info/warn/error logs by category |
+
+### Key Functions
+
+```typescript
+// Metrics persistence (db.ts)
+await saveRagMetric({ type, timestamp, sessionId, docId, value });
+await getRecentRagMetrics({ type, sessionId, limit });
+await cleanupOldRagMetrics();  // Removes >3 day old
+
+// System logs (db.ts)
+await logInfo('rag', 'Embeddings generated', { docId, chunks: 42 });
+await logError('system', 'Model load failed', { error: e.message });
+await cleanupOldSystemLogs();  // Removes >7 day old
+
+// Async metrics for dashboard (ragMetrics.ts)
+const metrics = await getRecentMetricsAsync({ type: 'embedding_generated' });
+```
+
+### Retention Cleanup
+
+Automatic cleanup runs on app startup:
+```typescript
+await runRetentionCleanup();
+// Returns: { metricsDeleted: number, logsDeleted: number }
+```
+
 ## Dependencies
 
 **Frontend (gogga-frontend/package.json):**
