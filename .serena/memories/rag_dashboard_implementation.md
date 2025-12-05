@@ -110,6 +110,16 @@ const PIE_COLORS = ['#2d2d2d', '#5a5a5a'];
    - Applied to both OverviewTab and EmbeddingsTab
    - Key insight: `doc.hasEmbeddings` in Dexie is the source of truth, not in-memory cache
 
+4. **Vector Magnitude Fix (Dec 5, 2025)**
+   - Problem: Vector Info showed "Magnitude 0.0000" despite "Embedding Quality 100%"
+   - Root cause: `embeddingsCache` is ephemeral (cleared on page refresh)
+   - `getCachedVectors()` returned empty array on dashboard load
+   - Fix: Added `reloadEmbeddingsForDashboard()` method to RagManager
+   - Dashboard now regenerates embeddings on load when:
+     - Cache is empty (`cachedVectors.vectors.length === 0`)
+     - But docs have `hasEmbeddings=true` or `embeddingStatus='complete'`
+   - Files modified: `ragManager.ts`, `useRagDashboard.ts`
+
 3. **Embedding Pre-generation on Upload**
    - `useRAG.ts` now initializes semantic engine on first JIGGA upload
    - Embeddings generated immediately (not lazily on query)

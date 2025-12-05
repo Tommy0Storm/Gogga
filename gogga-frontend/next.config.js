@@ -11,13 +11,17 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   // Allow dev requests from any origin (for Docker/remote development)
-  // Next.js: hostnames without protocol, supports wildcards
+  // Next.js: hostnames without protocol - no wildcards supported
   allowedDevOrigins: [
     'localhost',
-    '127.0.0.1', 
-    '192.168.0.*',  // Allow all local network IPs
-    '10.*',         // Allow all 10.x.x.x IPs
-    '*.local',
+    '127.0.0.1',
+    '10.241.135.171',   // Remote dev machine
+    '192.168.0.168',    // Local network access
+    '192.168.0.101',
+    '192.168.0.102',
+    '192.168.0.103',
+    '192.168.0.104',
+    '192.168.0.105',
   ],
   // Disable the Next.js dev indicator (floating N button)
   devIndicators: false,

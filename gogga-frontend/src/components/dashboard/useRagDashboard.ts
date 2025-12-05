@@ -412,7 +412,21 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
 
       // Fetch real vector data from RagManager cache
       try {
-        const cachedVectors = ragManager.getCachedVectors();
+        let cachedVectors = ragManager.getCachedVectors();
+        
+        // If cache is empty but we have docs with embeddings, reload them
+        if (cachedVectors.vectors.length === 0) {
+          const docsWithEmbeddings = docs.filter(
+            (d) => d.hasEmbeddings || d.embeddingStatus === 'complete'
+          );
+          if (docsWithEmbeddings.length > 0) {
+            console.log('[Dashboard] Reloading embeddings for', docsWithEmbeddings.length, 'docs');
+            await ragManager.reloadEmbeddingsForDashboard(docsWithEmbeddings as any);
+            // Re-fetch after reload
+            cachedVectors = ragManager.getCachedVectors();
+          }
+        }
+        
         if (cachedVectors.vectors.length > 0) {
           setVectorData({
             vectors: cachedVectors.vectors,

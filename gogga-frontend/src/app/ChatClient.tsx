@@ -463,7 +463,7 @@ export function ChatClient() {
       const response = await axios.post('/api/v1/images/generate', {
         prompt: originalPrompt,
         user_id: 'demo_user_123',
-        user_tier: tier,
+        user_tier: tier.toLowerCase(),
         enhance_prompt: true,
       });
 
