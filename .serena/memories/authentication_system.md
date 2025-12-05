@@ -176,6 +176,43 @@ model Subscription {
 | `subscription_activated` | PayFast confirms payment | tier, payfastToken |
 | `subscription_cancelled` | User cancels subscription | tier |
 
+## Subscription Assignment
+
+Every new user is automatically assigned FREE tier on first login:
+
+```typescript
+// In auth.ts authorize callback
+const user = await prisma.user.upsert({
+  where: { email: tokenRecord.email },
+  update: { updatedAt: new Date() },
+  create: {
+    email: tokenRecord.email,
+    subscription: {
+      create: {
+        tier: 'FREE',
+        status: 'active',
+        startedAt: new Date()
+      }
+    }
+  },
+  include: { subscription: true }
+})
+
+// Backfill for existing users without subscription
+if (!user.subscription) {
+  await prisma.subscription.create({...})
+}
+```
+
+The tier is included in the JWT session:
+- `session.user.tier` → 'FREE' | 'JIVE' | 'JIGGA'
+
+Utility functions in `src/lib/subscription.ts`:
+- `getUserSubscription(userId)` - Get subscription from DB
+- `requireTier(minTier)` - Require tier or redirect
+- `hasTier(userTier, requiredTier)` - Check tier without redirect
+- `getTierInfo(tier)` - Get display info for tier
+
 ## Session Management
 
 | Aspect | Value |

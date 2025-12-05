@@ -76,25 +76,58 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           })
 
           // Upsert user (create if new, update timestamp if exists)
+          // New users automatically get FREE tier subscription
           const user = await prisma.user.upsert({
             where: { email: tokenRecord.email },
             update: { updatedAt: new Date() },
-            create: { email: tokenRecord.email }
+            create: {
+              email: tokenRecord.email,
+              subscription: {
+                create: {
+                  tier: 'FREE',
+                  status: 'active',
+                  startedAt: new Date()
+                }
+              }
+            },
+            include: { subscription: true }
           })
 
-          // Log successful login
+          // Ensure existing users have a subscription (backfill)
+          if (!user.subscription) {
+            await prisma.subscription.create({
+              data: {
+                userId: user.id,
+                tier: 'FREE',
+                status: 'active',
+                startedAt: new Date()
+              }
+            })
+          }
+
+          // Get the user's current subscription tier
+          const subscription = user.subscription || await prisma.subscription.findUnique({
+            where: { userId: user.id }
+          })
+
+          // Log successful login with tier info
           await prisma.authLog.create({
             data: {
               email: user.email,
               action: 'login_success',
-              meta: JSON.stringify({ method: 'email_token' })
+              meta: JSON.stringify({ 
+                method: 'email_token',
+                tier: subscription?.tier || 'FREE',
+                isNewUser: !user.subscription
+              })
             }
           })
 
-          // Return user object for JWT
+          // Return user object for JWT (includes tier)
           return {
             id: user.id,
-            email: user.email
+            email: user.email,
+            tier: (subscription?.tier || 'FREE') as 'FREE' | 'JIVE' | 'JIGGA'
           }
         } catch (error) {
           console.error('Auth error:', error)
@@ -119,6 +152,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id
         token.email = user.email
+        token.tier = user.tier || 'FREE'
       }
       return token
     },
@@ -127,6 +161,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string
         session.user.email = token.email as string
+        session.user.tier = token.tier || 'FREE'
       }
       return session
     }

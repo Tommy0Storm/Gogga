@@ -1,126 +1,110 @@
 /**
- * GOGGA - User Subscription Helper
+ * GOGGA - Subscription Utilities
  * 
- * Server-side utility for fetching user subscription status.
- * Used in API routes to determine tier-based access.
+ * Helper functions for checking user tier and subscription status.
+ * Use these throughout the app for consistent tier enforcement.
  */
 import prisma from '@/lib/prisma'
+import { auth } from '@/auth'
+import { redirect } from 'next/navigation'
 
-export type UserTier = 'FREE' | 'JIVE' | 'JIGGA'
+export type Tier = 'FREE' | 'JIVE' | 'JIGGA'
 
 export interface UserSubscription {
-  userId: string
-  email: string
-  tier: UserTier
-  status: 'pending' | 'active' | 'cancelled' | 'expired' | null
+  tier: Tier
+  status: 'pending' | 'active' | 'cancelled' | 'expired'
+  startedAt: Date | null
   nextBilling: Date | null
 }
 
 /**
- * Get user's subscription tier by email
- * Returns FREE if no subscription found or subscription not active
+ * Get the current user's subscription from the database.
+ * Falls back to FREE tier if no subscription exists.
  */
-export async function getUserTier(email: string): Promise<UserTier> {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: { subscription: true }
+export async function getUserSubscription(userId: string): Promise<UserSubscription> {
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId }
+  })
+
+  if (!subscription) {
+    // Create FREE subscription if missing (shouldn't happen, but safety)
+    const newSub = await prisma.subscription.create({
+      data: {
+        userId,
+        tier: 'FREE',
+        status: 'active',
+        startedAt: new Date()
+      }
     })
-
-    if (!user?.subscription) {
-      return 'FREE'
-    }
-
-    // Only return tier if subscription is active
-    if (user.subscription.status === 'active') {
-      return user.subscription.tier as UserTier
-    }
-
-    return 'FREE'
-  } catch (error) {
-    console.error('Error fetching user tier:', error)
-    return 'FREE'
-  }
-}
-
-/**
- * Get full user subscription details
- */
-export async function getUserSubscription(email: string): Promise<UserSubscription | null> {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: { subscription: true }
-    })
-
-    if (!user) {
-      return null
-    }
-
     return {
-      userId: user.id,
-      email: user.email,
-      tier: (user.subscription?.status === 'active' 
-        ? user.subscription.tier 
-        : 'FREE') as UserTier,
-      status: user.subscription?.status as UserSubscription['status'] ?? null,
-      nextBilling: user.subscription?.nextBilling ?? null
+      tier: 'FREE',
+      status: 'active',
+      startedAt: newSub.startedAt,
+      nextBilling: null
     }
-  } catch (error) {
-    console.error('Error fetching user subscription:', error)
-    return null
+  }
+
+  return {
+    tier: subscription.tier as Tier,
+    status: subscription.status as 'pending' | 'active' | 'cancelled' | 'expired',
+    startedAt: subscription.startedAt,
+    nextBilling: subscription.nextBilling
   }
 }
 
 /**
- * Check if user has access to a specific tier's features
+ * Require a minimum tier for access.
+ * Redirects to /upgrade if user doesn't have required tier.
  */
-export function hasTierAccess(userTier: UserTier, requiredTier: UserTier): boolean {
-  const tierLevels: Record<UserTier, number> = {
-    'FREE': 0,
-    'JIVE': 1,
-    'JIGGA': 2
+export async function requireTier(minTier: Tier): Promise<UserSubscription> {
+  const session = await auth()
+  
+  if (!session?.user?.id) {
+    redirect('/login')
   }
 
-  return tierLevels[userTier] >= tierLevels[requiredTier]
+  const subscription = await getUserSubscription(session.user.id)
+  
+  const tierRank = { FREE: 0, JIVE: 1, JIGGA: 2 }
+  
+  if (tierRank[subscription.tier] < tierRank[minTier]) {
+    redirect('/upgrade')
+  }
+
+  return subscription
 }
 
 /**
- * Get tier limits for various features
+ * Check if user has at least the specified tier (no redirect).
  */
-export function getTierLimits(tier: UserTier) {
-  const limits = {
+export function hasTier(userTier: Tier, requiredTier: Tier): boolean {
+  const tierRank = { FREE: 0, JIVE: 1, JIGGA: 2 }
+  return tierRank[userTier] >= tierRank[requiredTier]
+}
+
+/**
+ * Get tier display info.
+ */
+export function getTierInfo(tier: Tier) {
+  const tiers = {
     FREE: {
-      imagesPerMonth: 50,
-      docsPerSession: 0,
-      searchesPerDay: 3,
-      researchPerDay: 0,
-      hasRag: false,
-      hasSemanticRag: false,
-      hasChatHistory: false,
-      hasThinkingMode: false,
+      name: 'Free',
+      price: 'R0',
+      color: 'gray',
+      features: ['Basic AI chat', 'Limited images', 'No RAG']
     },
     JIVE: {
-      imagesPerMonth: 200,
-      docsPerSession: 5,
-      searchesPerDay: 50,
-      researchPerDay: 10,
-      hasRag: true,
-      hasSemanticRag: false,
-      hasChatHistory: true,
-      hasThinkingMode: false,
+      name: 'Jive',
+      price: 'R99/mo',
+      color: 'blue',
+      features: ['Fast AI (2,200 t/s)', '200 images/mo', '5 docs RAG', 'CePO reasoning']
     },
     JIGGA: {
-      imagesPerMonth: 1000,
-      docsPerSession: 10,
-      searchesPerDay: -1, // unlimited
-      researchPerDay: -1, // unlimited
-      hasRag: true,
-      hasSemanticRag: true,
-      hasChatHistory: true,
-      hasThinkingMode: true,
+      name: 'Jigga',
+      price: 'R299/mo',
+      color: 'purple',
+      features: ['Thinking mode', '1,000 images/mo', '10 docs RAG', 'Semantic search', 'Dashboard']
     }
   }
-
-  return limits[tier]
+  return tiers[tier]
 }

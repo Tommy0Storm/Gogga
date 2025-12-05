@@ -1186,6 +1186,125 @@ The retrieved context is injected into the chat message before sending to the LL
 
 ---
 
+## Subscription Lifecycle
+
+Every user is automatically assigned the **FREE tier** upon first login. No forms, no checkboxes.
+
+### User Journey
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SUBSCRIPTION LIFECYCLE                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. FIRST LOGIN (Magic Token)                                   │
+│     └─→ User created with email                                 │
+│     └─→ Subscription auto-created: tier=FREE, status=active     │
+│     └─→ No forms, instant access to Free tier features          │
+│                                                                 │
+│  2. FREE TIER ACCESS                                            │
+│     └─→ Basic AI chat (OpenRouter Llama 3.3 70B)                │
+│     └─→ 50 image descriptions/month                             │
+│     └─→ No RAG, no chat history                                 │
+│                                                                 │
+│  3. USER WANTS UPGRADE                                          │
+│     └─→ Clicks upgrade → PayFast payment                        │
+│     └─→ ITN webhook updates subscription.tier                   │
+│     └─→ Access expands immediately                              │
+│                                                                 │
+│  4. SUBSCRIPTION ACTIVE (JIVE/JIGGA)                            │
+│     └─→ Full tier features available                            │
+│     └─→ nextBilling set for auto-renewal                        │
+│     └─→ User can cancel anytime                                 │
+│                                                                 │
+│  5. CANCELLATION                                                │
+│     └─→ status changes to 'cancelled'                           │
+│     └─→ Access continues until nextBilling date                 │
+│     └─→ Then reverts to FREE                                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Database Schema for Subscriptions
+
+```prisma
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  tier        String    // FREE, JIVE, JIGGA
+  status      String    // pending, active, cancelled, expired
+  payfastToken String?  // For cancellation via PayFast API
+  startedAt   DateTime?
+  nextBilling DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+}
+```
+
+### Auto-Assignment on Login
+
+When a user logs in for the first time:
+
+```typescript
+// In auth.ts - authorize callback
+const user = await prisma.user.upsert({
+  where: { email: tokenRecord.email },
+  update: { updatedAt: new Date() },
+  create: {
+    email: tokenRecord.email,
+    subscription: {
+      create: {
+        tier: 'FREE',
+        status: 'active',
+        startedAt: new Date()
+      }
+    }
+  },
+  include: { subscription: true }
+})
+
+// Backfill for existing users without subscription
+if (!user.subscription) {
+  await prisma.subscription.create({
+    data: {
+      userId: user.id,
+      tier: 'FREE',
+      status: 'active',
+      startedAt: new Date()
+    }
+  })
+}
+```
+
+### Tier in Session
+
+The user's tier is included in their JWT session:
+
+```typescript
+// Access tier anywhere in the app
+const session = await auth()
+console.log(session.user.tier) // 'FREE' | 'JIVE' | 'JIGGA'
+```
+
+### Tier Enforcement
+
+Use the subscription utilities for consistent tier checking:
+
+```typescript
+import { requireTier, hasTier } from '@/lib/subscription'
+
+// Server component - redirect if insufficient tier
+const subscription = await requireTier('JIVE')
+
+// Client-side check
+if (!hasTier(session.user.tier, 'JIGGA')) {
+  // Show upgrade prompt
+}
+```
+
+---
+
 ## Implementation Status
 
 ### Completed ✅
@@ -1197,7 +1316,11 @@ The retrieved context is injected into the chat message before sending to the LL
 | **EmailJS Integration** | ✅ Implemented | Magic link delivery via REST API |
 | **Login Flow** | ✅ Implemented | Email → Token → Session |
 | **AuthLog Events** | ✅ Implemented | Security logging to SQLite |
-| **Session Management** | ✅ Implemented | 30-day JWT sessions |
+| **Session Management** | ✅ Implemented | 30-day JWT sessions with tier |
+| **Route Protection** | ✅ Implemented | Server-side auth checks on / and /login |
+| **FREE Tier Auto-Assign** | ✅ Implemented | New users get FREE tier automatically |
+| **Tier in Session** | ✅ Implemented | session.user.tier accessible everywhere |
+| **Subscription Utilities** | ✅ Implemented | requireTier(), hasTier(), getTierInfo() |
 | **PostHog Analytics** | ✅ Implemented | EU region, privacy-first |
 
 ### Coming Soon 🔜
@@ -1205,7 +1328,7 @@ The retrieved context is injected into the chat message before sending to the LL
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **PayFast Subscriptions** | 🔜 In Progress | ITN webhook ready, needs frontend flow |
-| **Tier Enforcement** | 🔜 Planned | Server-side tier validation from DB |
+| **Upgrade Page** | 🔜 Planned | /upgrade route for tier selection |
 | **Social Auth** | 🔜 Optional | Google/GitHub OAuth providers |
 
 ### Why SQLite?
