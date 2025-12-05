@@ -24,6 +24,87 @@ GOGGA runs on a fully self-contained, cloud-free architecture:
               Everything lives inside the repo, no cloud dependencies
 ```
 
+---
+
+## Storage Architecture (Dual-Database)
+
+GOGGA uses **two separate databases** that never connect directly:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GOGGA STORAGE ARCHITECTURE                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  SERVER-SIDE (SQLite + Prisma)          Per-Instance            │
+│  ├── User identity (email, id)                                  │
+│  ├── Login tokens (magic links)                                 │
+│  ├── Auth logs (connection audit)                               │
+│  └── Subscriptions (tier, status, PayFast token)                │
+│                                                                 │
+│  ─────────────────── session.user ───────────────────           │
+│                         ↓                                       │
+│  CLIENT-SIDE (Dexie/IndexedDB)          Per-User-Per-Device     │
+│  ├── Chat sessions & messages                                   │
+│  ├── RAG documents & chunks                                     │
+│  ├── Generated images                                           │
+│  ├── User preferences                                           │
+│  ├── Long-term memories                                         │
+│  └── Token usage tracking                                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Why Two Databases?
+
+| Database | Purpose | Scope | Persistence |
+|----------|---------|-------|-------------|
+| **SQLite** | Identity & billing (authoritative) | Server instance | Until deleted |
+| **Dexie** | User content (local) | Per-browser, per-device | User controlled |
+
+### Data Isolation (Per-User-Per-Device)
+
+Each user's Dexie database is **automatically isolated** by the browser:
+
+- **Same-origin policy**: Only `gogga.app` can access its IndexedDB
+- **Per-browser**: Chrome, Firefox, Safari each have separate databases
+- **Per-device**: Desktop and mobile are completely isolated
+- **No sharing**: Multiple users on shared device = separate browser profiles
+
+```
+User A (Chrome Desktop)  → GoggaDB (isolated)
+User A (Chrome Mobile)   → GoggaDB (isolated, different data)
+User B (Chrome Desktop)  → GoggaDB (isolated, different data)
+```
+
+### What Goes Where?
+
+| Data Type | Storage | Why |
+|-----------|---------|-----|
+| Email address | SQLite | Auth identity, PayFast subscription |
+| Login tokens | SQLite | Server-side validation, expiry |
+| Subscription tier | SQLite | Billing authoritative source |
+| Chat history | Dexie | Local-first, no server round-trips |
+| RAG documents | Dexie | User uploads stay on their device |
+| Generated images | Dexie | Thumbnails + full images cached locally |
+| User preferences | Dexie | UI settings, language, theme |
+| BuddySystem profile | localStorage | Lightweight relationship tracking |
+
+### The Bridge: `session.user`
+
+The only connection between SQLite and Dexie is the session:
+
+```typescript
+// Server-side (auth.ts)
+const session = await auth()  // From SQLite via NextAuth
+
+// Client-side (ChatClient.tsx)
+const { data: session } = useSession()
+session.user.id      // Used to identify user
+session.user.tier    // Used to gate features
+```
+
+The session **does not** store Dexie data - it only provides user identity and tier for feature gating.
+
 ### Stack Benefits
 
 | Component | Why |

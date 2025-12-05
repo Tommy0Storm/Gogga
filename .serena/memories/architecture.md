@@ -1,5 +1,44 @@
 # GOGGA Architecture Details
 
+## Storage Architecture (Dual-Database)
+
+GOGGA uses **two separate databases** that never connect directly:
+
+| Database | Purpose | Scope | Persistence |
+|----------|---------|-------|-------------|
+| **SQLite** (Prisma) | Identity & billing | Server instance | Until deleted |
+| **Dexie** (IndexedDB) | User content | Per-browser, per-device | User controlled |
+
+### SQLite (Server-Side)
+- User identity (email, id)
+- Login tokens (magic links)
+- Auth logs (connection audit)
+- Subscriptions (tier, status, PayFast token)
+
+### Dexie (Client-Side, Per-User-Per-Device)
+- Chat sessions & messages
+- RAG documents & chunks
+- Generated images
+- User preferences
+- Long-term memories
+- Token usage tracking
+
+### Data Isolation
+Each user's Dexie database is **automatically isolated** by the browser:
+- Same-origin policy: Only `gogga.app` can access its IndexedDB
+- Per-browser: Chrome, Firefox, Safari each have separate databases
+- Per-device: Desktop and mobile are completely isolated
+- No sharing: Multiple users on shared device = separate browser profiles
+
+### The Bridge: `session.user`
+The only connection between SQLite and Dexie is the session:
+- `session.user.id` - Identifies user
+- `session.user.tier` - Gates features (FREE/JIVE/JIGGA)
+
+---
+
+# GOGGA Architecture Details
+
 ## Tier-Based Cognitive Routing
 
 GOGGA uses a 3-tier subscription model with distinct routing logic and pricing.
