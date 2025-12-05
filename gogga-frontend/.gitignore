@@ -1,1 +1,23 @@
+# Environment files (contains secrets)
 .env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Testing
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { AuthProvider } from '@/components/AuthProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -58,7 +59,7 @@ export default function RootLayout({
         className="font-quicksand font-normal antialiased"
         suppressHydrationWarning
       >
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -33,43 +33,169 @@ GOGGA is transitioning to a fully self-contained, cloud-free architecture:
 | **Prisma** | Type-safe queries, migrations, schema-first development |
 | **SQLite** | Zero config, file-based, Git-friendly for dev |
 
-### File Structure (Upcoming)
+### File Structure (Implemented)
 
 ```
 gogga-frontend/
 ├── prisma/
-│   ├── schema.prisma      # User, Session, Subscription models
+│   ├── schema.prisma      # User, LoginToken, AuthLog, Subscription models
 │   ├── dev.db             # SQLite database file
 │   └── migrations/        # Version-controlled migrations
 ├── src/
 │   ├── lib/
-│   │   ├── auth.ts        # Better Auth config
+│   │   ├── auth.ts        # NextAuth Credentials provider config
 │   │   ├── prisma.ts      # Prisma client singleton
 │   │   └── db.ts          # Dexie (client-side RAG)
+│   ├── components/
+│   │   └── AuthProvider.tsx  # NextAuth SessionProvider wrapper
+│   ├── types/
+│   │   └── next-auth.d.ts    # NextAuth type extensions
 │   └── app/
-│       └── api/auth/[...all]/route.ts  # Auth routes
+│       ├── login/page.tsx    # Login page (magic link + token)
+│       └── api/
+│           ├── auth/
+│           │   ├── [...nextauth]/route.ts  # NextAuth handlers
+│           │   └── request-token/route.ts  # Magic link generator
+│           └── payfast/
+│               └── notify/route.ts         # PayFast ITN webhook
 ```
 
 ### Auth + Tier Integration
 
-```typescript
-// User model with tier
+```prisma
+// Prisma Schema (gogga-frontend/prisma/schema.prisma)
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")  // file:./dev.db
+}
+
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  tier          String   @default("free")  // free | jive | jigga
-  subscription  Subscription?
-  // ... Better Auth fields
+  id           String        @id @default(cuid())
+  email        String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tokens       LoginToken[]
+  subscription Subscription?
+}
+
+model LoginToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [email], references: [email])
+}
+
+model AuthLog {
+  id        String   @id @default(cuid())
+  email     String?  // Only for dispute investigation
+  action    String   // token_requested, login_success, subscription_activated
+  ip        String?  // Connection logging for security
+  meta      String?  // JSON string (non-personal data)
+  createdAt DateTime @default(now())
 }
 
 model Subscription {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  tier          String   // jive | jigga
-  payfastToken  String?  // For cancellation
-  expiresAt     DateTime
-  user          User     @relation(fields: [userId], references: [id])
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  tier        String    // FREE, JIVE, JIGGA
+  status      String    // pending, active, cancelled, expired
+  payfastToken String?  // For cancellation via PayFast API
+  startedAt   DateTime?
+  nextBilling DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
 }
+```
+
+### Authentication Flow (Token-Based Passwordless)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GOGGA TOKEN-BASED AUTH                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. USER ENTERS EMAIL                                           │
+│     └─→ POST /api/auth/request-token                            │
+│         └─→ Generate 64-char hex token                          │
+│         └─→ Store in LoginToken (15 min expiry)                 │
+│         └─→ Send magic link via EmailJS                         │
+│                                                                 │
+│  2. USER CLICKS LINK OR PASTES TOKEN                            │
+│     └─→ /login?token=xxx OR paste token manually                │
+│     └─→ signIn('email-token', { token })                        │
+│                                                                 │
+│  3. NEXTAUTH VALIDATES                                          │
+│     └─→ Credentials provider authorize()                        │
+│     └─→ Check token exists, not used, not expired               │
+│     └─→ Mark token as used                                      │
+│     └─→ Upsert User                                             │
+│     └─→ Create JWT session                                      │
+│                                                                 │
+│  4. SESSION ACTIVE                                              │
+│     └─→ JWT stored in cookie (30 days)                          │
+│     └─→ useSession() hook available throughout app              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Privacy & Data Policy
+
+| Data Type | Storage | Retention | Purpose |
+|-----------|---------|-----------|---------|
+| Email | SQLite | Until deletion request | Authentication |
+| Login tokens | SQLite | Auto-expire 15 min | One-time use |
+| Auth logs | SQLite | 90 days | Dispute investigation |
+| Session | JWT cookie | 30 days | Active session |
+| Chat/RAG | IndexedDB | User controlled | Local functionality |
+
+**User Data Control:**
+- User controls all chat and document data (stored locally in browser)
+- Email is the only personal data stored server-side
+- Auth logs contain connection info only (IP, action type, timestamp)
+- No personal data logging beyond what's needed for disputes
+
+### EmailJS Templates (service_q6alymo)
+
+| Template ID | Purpose |
+|-------------|---------|
+| `template_magic_token` | Magic link + token for sign-in |
+| `vcb_welcome_free` | Welcome email (FREE tier) |
+| `vcb_subscription_activation_with_privacy` | Subscription confirmed |
+| `vcb_payment_success` | Payment processed |
+| `vcb_payment_failed` | Payment failed |
+| `vcb_subscription_cancelled` | Subscription cancelled |
+
+### Environment Variables
+
+```bash
+# .env.local (gogga-frontend)
+
+# Base URL
+NEXT_PUBLIC_BASE_URL=https://gogga.vcb-ai.online
+
+# EmailJS (service_q6alymo via Outlook)
+EMAILJS_PUBLIC_KEY=xxx
+EMAILJS_PRIVATE_KEY=xxx
+EMAIL_FROM_NAME="VCB-AI Support"
+EMAIL_FROM=hello@vcb-ai.online
+
+# NextAuth
+NEXTAUTH_SECRET=xxx  # openssl rand -base64 32
+NEXTAUTH_URL=https://gogga.vcb-ai.online
+
+# Database
+DATABASE_URL="file:./dev.db"
+
+# PayFast (ZAR payments)
+PAYFAST_MERCHANT_ID=xxx
+PAYFAST_MERCHANT_KEY=xxx
+PAYFAST_PASSPHRASE=xxx
+PAYFAST_ENV=sandbox  # or production
 ```
 
 ---

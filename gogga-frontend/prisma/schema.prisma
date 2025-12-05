@@ -1,0 +1,59 @@
+// GOGGA Auth Database Schema
+// SQLite via Prisma for self-hosted authentication
+// Connection-type logging only - no personal data stored beyond email
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Core user account - minimal data, user controls their data
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tokens       LoginToken[]
+  subscription Subscription?
+}
+
+// One-time magic link tokens (15 min expiry)
+model LoginToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [email], references: [email])
+}
+
+// Connection-type logging for audit/disputes only
+// NO personal data - just action types, IP, and timestamps
+model AuthLog {
+  id        String   @id @default(cuid())
+  email     String?  // Only for dispute investigation
+  action    String   // token_requested, login_success, login_failed, subscription_activated, etc.
+  ip        String?  // Connection logging for security
+  meta      String?  // JSON string for additional context (non-personal)
+  createdAt DateTime @default(now())
+}
+
+// Subscription state for tier management
+// Integrates with PayFast for ZAR payments
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  tier        String    // FREE, JIVE, JIGGA
+  status      String    // pending, active, cancelled, expired
+  payfastToken String?  // PayFast subscription token for cancellation
+  startedAt   DateTime?
+  nextBilling DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+}
