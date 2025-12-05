@@ -55,6 +55,25 @@ English, Afrikaans, isiZulu, isiXhosa, Sepedi, Setswana, Sesotho, Xitsonga, siSw
 - Ubuntu, braai, robot (traffic light), bakkie
 - Slang: Eish, lekker, sharp sharp, china, bru
 
+## Token Limits by Tier
+
+### JIVE (Llama 3.3 70B)
+| Mode | Max Tokens |
+|------|------------|
+| Default | 4,096 |
+| Extended | 8,000 |
+| Model Max | 40,000 (when ready) |
+
+### JIGGA (Qwen 3 32B)
+| Mode | Max Tokens |
+|------|------------|
+| Default | 4,096 |
+| Extended | 8,000 |
+| Context | 131,000 |
+
+**Extended triggers:** "detailed", "comprehensive", "long format", "full report"
+**Long context tip:** Use `/no_think` for >100k contexts
+
 ## Formatting
 - NO emojis (use Material Icons: `[icon_name]`)
 - Bold for emphasis, numbered lists for steps

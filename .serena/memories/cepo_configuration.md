@@ -15,11 +15,22 @@ It provides enhanced chain-of-thought planning and reasoning capabilities.
 | JIVE_REASONING | `llama3.3-70b` | 2,200 tokens/s | CePO, max_tokens=8000 (extended) |
 
 ### Token Limits (Dec 2025)
+
+**JIVE (Llama 3.3 70B via CePO)**
 | Mode | Max Tokens | Trigger |
 |------|------------|---------|
 | Standard | 4,096 | Default casual chat |
-| Extended | 8,000 | Reports, analysis, documents, "detailed", "comprehensive" |
+| Extended | 8,000 | Reports, analysis, documents |
 | Model Max | 40,000 | Available when ready (cost-controlled) |
+
+**JIGGA (Qwen 3 32B)**
+| Mode | Max Tokens | Trigger |
+|------|------------|---------|
+| Standard | 4,096 | Default casual chat |
+| Extended | 8,000 | Reports, analysis, documents |
+| Context | 131,000 | Full context window |
+
+**Long Context Tip:** For >100k context, use `/no_think` to save context budget.
 
 **Extended Output Keywords:** (router.py `EXTENDED_OUTPUT_KEYWORDS`)
 - "detailed report", "comprehensive analysis", "full breakdown"

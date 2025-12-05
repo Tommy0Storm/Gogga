@@ -211,6 +211,34 @@ For: "Hello, how are you?", simple factual questions, casual conversation.
 ### Fast Mode (`/no_think`)
 Explicitly triggered for quick, direct responses without reasoning display.
 
+**Long Context Tip:** For prompts with >100k context tokens, use `/no_think` to save context budget.
+
+---
+
+## Token Limits by Tier
+
+### JIVE (Llama 3.3 70B via CePO)
+
+| Mode | Max Tokens | Notes |
+|------|------------|-------|
+| Standard | 4,096 | Default for casual chat |
+| Extended | 8,000 | Auto-triggers for reports, analysis |
+| Model Max | 40,000 | Available when ready (cost-controlled) |
+
+### JIGGA (Qwen 3 32B)
+
+| Mode | Max Tokens | Notes |
+|------|------------|-------|
+| Standard | 4,096 | Default for casual chat |
+| Extended | 8,000 | Auto-triggers for reports, analysis |
+| Context | 131,000 | Full context window |
+
+**Extended output auto-triggers for:**
+- "detailed report", "comprehensive analysis", "full breakdown"
+- "long format", "extended analysis", "thorough review"
+- "in-depth", "professional document", "formal document"
+- "draft a", "complete analysis", "full explanation"
+
 ---
 
 ## Formatting Rules

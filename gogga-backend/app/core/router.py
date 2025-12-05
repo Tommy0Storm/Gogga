@@ -58,24 +58,31 @@ IMAGE_LIMITS: Final[dict[UserTier, int]] = {
 # Currently limited to 8,000 for cost control - increase to 40,000 when ready
 JIVE_MAX_TOKENS: Final[int] = 8000  # Llama 3.3 70B extended output (max: 40,000)
 JIVE_DEFAULT_TOKENS: Final[int] = 4096  # Default for normal requests
-JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B (max: 8,000)
+
+# JIGGA Token limits (Qwen 3 32B)
+# Context: 131k tokens | Max Output: 8k tokens
+# For long contexts (>100k), consider using /no_think to save context budget
+JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B max output
+JIGGA_DEFAULT_TOKENS: Final[int] = 4096  # Default for casual chat
 
 # DO NOT use greedy decoding (temp=0) - causes performance degradation and endless repetitions
+# For long contexts (>100k tokens), use /no_think to disable reasoning and save context budget
 QWEN_THINKING_SETTINGS: Final[dict] = {
-    "temperature": 0.6,
+    "temperature": 0.6,  # REQUIRED - greedy (0) causes infinite loops
     "top_p": 0.95,
     "top_k": 20,
     "min_p": 0.0,
-    "max_tokens": 8000,  # Qwen 3 32B max output tokens
+    # max_tokens set dynamically based on request type (4096 default, 8000 extended)
 }
 
 # Qwen fast mode settings (JIGGA tier with /no_think)
+# Use for: casual chat, quick questions, or long contexts where thinking would exceed budget
 QWEN_FAST_SETTINGS: Final[dict] = {
     "temperature": 0.7,
     "top_p": 0.8,
     "top_k": 20,
     "min_p": 0.0,
-    "max_tokens": 8000,
+    # max_tokens set dynamically based on request type (4096 default, 8000 extended)
 }
 
 
@@ -98,7 +105,10 @@ EXTENDED_OUTPUT_KEYWORDS: Final[frozenset[str]] = frozenset([
     "comprehensive report", "detailed report", "full report",
     "comprehensive analysis", "detailed analysis", "full analysis",
     "comprehensive review", "detailed review", "full review",
+    "comprehensive breakdown", "detailed breakdown", "full breakdown",
     "draft a full", "write a full", "create a full",
+    "thorough review", "thorough analysis", "thorough explanation",
+    "extended analysis", "extended review", "extended report",
 ])
 
 # Keywords that trigger comprehensive document/analysis output

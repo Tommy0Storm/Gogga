@@ -25,7 +25,9 @@ from app.core.router import (
     tier_router, CognitiveLayer, UserTier,
     QWEN_THINKING_SETTINGS, QWEN_FAST_SETTINGS,
     is_extended_output_request, is_document_analysis_request,
-    JIVE_MAX_TOKENS, JIVE_DEFAULT_TOKENS, COMPREHENSIVE_OUTPUT_INSTRUCTION
+    JIVE_MAX_TOKENS, JIVE_DEFAULT_TOKENS,
+    JIGGA_MAX_TOKENS, JIGGA_DEFAULT_TOKENS,
+    COMPREHENSIVE_OUTPUT_INSTRUCTION
 )
 from app.services.cost_tracker import track_usage
 from app.core.exceptions import InferenceError
@@ -37,8 +39,8 @@ logger = logging.getLogger(__name__)
 MAX_HISTORY_TURNS: Final[int] = 10
 DEFAULT_TEMPERATURE: Final[float] = 0.7
 DEFAULT_MAX_TOKENS: Final[int] = 4096
-JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B max output tokens
 DEFAULT_TOP_P: Final[float] = 0.95
+# Note: JIGGA_MAX_TOKENS and JIGGA_DEFAULT_TOKENS imported from router.py
 
 # Retry configuration for rate limits
 MAX_RETRIES: Final[int] = 3
@@ -265,28 +267,38 @@ class AIService:
         messages.append({"role": "user", "content": actual_message})
 
         # Set generation parameters based on tier and mode
-        # JIGGA tier uses specific settings for thinking/non-thinking
+        # JIGGA: Qwen 3 32B (131k context, 8k max output)
+        # JIVE: Llama 3.3 70B (128k context, 40k max output - limited to 8k)
         # DO NOT use greedy decoding (temp=0) - causes performance degradation
         if is_jigga:
+            # Determine token limit based on request type
+            # For long contexts (>100k), use /no_think to save context budget
+            if is_extended_request or is_doc_request:
+                jigga_max_tokens = JIGGA_MAX_TOKENS  # 8000 for extended output
+                logger.info(f"JIGGA extended output mode - max_tokens={jigga_max_tokens}")
+            else:
+                jigga_max_tokens = JIGGA_DEFAULT_TOKENS  # 4096 for casual chat
+            
             if thinking_mode:
                 # Qwen thinking mode: temp=0.6, top_p=0.95, top_k=20, min_p=0
                 temperature = QWEN_THINKING_SETTINGS["temperature"]
                 top_p = QWEN_THINKING_SETTINGS["top_p"]
-                max_tokens = QWEN_THINKING_SETTINGS.get("max_tokens", JIGGA_MAX_TOKENS)
-                logger.info("JIGGA thinking mode - temp=0.6, top_p=0.95, top_k=20, min_p=0")
+                max_tokens = jigga_max_tokens
+                logger.info(f"JIGGA thinking mode - temp=0.6, top_p=0.95, max_tokens={max_tokens}")
             else:
-                # Qwen fast mode: temp=0.7, top_p=0.8, top_k=20, min_p=0
+                # Qwen fast mode (/no_think): temp=0.7, top_p=0.8, top_k=20, min_p=0
+                # Use for: casual chat, quick questions, or long contexts
                 temperature = QWEN_FAST_SETTINGS["temperature"]
                 top_p = QWEN_FAST_SETTINGS["top_p"]
-                max_tokens = QWEN_FAST_SETTINGS.get("max_tokens", JIGGA_MAX_TOKENS)
-                logger.info("JIGGA fast mode - temp=0.7, top_p=0.8, top_k=20, min_p=0")
+                max_tokens = jigga_max_tokens
+                logger.info(f"JIGGA fast mode - temp=0.7, top_p=0.8, max_tokens={max_tokens}")
         else:
             # JIVE tier (Llama 3.3 70B)
             temperature = DEFAULT_TEMPERATURE
             top_p = DEFAULT_TOP_P
             
             # Use extended tokens for document/analysis or explicit long-form requests
-            if is_extended_output_request(message) or is_document_analysis_request(message):
+            if is_extended_request or is_doc_request:
                 max_tokens = JIVE_MAX_TOKENS  # 8000 tokens (max: 40,000 when ready)
                 logger.info(f"JIVE extended output mode - max_tokens={max_tokens}")
             else:

@@ -642,6 +642,24 @@ SEARCH: Query → Intent Analysis → Multi-Source Retrieval → Ranked Results 
 - **Cross-Session Selection**: Access documents from any past session
 - **Chat Persistence**: Full history with session management
 
+### Token Limits
+
+| Mode | Max Tokens | Notes |
+|------|------------|-------|
+| Standard | 4,096 | Default for casual chat |
+| Extended | 8,000 | Auto-triggers for reports, analysis, documents |
+| Context | 131,000 | Full context window |
+
+**Extended output auto-triggers for:**
+- Reports, drafts, analysis requests
+- Legal documents, contracts, agreements
+- Comprehensive explanations, detailed breakdowns
+- Long-form content, essays, articles
+- Use keywords like: "detailed", "comprehensive", "long format", "full report"
+
+**Long Context Tip:**
+For prompts with >100k context tokens, use `/no_think` to disable reasoning and save context budget.
+
 ### Pipeline
 
 ```text
