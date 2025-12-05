@@ -56,6 +56,8 @@ GOGGA uses **two separate databases** that never connect directly:
 
 ### Why Two Databases?
 
+> **Dexie contains user-owned content only. SQLite contains system-owned identity only.**
+
 | Database | Purpose | Scope | Persistence |
 |----------|---------|-------|-------------|
 | **SQLite** | Identity & billing (authoritative) | Server instance | Until deleted |
