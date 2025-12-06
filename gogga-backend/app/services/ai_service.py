@@ -150,13 +150,17 @@ class AIService:
         elif layer == CognitiveLayer.JIVE_SPEED:
             return await AIService._generate_cerebras(
                 user_id, message, history, layer,
-                use_cepo=False
+                use_cepo=False,
+                enable_tools=True,
+                tier="jive"
             )
         
         elif layer == CognitiveLayer.JIVE_REASONING:
             return await AIService._generate_cerebras(
                 user_id, message, history, layer,
-                use_cepo=True
+                use_cepo=True,
+                enable_tools=True,
+                tier="jive"
             )
         
         elif layer == CognitiveLayer.JIGGA_THINK:
@@ -223,7 +227,7 @@ class AIService:
             use_cepo: Route through CePO sidecar (JIVE reasoning)
             thinking_mode: Use Qwen thinking settings (JIGGA)
             append_no_think: Append /no_think to message (JIGGA fast)
-            enable_tools: Enable tool calling (JIGGA only)
+            enable_tools: Enable tool calling (JIVE: image+chart, JIGGA: all)
             tier: User tier for tool selection
 
         Returns:

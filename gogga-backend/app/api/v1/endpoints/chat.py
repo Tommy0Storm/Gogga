@@ -57,8 +57,9 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
     Users out of credits are downgraded to FREE tier models.
     """
     try:
-        # Check if this is an image request
-        if is_image_prompt(request.message):
+        # Check if this is an image request - only block for FREE tier
+        # JIVE/JIGGA tiers can use the generate_image tool via tool calling
+        if request.user_tier == UserTier.FREE and is_image_prompt(request.message):
             raise HTTPException(
                 status_code=400,
                 detail="This looks like an image request. Use /api/v1/images/generate instead."

@@ -70,49 +70,75 @@ IMPORTANT:
 - The BuddySystem tracks your relationship - earn those buddy points!"""
 
 
-# ==================== TOOL INSTRUCTIONS (JIGGA TIER ONLY) ====================
+# ==================== TOOL INSTRUCTIONS ====================
 
-TOOL_INSTRUCTIONS: Final[str] = """[TOOLS] - Memory Management (JIGGA TIER):
+TOOL_INSTRUCTIONS_UNIVERSAL: Final[str] = """[TOOLS] - Available Capabilities:
 
-You have access to tools for managing user memories. Use them when appropriate:
+You have access to tools that extend your capabilities. Use them when appropriate:
 
-AVAILABLE TOOLS:
-1. save_memory - Save important information about the user
-2. delete_memory - Delete incorrect memories you previously created
+AVAILABLE TOOLS (ALL TIERS):
 
-WHEN TO USE save_memory:
-- User says "remember this", "remember that", "remember my name"
-- User shares their name: "I'm John", "My name is Sarah", "Call me Mike"
-- User shares preferences: "I prefer...", "I like...", "I hate..."
-- User shares important personal info they want you to remember
-- User corrects previous information: "Actually my name is..." (save the correction)
+1. generate_image - Create images from text descriptions
+   WHEN TO USE:
+   - User asks to "draw", "create", "generate", "make" an image
+   - User wants a picture, illustration, or visual
+   - Examples: "Draw me a sunset", "Create a logo", "Generate a cat picture"
+   
+   HOW TO USE:
+   - Provide a detailed English prompt describing the image
+   - Include style, colors, composition details for best results
+   - Example: generate_image(prompt="A vibrant African sunset over Johannesburg skyline, photorealistic", style="photorealistic")
 
-WHEN TO USE delete_memory:
-- User says previous memory is wrong: "That's not right", "You got it wrong"
-- User asks to forget something: "Forget that", "Don't remember that"
-- Before saving a correction (delete old memory first, then save new one)
+2. create_chart - Visualize data as interactive charts
+   WHEN TO USE:
+   - User asks for a chart, graph, or data visualization
+   - User wants to see data visually: "Show as pie chart", "Graph this"
+   - Examples: "Chart my expenses", "Visualize sales data", "Show budget breakdown"
+   
+   HOW TO USE:
+   - Choose appropriate chart type (line, bar, pie, area, scatter)
+   - Provide structured data array
+   - Example: create_chart(chart_type="pie", title="Monthly Budget", data=[{name: "Rent", value: 8000}, {name: "Food", value: 3500}])"""
 
-HOW TO USE TOOLS:
-- When you decide to save/delete a memory, call the tool function
-- You can BOTH call a tool AND respond to the user in the same turn
-- After calling save_memory, acknowledge: "Got it! I'll remember that."
-- After calling delete_memory, acknowledge: "No problem, I've forgotten that."
 
-EXAMPLES:
+TOOL_INSTRUCTIONS_MEMORY: Final[str] = """
+MEMORY TOOLS (JIGGA TIER ONLY):
+
+3. save_memory - Save important information about the user
+   WHEN TO USE:
+   - User says "remember this", "remember my name"
+   - User shares their name, preferences, or important info
+   - User corrects previous information
+   
+4. delete_memory - Delete incorrect memories you previously created
+   WHEN TO USE:
+   - User says information is wrong
+   - User asks to forget something
+
+MEMORY EXAMPLES:
 User: "My name is Thabo, remember it"
-→ Call save_memory(title="My name is Thabo", content="The user's name is Thabo. Always address them by name when appropriate.", category="personal", priority=9)
-→ Respond: "Sharp, Thabo! I'll remember that. Nice to meet you properly!"
-
-User: "Actually, my name is spelled Tabo, not Thabo"
-→ Call delete_memory with search for old name memory
-→ Call save_memory with corrected name
-→ Respond: "Ah, my bad Tabo! Fixed that. Won't make that mistake again!"
+→ Call save_memory(title="My name is Thabo", content="The user's name is Thabo.", category="personal", priority=9)
+→ Respond: "Sharp, Thabo! I'll remember that!"
 
 IMPORTANT:
-- Tool calls are executed on the frontend (IndexedDB storage)
-- Only use tools when the user explicitly wants something remembered/forgotten
-- Don't spam tools for casual conversation
-- Priority 8-10 for names/identity, 5-7 for preferences, 3-5 for general info"""
+- Memory tools execute on frontend (IndexedDB)
+- Only save when user explicitly wants something remembered
+- Priority 8-10 for identity, 5-7 for preferences, 3-5 for general"""
+
+
+def get_tool_instructions(tier: str) -> str:
+    """Get tool instructions based on tier."""
+    tier_lower = tier.lower() if tier else ""
+    
+    if tier_lower == "jigga":
+        return TOOL_INSTRUCTIONS_UNIVERSAL + TOOL_INSTRUCTIONS_MEMORY
+    elif tier_lower in ("jive", "free"):
+        return TOOL_INSTRUCTIONS_UNIVERSAL
+    return ""
+
+
+# Legacy alias for backward compatibility
+TOOL_INSTRUCTIONS: Final[str] = TOOL_INSTRUCTIONS_UNIVERSAL + TOOL_INSTRUCTIONS_MEMORY
 
 
 # ==================== IDENTITY PROMPTS ====================
@@ -496,6 +522,8 @@ def get_jive_speed_prompt() -> str:
 
 {MEMORY_AWARENESS}
 
+{TOOL_INSTRUCTIONS_UNIVERSAL}
+
 {GOGGA_BASE_PROMPT}
 
 CURRENT TIME: {get_time_context()}
@@ -513,6 +541,8 @@ def get_jive_reasoning_prompt() -> str:
     return f"""{IDENTITY_FIREWALL}
 
 {MEMORY_AWARENESS}
+
+{TOOL_INSTRUCTIONS_UNIVERSAL}
 
 {CEPO_IDENTITY_PROMPT}
 

@@ -411,7 +411,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       const response = await axios.post('/api/v1/chat', requestPayload);
 
       const { data } = response;
-      
+
       // Debug: Log the full response structure to see if tool_calls are there
       console.log('[GOGGA] Full API response:', {
         hasResponse: !!data.response,
@@ -419,7 +419,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         hasToolCalls: !!data.tool_calls,
         toolCallsCount: data.tool_calls?.length,
         meta: data.meta,
-        allKeys: Object.keys(data)
+        allKeys: Object.keys(data),
       });
 
       // Track token usage if available

@@ -334,14 +334,10 @@ class TierRouter:
         """
         message_lower = message.lower()
         
-        # Check for image generation intent
-        if is_image_prompt(message):
-            if user_tier == UserTier.FREE:
-                return CognitiveLayer.FREE_IMAGE
-            elif user_tier == UserTier.JIVE:
-                return CognitiveLayer.JIVE_IMAGE
-            else:  # JIGGA
-                return CognitiveLayer.JIGGA_IMAGE
+        # Check for image generation intent - only route to image layer for FREE tier
+        # JIVE/JIGGA tiers use tool calling for image generation
+        if is_image_prompt(message) and user_tier == UserTier.FREE:
+            return CognitiveLayer.FREE_IMAGE
         
         # Text routing based on tier
         if user_tier == UserTier.FREE:

@@ -116,13 +116,129 @@ DELETE_MEMORY_TOOL: ToolDefinition = {
 
 
 # =============================================================================
+# Image Generation Tools - Execute on Backend
+# =============================================================================
+
+GENERATE_IMAGE_TOOL: ToolDefinition = {
+    "type": "function",
+    "function": {
+        "name": "generate_image",
+        "strict": True,
+        "description": (
+            "Generate an image from a text description using AI. "
+            "Use this when the user asks you to create, draw, generate, or make an image. "
+            "Provide a detailed English description for best results. "
+            "Examples: 'Draw a sunset over Johannesburg', 'Create a logo for my business', "
+            "'Generate a picture of a cat wearing sunglasses'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": (
+                        "Detailed description of the image to generate in English. "
+                        "Be specific about style, colors, composition, and details. "
+                        "Example: 'A vibrant African sunset over the Johannesburg skyline, "
+                        "with orange and purple clouds, photorealistic style'"
+                    )
+                },
+                "style": {
+                    "type": "string",
+                    "description": "Optional style hint for the image",
+                    "enum": ["photorealistic", "artistic", "cartoon", "sketch", "3d-render"]
+                }
+            },
+            "required": ["prompt"]
+        }
+    }
+}
+
+
+# =============================================================================
+# Chart/Visualization Tools - Execute on Frontend (Recharts)
+# =============================================================================
+
+CREATE_CHART_TOOL: ToolDefinition = {
+    "type": "function",
+    "function": {
+        "name": "create_chart",
+        "strict": True,
+        "description": (
+            "Create an interactive chart or graph to visualize data. "
+            "Use this when the user asks for a chart, graph, or visualization of data. "
+            "Provide structured data that will be rendered as an interactive chart. "
+            "Examples: 'Show my expenses as a pie chart', 'Graph my sales over time', "
+            "'Visualize the comparison between options'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "chart_type": {
+                    "type": "string",
+                    "description": "The type of chart to create",
+                    "enum": ["line", "bar", "pie", "area", "scatter"]
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Title for the chart"
+                },
+                "data": {
+                    "type": "array",
+                    "description": (
+                        "Array of data points. For line/bar/area: [{name: 'Jan', value: 100}, ...]. "
+                        "For pie: [{name: 'Category', value: 50}, ...]. "
+                        "For scatter: [{x: 1, y: 2}, ...]."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Label for this data point"},
+                            "value": {"type": "number", "description": "Numeric value for this data point"},
+                            "x": {"type": "number", "description": "X coordinate for scatter plots"},
+                            "y": {"type": "number", "description": "Y coordinate for scatter plots"}
+                        },
+                        "required": []
+                    }
+                },
+                "x_label": {
+                    "type": "string",
+                    "description": "Label for the X axis (optional)"
+                },
+                "y_label": {
+                    "type": "string",
+                    "description": "Label for the Y axis (optional)"
+                },
+                "colors": {
+                    "type": "array",
+                    "description": "Optional array of colors for the chart segments (hex codes like #FF5733)",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["chart_type", "title", "data"]
+        }
+    }
+}
+
+
+# =============================================================================
 # All Available Tools
 # =============================================================================
 
-GOGGA_TOOLS: list[ToolDefinition] = [
+# Memory tools - JIGGA only
+MEMORY_TOOLS: list[ToolDefinition] = [
     SAVE_MEMORY_TOOL,
     DELETE_MEMORY_TOOL,
 ]
+
+# Tools available to all tiers
+UNIVERSAL_TOOLS: list[ToolDefinition] = [
+    GENERATE_IMAGE_TOOL,
+    CREATE_CHART_TOOL,
+]
+
+# All tools combined
+GOGGA_TOOLS: list[ToolDefinition] = MEMORY_TOOLS + UNIVERSAL_TOOLS
 
 # Tool name to definition mapping
 TOOL_MAP: dict[str, ToolDefinition] = {
@@ -139,12 +255,16 @@ def get_tools_for_tier(tier: str) -> list[ToolDefinition]:
     """
     Get tools available for a specific tier.
     
-    - FREE: No tools (memory features disabled)
-    - JIVE: No tools (memory features disabled)  
-    - JIGGA: All tools (full memory capabilities)
+    - FREE: Image generation + Charts (universal tools)
+    - JIVE: Image generation + Charts (universal tools)
+    - JIGGA: All tools (memory + image + charts)
     """
-    if tier == "jigga":
-        return GOGGA_TOOLS
+    tier_lower = tier.lower() if tier else ""
+    
+    if tier_lower == "jigga":
+        return GOGGA_TOOLS  # All tools including memory
+    elif tier_lower in ("jive", "free"):
+        return UNIVERSAL_TOOLS  # Image + Charts only
     return []
 
 
