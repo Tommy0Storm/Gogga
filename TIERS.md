@@ -113,8 +113,49 @@ The session **does not** store Dexie data - it only provides user identity and t
 |-----------|-----|
 | **Next.js App Router** | Server components, streaming, Turbopack |
 | **NextAuth.js v5** | Passwordless token-based auth, JWT sessions |
-| **Prisma** | Type-safe queries, migrations, schema-first development |
+| **Prisma 7** | Type-safe queries, driver adapters, improved performance |
 | **SQLite** | Zero config, file-based, Git-friendly for dev |
+
+### Prisma 7 Architecture
+
+Prisma 7.1.0 uses the **Driver Adapter pattern** for database connections:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PRISMA 7 DRIVER ADAPTER                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  prisma.config.ts (CLI)     │ Handles migrate/generate          │
+│  ├── defineConfig()         │ Configuration function            │
+│  ├── env('DATABASE_URL')    │ Read from .env.local              │
+│  └── migrations.path        │ Where to store migrations         │
+│                                                                 │
+│  src/lib/prisma.ts (Runtime)│ Handles all database queries      │
+│  ├── PrismaBetterSqlite3    │ SQLite adapter (native)           │
+│  ├── PrismaClient({ adapter })│ Client with adapter injection   │
+│  └── Connection pooling     │ Configurable min/max connections  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Prisma 7 Features Used:**
+| Feature | Implementation |
+|---------|----------------|
+| Driver Adapters | `@prisma/adapter-better-sqlite3` for SQLite |
+| Generated Client | Output to `./prisma/generated/prisma` |
+| Type-safe Raw Queries | `$queryRaw` with template literals |
+| Connection Pooling | Configurable via adapter options |
+| Transaction Retry | Built-in retry logic for deadlocks |
+
+**Dependencies:**
+```json
+{
+  "@prisma/adapter-better-sqlite3": "^7.1.0",
+  "@prisma/client": "^7.1.0",
+  "better-sqlite3": "^12.5.0",
+  "prisma": "^7.1.0"
+}
+```
 
 ### File Structure (Implemented)
 
@@ -122,12 +163,14 @@ The session **does not** store Dexie data - it only provides user identity and t
 gogga-frontend/
 ├── prisma/
 │   ├── schema.prisma      # User, LoginToken, AuthLog, Subscription models
+│   ├── generated/prisma/  # Prisma 7 generated client output
 │   ├── dev.db             # SQLite database file
 │   └── migrations/        # Version-controlled migrations
+├── prisma.config.ts       # Prisma 7 CLI configuration
 ├── src/
 │   ├── auth.ts            # NextAuth v5 configuration (root level)
 │   ├── lib/
-│   │   ├── prisma.ts      # Prisma client singleton
+│   │   ├── prisma.ts      # Prisma client with driver adapter
 │   │   └── db.ts          # Dexie (client-side RAG)
 │   ├── components/
 │   │   └── AuthProvider.tsx  # NextAuth SessionProvider wrapper
@@ -168,15 +211,20 @@ gogga-frontend/
 
 **Tech Stack:**
 - NextAuth.js v5.0.0-beta.30 (App Router compatible)
-- Prisma v5.22.0 with SQLite
+- Prisma v7.1.0 with SQLite (Driver Adapter pattern)
 - EmailJS REST API (service_q6alymo)
 
 ```prisma
 // Prisma Schema (gogga-frontend/prisma/schema.prisma)
 
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")  // file:./dev.db
+  // URL handled by driver adapter in prisma.ts
 }
 
 model User {
@@ -1119,7 +1167,7 @@ Body: { search_id, helpful: boolean, feedback? }
 | TypeScript | 5.3+ | Strict mode |
 | Lucide React | 0.555.0 | Icon library |
 | NextAuth.js | 5.0.0-beta.30 | Passwordless token auth |
-| Prisma | 5.22.0 | SQLite ORM |
+| Prisma | 7.1.0 | SQLite ORM with Driver Adapter |
 
 ### UI Theme
 
