@@ -115,12 +115,28 @@ const COLORS = {
 const PIE_COLORS = ['#171717', '#404040', '#525252', '#737373', '#a3a3a3', '#d4d4d4'];
 
 // ============================================================================
+// Custom Tooltip Types
+// ============================================================================
+
+/**
+ * Payload entry from Recharts tooltip
+ * Matches the structure passed by Recharts internals
+ */
+interface TooltipPayloadEntry {
+  name: string;
+  value: number;
+  color: string;
+  dataKey: string;
+  payload: Record<string, unknown>;
+}
+
+// ============================================================================
 // Custom Tooltip
 // ============================================================================
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: any[];
+  payload?: TooltipPayloadEntry[];
   label?: string;
   unit?: string;
 }
@@ -313,10 +329,14 @@ export const StorageChart: React.FC<StorageChartProps> = ({
 // Query Mode Pie Chart
 // ============================================================================
 
+/**
+ * Data structure for QueryModePie chart
+ * Recharts requires index signature for data items
+ */
 interface QueryModeData {
   name: string;
   value: number;
-  [key: string]: any;
+  [key: string]: string | number;
 }
 
 interface QueryModePieProps {

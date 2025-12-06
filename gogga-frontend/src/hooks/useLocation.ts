@@ -163,21 +163,60 @@ async function getWeatherByCoords(
 }
 
 /**
+ * Sanitize city name for geocoding API
+ * Removes ward numbers, district suffixes, and other noise
+ */
+function sanitizeCityName(city: string): string {
+  // Remove "Ward X", "Ward XX", "District X" patterns
+  let cleaned = city.replace(/\s+(Ward|District|Section|Block)\s+\d+/gi, '');
+  
+  // SA municipality name mappings to major cities
+  const cityMappings: Record<string, string> = {
+    'tshwane': 'Pretoria',
+    'city of tshwane': 'Pretoria',
+    'ekurhuleni': 'Johannesburg East',
+    'city of ekurhuleni': 'Germiston',
+    'ethekwini': 'Durban',
+    'city of johannesburg': 'Johannesburg',
+    'city of cape town': 'Cape Town',
+    'nelson mandela bay': 'Port Elizabeth',
+    'buffalo city': 'East London',
+    'mangaung': 'Bloemfontein',
+  };
+  
+  const lowerCleaned = cleaned.toLowerCase().trim();
+  if (cityMappings[lowerCleaned]) {
+    return cityMappings[lowerCleaned];
+  }
+  
+  return cleaned.trim() || city;
+}
+
+/**
  * Fetch weather data for a city (fallback if no coordinates)
  */
 async function getWeatherForecast(city: string): Promise<WeatherData | null> {
   try {
+    // Sanitize city name for better geocoding results
+    const sanitizedCity = sanitizeCityName(city);
+
     // Using Open-Meteo API (free, no API key required)
     // First geocode the city to get coordinates
     const geoResponse = await fetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-        city
+        sanitizedCity
       )}&count=1`
     );
     const geoData = await geoResponse.json();
 
     if (!geoData.results || geoData.results.length === 0) {
-      console.warn('[Weather] City not found:', city);
+      console.warn(
+        '[Weather] City not found:',
+        city,
+        '(sanitized:',
+        sanitizedCity,
+        ')'
+      );
       return null;
     }
 

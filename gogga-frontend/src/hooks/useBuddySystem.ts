@@ -62,14 +62,16 @@ export function useBuddySystem(): UseBuddySystemReturn {
     try {
       const p = await buddySystem.initialize();
       setProfile(p);
-      
+
       const s = await buddySystem.getStats();
       setStats(s);
 
       const greet = buddySystem.getTimeGreeting();
       setGreeting(`${greet.greeting}!`);
-      
-      setSarcasticIntro(buddySystem.getSarcasticIntro());
+
+      // getSarcasticIntro is now async (reads name from Dexie)
+      const intro = await buddySystem.getSarcasticIntro();
+      setSarcasticIntro(intro);
     } catch (err) {
       console.error('[useBuddySystem] Failed to load:', err);
     } finally {

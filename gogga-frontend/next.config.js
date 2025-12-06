@@ -58,10 +58,16 @@ const nextConfig = {
   },
   async rewrites() {
     return [
-      // Proxy backend API routes EXCEPT auth (handled by NextAuth)
+      // Proxy backend API routes EXCEPT:
+      // - auth (handled by NextAuth)
+      // - chat (handled by app/api/v1/chat/route.ts with extended timeout)
       {
-        source: '/api/v1/:path*',
-        destination: `${BACKEND_URL}/api/v1/:path*`,
+        source: '/api/v1/images/:path*',
+        destination: `${BACKEND_URL}/api/v1/images/:path*`,
+      },
+      {
+        source: '/api/v1/payments/:path*',
+        destination: `${BACKEND_URL}/api/v1/payments/:path*`,
       },
       {
         source: '/health',

@@ -13,6 +13,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
+/**
+ * Subscription API response structure
+ */
+interface SubscriptionResponse {
+  email: string;
+  tier: string;
+  status: string;
+  credits: {
+    total: number;
+    used: number;
+    available: number;
+    purchased: number;
+    monthly: number;
+  };
+  images: {
+    used: number;
+    limit: number;
+  };
+  nextBilling: Date | null;
+  payfastToken: boolean;
+}
+
 export async function GET(request: NextRequest) {
   try {
     let userEmail: string | null = null
@@ -23,24 +45,24 @@ export async function GET(request: NextRequest) {
     
     if (authHeader === `Bearer ${expectedKey}`) {
       // Internal API call - get email from query param
-      userEmail = request.nextUrl.searchParams.get('email')
+      userEmail = request.nextUrl.searchParams.get('email');
       if (!userEmail) {
         return NextResponse.json(
           { error: 'Email parameter required for internal API' },
           { status: 400 }
-        )
+        );
       }
     } else {
       // Session-based auth (frontend)
-      const session = await auth()
-      userEmail = session?.user?.email || null
+      const session = await auth();
+      userEmail = session?.user?.email ?? null;
     }
-    
+
     if (!userEmail) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
-      )
+      );
     }
 
     // Get user with subscription
@@ -49,53 +71,42 @@ export async function GET(request: NextRequest) {
       include: {
         subscription: true,
       },
-    })
+    });
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Default FREE tier values
-    const defaultSubscription = {
-      tier: 'FREE',
-      status: 'active',
-      credits: 0,
-      creditsUsed: 0,
-      monthlyCredits: 0,
-      imagesUsed: 0,
-      imagesLimit: 0,
-      nextBilling: null as Date | null,
-      payfastToken: null as string | null,
-    }
+    // Extract subscription data with proper null handling
+    const sub = user.subscription;
 
-    const subscription = user.subscription || defaultSubscription
+    // Build response with proper defaults
+    const credits = sub?.credits ?? 0;
+    const creditsUsed = sub?.creditsUsed ?? 0;
+    const monthlyCredits = sub?.monthlyCredits ?? 0;
+    const totalCredits = credits + monthlyCredits;
+    const availableCredits = totalCredits - creditsUsed;
 
-    // Calculate available credits
-    const totalCredits = (subscription.credits || 0) + (subscription.monthlyCredits || 0)
-    const usedCredits = subscription.creditsUsed || 0
-    const availableCredits = totalCredits - usedCredits
-
-    return NextResponse.json({
+    const response: SubscriptionResponse = {
       email: user.email,
-      tier: subscription.tier || 'FREE',
-      status: subscription.status || 'active',
+      tier: sub?.tier ?? 'FREE',
+      status: sub?.status ?? 'active',
       credits: {
         total: totalCredits,
-        used: usedCredits,
+        used: creditsUsed,
         available: availableCredits,
-        purchased: subscription.credits || 0,
-        monthly: subscription.monthlyCredits || 0,
+        purchased: credits,
+        monthly: monthlyCredits,
       },
       images: {
-        used: subscription.imagesUsed || 0,
-        limit: subscription.imagesLimit || 0,
+        used: sub?.imagesUsed ?? 0,
+        limit: sub?.imagesLimit ?? 0,
       },
-      nextBilling: 'nextBilling' in subscription ? subscription.nextBilling : null,
-      payfastToken: ('payfastToken' in subscription && subscription.payfastToken) ? true : false,
-    })
+      nextBilling: sub?.nextBilling ?? null,
+      payfastToken: Boolean(sub?.payfastToken),
+    };
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Subscription API error:', error)

@@ -45,10 +45,18 @@ class ChatMetadata(BaseModel):
     has_thinking: Optional[bool] = Field(default=False, description="Response contains thinking block")
 
 
+class ToolCall(BaseModel):
+    """Tool call from AI model."""
+    id: str = Field(..., description="Tool call ID")
+    name: str = Field(..., description="Tool name")
+    arguments: Dict[str, Any] = Field(..., description="Tool arguments")
+
+
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
     response: str = Field(..., description="The AI assistant's response")
     thinking: Optional[str] = Field(default=None, description="JIGGA thinking block (collapsed in UI)")
+    tool_calls: Optional[list[ToolCall]] = Field(default=None, description="Tool calls for frontend execution")
     meta: Dict[str, Any] = Field(default={}, description="Response metadata")
 
 

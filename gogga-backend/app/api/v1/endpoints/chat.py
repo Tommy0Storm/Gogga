@@ -114,6 +114,7 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
         return ChatResponse(
             response=result["response"],
             thinking=result.get("thinking"),  # JIGGA thinking block for UI
+            tool_calls=result.get("tool_calls"),  # Tool calls for frontend execution
             meta=meta
         )
         

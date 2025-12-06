@@ -32,6 +32,11 @@ import {
   getMemoryContextForLLM,
 } from '@/lib/db';
 import {
+  executeToolCalls,
+  formatToolResultsMessage,
+  type ToolCall,
+} from '@/lib/toolHandler';
+import {
   Bot,
   User,
   Zap,
@@ -406,6 +411,16 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       const response = await axios.post('/api/v1/chat', requestPayload);
 
       const { data } = response;
+      
+      // Debug: Log the full response structure to see if tool_calls are there
+      console.log('[GOGGA] Full API response:', {
+        hasResponse: !!data.response,
+        responseLength: data.response?.length,
+        hasToolCalls: !!data.tool_calls,
+        toolCallsCount: data.tool_calls?.length,
+        meta: data.meta,
+        allKeys: Object.keys(data)
+      });
 
       // Track token usage if available
       if (data.meta?.tokens) {
@@ -431,8 +446,42 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
           buddy_context: !!buddyContext, // BuddySystem profile was used
           location_context: !!locationContext, // Location was included
           has_thinking: data.meta?.has_thinking || !!data.thinking,
+          timestamp: new Date().toISOString(), // Response timestamp
         },
       };
+
+      // Handle tool calls if present (JIGGA tier only)
+      if (
+        data.tool_calls &&
+        Array.isArray(data.tool_calls) &&
+        data.tool_calls.length > 0
+      ) {
+        console.log('[GOGGA] Tool calls received:', data.tool_calls);
+
+        try {
+          // Execute the tool calls on the frontend
+          const toolResults = await executeToolCalls(
+            data.tool_calls as ToolCall[]
+          );
+          console.log('[GOGGA] Tool results:', toolResults);
+
+          // Add tool execution info to the message
+          const toolSummary = formatToolResultsMessage(toolResults);
+          if (toolSummary) {
+            // Append tool results to the response
+            botMsg.content = botMsg.content
+              ? `${botMsg.content}\n\n---\n**Memory Updated:**\n${toolSummary}`
+              : toolSummary;
+          }
+
+          // Mark that tools were executed
+          if (botMsg.meta) {
+            botMsg.meta.tools_executed = true;
+          }
+        } catch (toolError) {
+          console.error('[GOGGA] Tool execution failed:', toolError);
+        }
+      }
 
       if (isPersistenceEnabled) {
         await addMessage(botMsg);
@@ -855,7 +904,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
 
           {/* Account Menu (replaces simple tier badge) */}
           {userEmail ? (
-            <AccountMenu 
+            <AccountMenu
               userEmail={userEmail}
               currentTier={userTier as 'FREE' | 'JIVE' | 'JIGGA'}
             />
@@ -1161,34 +1210,56 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                             {m.meta.tier}
                           </button>
                         )}
+                        {/* Layer badge - different display for each tier */}
                         {m.meta.layer && (
                           <button type="button" className="meta-badge">
                             {m.meta.layer === 'jive_speed' ? (
-                              <Zap size={12} />
+                              <>
+                                <Zap size={12} />
+                                <span>Speed</span>
+                              </>
+                            ) : m.meta.layer === 'jive_reasoning' ? (
+                              <>
+                                <Brain size={12} />
+                                <span>CePO</span>
+                              </>
+                            ) : m.meta.layer === 'jigga_think' ? (
+                              <>
+                                <Brain size={12} />
+                                <span>Thinking</span>
+                              </>
+                            ) : m.meta.layer === 'jigga_fast' ? (
+                              <>
+                                <Zap size={12} />
+                                <span>Fast</span>
+                              </>
                             ) : (
-                              <Brain size={12} />
+                              <>
+                                <Brain size={12} />
+                                <span>{m.meta.layer}</span>
+                              </>
                             )}
-                            <span>
-                              {m.meta.layer
-                                .replace('jive_', '')
-                                .replace('jigga_', '')}
-                            </span>
-                          </button>
-                        )}
-                        {/* CePO indicator - shows when provider includes cepo */}
-                        {m.meta.provider?.includes('cepo') && (
-                          <button
-                            type="button"
-                            className="meta-badge meta-badge-cepo"
-                          >
-                            <Brain size={12} />
-                            <span>CePO</span>
                           </button>
                         )}
                         {m.meta.latency_seconds && (
                           <button type="button" className="meta-badge">
                             <Clock size={12} />
                             <span>{m.meta.latency_seconds.toFixed(2)}s</span>
+                          </button>
+                        )}
+                        {/* Timestamp display */}
+                        {m.meta.timestamp && (
+                          <button
+                            type="button"
+                            className="meta-badge text-[10px] opacity-60"
+                            title={new Date(m.meta.timestamp).toLocaleString()}
+                          >
+                            <span>
+                              {new Date(m.meta.timestamp).toLocaleTimeString(
+                                [],
+                                { hour: '2-digit', minute: '2-digit' }
+                              )}
+                            </span>
                           </button>
                         )}
                         {m.meta.cost_zar !== undefined &&

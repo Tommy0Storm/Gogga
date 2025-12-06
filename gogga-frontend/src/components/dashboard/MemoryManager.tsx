@@ -7,21 +7,38 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Plus, Trash2, Edit2, Save, X, Brain, User, FolderOpen, 
-  BookOpen, Tag, ToggleLeft, ToggleRight, AlertCircle, 
-  ChevronDown, ChevronUp, Sparkles, Lock, Info as FiInfo
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Save,
+  X,
+  Brain,
+  User,
+  FolderOpen,
+  BookOpen,
+  Tag,
+  ToggleLeft,
+  ToggleRight,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Lock,
+  Info as FiInfo,
+  Bot,
 } from 'lucide-react';
-import { 
-  db, 
-  type MemoryContext, 
+import {
+  db,
+  type MemoryContext,
   type MemoryCategory,
-  createMemory, 
-  updateMemory, 
-  deleteMemory, 
+  type MemorySource,
+  createMemory,
+  updateMemory,
+  deleteMemory,
   getAllMemories,
   getMemoryStats,
-  MEMORY_LIMITS 
+  MEMORY_LIMITS,
 } from '@/lib/db';
 
 // ============================================================================
@@ -62,27 +79,62 @@ interface MemoryCardProps {
   onToggleActive: (id: number, isActive: boolean) => void;
 }
 
-const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onToggleActive }) => {
+const MemoryCard: React.FC<MemoryCardProps> = ({
+  memory,
+  onEdit,
+  onDelete,
+  onToggleActive,
+}) => {
   const [expanded, setExpanded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const category = CATEGORY_CONFIG[memory.category];
+  const isUserCreated = (memory.source || 'user') === 'user';
+  const isGoggaCreated = memory.source === 'gogga';
 
   return (
-    <div className={`
+    <div
+      className={`
       border rounded-lg p-4 transition-all
-      ${memory.isActive 
-        ? 'border-primary-300 bg-primary-50/50' 
-        : 'border-primary-200 bg-primary-100/30 opacity-60'
+      ${
+        memory.isActive
+          ? 'border-primary-300 bg-primary-50/50'
+          : 'border-primary-200 bg-primary-100/30 opacity-60'
       }
-    `}>
+    `}
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className={`p-1.5 rounded ${memory.isActive ? 'bg-primary-200' : 'bg-primary-100'}`}>
+          <div
+            className={`p-1.5 rounded ${
+              memory.isActive ? 'bg-primary-200' : 'bg-primary-100'
+            }`}
+          >
             {category.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-primary-900 truncate">{memory.title}</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium text-primary-900 truncate">
+                {memory.title}
+              </h4>
+              {/* Source Badge */}
+              {isGoggaCreated ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-primary-200 text-primary-600 rounded"
+                  title="Created by Gogga AI"
+                >
+                  <Bot className="w-3 h-3" />
+                  AI
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-primary-100 text-primary-500 rounded"
+                  title="Created by you"
+                >
+                  <User className="w-3 h-3" />
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-xs text-primary-500">
               <span>{category.label}</span>
               <span>•</span>
@@ -92,7 +144,7 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onTog
             </div>
           </div>
         </div>
-        
+
         {/* Actions */}
         <div className="flex items-center gap-1">
           <button
@@ -100,10 +152,11 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onTog
             className="p-1.5 rounded hover:bg-primary-200 transition-colors"
             title={memory.isActive ? 'Deactivate' : 'Activate'}
           >
-            {memory.isActive 
-              ? <ToggleRight className="w-5 h-5 text-sa-green" />
-              : <ToggleLeft className="w-5 h-5 text-primary-400" />
-            }
+            {memory.isActive ? (
+              <ToggleRight className="w-5 h-5 text-sa-green" />
+            ) : (
+              <ToggleLeft className="w-5 h-5 text-primary-400" />
+            )}
           </button>
           <button
             onClick={() => onEdit(memory)}
@@ -124,8 +177,10 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onTog
 
       {/* Content Preview / Expand */}
       <div className="mt-3">
-        <div 
-          className={`text-sm text-primary-700 ${expanded ? '' : 'line-clamp-2'}`}
+        <div
+          className={`text-sm text-primary-700 ${
+            expanded ? '' : 'line-clamp-2'
+          }`}
           style={{ whiteSpace: 'pre-wrap' }}
         >
           {memory.content}
@@ -135,7 +190,11 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onTog
             onClick={() => setExpanded(!expanded)}
             className="mt-1 text-xs text-primary-500 hover:text-primary-700 flex items-center gap-1"
           >
-            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {expanded ? (
+              <ChevronUp className="w-3 h-3" />
+            ) : (
+              <ChevronDown className="w-3 h-3" />
+            )}
             {expanded ? 'Show less' : 'Show more'}
           </button>
         )}
@@ -144,7 +203,9 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onTog
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-700 mb-2">Delete this memory? This cannot be undone.</p>
+          <p className="text-sm text-red-700 mb-2">
+            Delete this memory? This cannot be undone.
+          </p>
           <div className="flex gap-2">
             <button
               onClick={() => onDelete(memory.id!)}
@@ -171,14 +232,25 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete, onTog
 
 interface MemoryEditorProps {
   memory?: MemoryContext | null;
-  onSave: (data: { title: string; content: string; category: MemoryCategory; priority: number }) => void;
+  onSave: (data: {
+    title: string;
+    content: string;
+    category: MemoryCategory;
+    priority: number;
+  }) => void;
   onClose: () => void;
 }
 
-const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) => {
+const MemoryEditor: React.FC<MemoryEditorProps> = ({
+  memory,
+  onSave,
+  onClose,
+}) => {
   const [title, setTitle] = useState(memory?.title || '');
   const [content, setContent] = useState(memory?.content || '');
-  const [category, setCategory] = useState<MemoryCategory>(memory?.category || 'custom');
+  const [category, setCategory] = useState<MemoryCategory>(
+    memory?.category || 'custom'
+  );
   const [priority, setPriority] = useState(memory?.priority || 5);
   const [error, setError] = useState<string | null>(null);
 
@@ -187,7 +259,7 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!title.trim()) {
       setError('Title is required');
       return;
@@ -197,11 +269,18 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
       return;
     }
     if (isOverLimit) {
-      setError(`Content too long. Max ${MEMORY_LIMITS.MAX_CONTENT_LENGTH} characters.`);
+      setError(
+        `Content too long. Max ${MEMORY_LIMITS.MAX_CONTENT_LENGTH} characters.`
+      );
       return;
     }
-    
-    onSave({ title: title.trim(), content: content.trim(), category, priority });
+
+    onSave({
+      title: title.trim(),
+      content: content.trim(),
+      category,
+      priority,
+    });
   };
 
   return (
@@ -213,13 +292,19 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
             <Brain className="w-5 h-5" />
             {memory ? 'Edit Memory' : 'Add New Memory'}
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-primary-100 rounded">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-primary-100 rounded"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <form
+          onSubmit={handleSubmit}
+          className="p-4 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]"
+        >
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
               <AlertCircle className="w-4 h-4" />
@@ -229,7 +314,9 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-primary-700 mb-1">Title</label>
+            <label className="block text-sm font-medium text-primary-700 mb-1">
+              Title
+            </label>
             <input
               type="text"
               value={title}
@@ -242,18 +329,26 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
 
           {/* Category */}
           <div>
-            <label className="block text-sm font-medium text-primary-700 mb-1">Category</label>
+            <label className="block text-sm font-medium text-primary-700 mb-1">
+              Category
+            </label>
             <div className="grid grid-cols-2 gap-2">
-              {(Object.entries(CATEGORY_CONFIG) as [MemoryCategory, typeof CATEGORY_CONFIG[MemoryCategory]][]).map(([key, config]) => (
+              {(
+                Object.entries(CATEGORY_CONFIG) as [
+                  MemoryCategory,
+                  (typeof CATEGORY_CONFIG)[MemoryCategory]
+                ][]
+              ).map(([key, config]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setCategory(key)}
                   className={`
                     p-3 rounded-lg border text-left transition-all
-                    ${category === key 
-                      ? 'border-primary-400 bg-primary-100' 
-                      : 'border-primary-200 hover:border-primary-300'
+                    ${
+                      category === key
+                        ? 'border-primary-400 bg-primary-100'
+                        : 'border-primary-200 hover:border-primary-300'
                     }
                   `}
                 >
@@ -261,7 +356,9 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
                     {config.icon}
                     <span className="font-medium text-sm">{config.label}</span>
                   </div>
-                  <p className="text-xs text-primary-500">{config.description}</p>
+                  <p className="text-xs text-primary-500">
+                    {config.description}
+                  </p>
                 </button>
               ))}
             </div>
@@ -270,9 +367,16 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
           {/* Content */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-primary-700">Content</label>
-              <span className={`text-xs ${isOverLimit ? 'text-red-500' : 'text-primary-500'}`}>
-                {content.length}/{MEMORY_LIMITS.MAX_CONTENT_LENGTH} chars • ~{estimatedTokens} tokens
+              <label className="block text-sm font-medium text-primary-700">
+                Content
+              </label>
+              <span
+                className={`text-xs ${
+                  isOverLimit ? 'text-red-500' : 'text-primary-500'
+                }`}
+              >
+                {content.length}/{MEMORY_LIMITS.MAX_CONTENT_LENGTH} chars • ~
+                {estimatedTokens} tokens
               </span>
             </div>
             <textarea
@@ -283,7 +387,11 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
               className={`
                 w-full px-3 py-2 border rounded-lg resize-none font-mono text-sm
                 focus:ring-2 focus:ring-primary-300 focus:border-primary-300
-                ${isOverLimit ? 'border-red-300 bg-red-50' : 'border-primary-200'}
+                ${
+                  isOverLimit
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-primary-200'
+                }
               `}
             />
           </div>
@@ -291,8 +399,12 @@ const MemoryEditor: React.FC<MemoryEditorProps> = ({ memory, onSave, onClose }) 
           {/* Priority */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-primary-700">Priority</label>
-              <span className="text-xs text-primary-500">{priority}/10 (higher = more important)</span>
+              <label className="block text-sm font-medium text-primary-700">
+                Priority
+              </label>
+              <span className="text-xs text-primary-500">
+                {priority}/10 (higher = more important)
+              </span>
             </div>
             <input
               type="range"
@@ -343,11 +455,11 @@ interface MemoryManagerProps {
   compact?: boolean;
 }
 
-export const MemoryManager: React.FC<MemoryManagerProps> = ({ 
-  tier = 'jigga', 
-  onRefresh, 
+export const MemoryManager: React.FC<MemoryManagerProps> = ({
+  tier = 'jigga',
+  onRefresh,
   onUpgrade,
-  compact = false 
+  compact = false,
 }) => {
   const [memories, setMemories] = useState<MemoryContext[]>([]);
   const [stats, setStats] = useState<{
@@ -355,10 +467,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
     active: number;
     totalTokens: number;
     byCategory: Record<MemoryCategory, number>;
+    bySource: Record<MemorySource, number>;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
-  const [editingMemory, setEditingMemory] = useState<MemoryContext | null>(null);
+  const [editingMemory, setEditingMemory] = useState<MemoryContext | null>(
+    null
+  );
   const [filter, setFilter] = useState<MemoryCategory | 'all'>('all');
 
   // Only JIGGA can use Long-Term Memory
@@ -388,13 +503,23 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
     loadMemories();
   }, [loadMemories]);
 
-  const handleSave = async (data: { title: string; content: string; category: MemoryCategory; priority: number }) => {
+  const handleSave = async (data: {
+    title: string;
+    content: string;
+    category: MemoryCategory;
+    priority: number;
+  }) => {
     if (!canUseMemory) return;
     try {
       if (editingMemory) {
         await updateMemory(editingMemory.id!, data);
       } else {
-        await createMemory(data.title, data.content, data.category, data.priority);
+        await createMemory(
+          data.title,
+          data.content,
+          data.category,
+          data.priority
+        );
       }
       setShowEditor(false);
       setEditingMemory(null);
@@ -433,9 +558,8 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
     setShowEditor(true);
   };
 
-  const filteredMemories = filter === 'all' 
-    ? memories 
-    : memories.filter(m => m.category === filter);
+  const filteredMemories =
+    filter === 'all' ? memories : memories.filter((m) => m.category === filter);
 
   // Tier-locked preview for JIVE users
   if (!canUseMemory) {
@@ -458,7 +582,10 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
             {/* Fake preview items */}
             <div className="grid gap-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="p-4 bg-primary-50 rounded-lg border border-primary-100">
+                <div
+                  key={i}
+                  className="p-4 bg-primary-50 rounded-lg border border-primary-100"
+                >
                   <div className="h-4 bg-primary-200 rounded w-1/3 mb-2" />
                   <div className="h-3 bg-primary-100 rounded w-full mb-1" />
                   <div className="h-3 bg-primary-100 rounded w-2/3" />
@@ -467,7 +594,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
             </div>
           </div>
         </div>
-        
+
         {/* Upgrade overlay */}
         <div className="relative bg-gradient-to-br from-primary-50/95 to-white/95 backdrop-blur-sm border border-primary-200 rounded-xl p-8 text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-primary-100 rounded-full flex items-center justify-center">
@@ -477,7 +604,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
             Long-Term Memory
           </h3>
           <p className="text-primary-600 mb-6 max-w-md mx-auto">
-            Store persistent context that carries across all your chat sessions. 
+            Store persistent context that carries across all your chat sessions.
             Add personal preferences, project details, or reference information.
           </p>
           <div className="flex flex-wrap justify-center gap-3 mb-6 text-sm text-primary-500">
@@ -533,7 +660,10 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
           </p>
         </div>
         <button
-          onClick={() => { setEditingMemory(null); setShowEditor(true); }}
+          onClick={() => {
+            setEditingMemory(null);
+            setShowEditor(true);
+          }}
           disabled={!canAddMore}
           className="px-3 py-2 bg-primary-800 text-white rounded-lg hover:bg-primary-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
         >
@@ -544,21 +674,43 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
       {/* Stats Bar */}
       {stats && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           <div className="p-3 bg-primary-100 rounded-lg">
-            <div className="text-2xl font-bold text-primary-900">{stats.total}</div>
+            <div className="text-2xl font-bold text-primary-900">
+              {stats.total}
+            </div>
             <div className="text-xs text-primary-600">Total Memories</div>
           </div>
           <div className="p-3 bg-primary-100 rounded-lg">
-            <div className="text-2xl font-bold text-sa-green">{stats.active}</div>
+            <div className="text-2xl font-bold text-sa-green">
+              {stats.active}
+            </div>
             <div className="text-xs text-primary-600">Active</div>
           </div>
           <div className="p-3 bg-primary-100 rounded-lg">
-            <div className="text-2xl font-bold text-primary-900">{stats.totalTokens}</div>
+            <div className="flex items-center gap-1.5">
+              <User className="w-4 h-4 text-primary-500" />
+              <span className="text-2xl font-bold text-primary-900">
+                {stats.bySource?.user || 0}
+              </span>
+              <span className="text-lg text-primary-400">/</span>
+              <Bot className="w-4 h-4 text-primary-400" />
+              <span className="text-2xl font-bold text-primary-600">
+                {stats.bySource?.gogga || 0}
+              </span>
+            </div>
+            <div className="text-xs text-primary-600">You / AI</div>
+          </div>
+          <div className="p-3 bg-primary-100 rounded-lg">
+            <div className="text-2xl font-bold text-primary-900">
+              {stats.totalTokens}
+            </div>
             <div className="text-xs text-primary-600">Est. Tokens</div>
           </div>
           <div className="p-3 bg-primary-100 rounded-lg">
-            <div className="text-2xl font-bold text-primary-900">{MEMORY_LIMITS.MAX_TOTAL_TOKENS - stats.totalTokens}</div>
+            <div className="text-2xl font-bold text-primary-900">
+              {MEMORY_LIMITS.MAX_TOTAL_TOKENS - stats.totalTokens}
+            </div>
             <div className="text-xs text-primary-600">Tokens Left</div>
           </div>
         </div>
@@ -569,17 +721,26 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
         <button
           onClick={() => setFilter('all')}
           className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-            filter === 'all' ? 'bg-primary-800 text-white' : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
+            filter === 'all'
+              ? 'bg-primary-800 text-white'
+              : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
           }`}
         >
           All ({memories.length})
         </button>
-        {(Object.entries(CATEGORY_CONFIG) as [MemoryCategory, typeof CATEGORY_CONFIG[MemoryCategory]][]).map(([key, config]) => (
+        {(
+          Object.entries(CATEGORY_CONFIG) as [
+            MemoryCategory,
+            (typeof CATEGORY_CONFIG)[MemoryCategory]
+          ][]
+        ).map(([key, config]) => (
           <button
             key={key}
             onClick={() => setFilter(key)}
             className={`px-3 py-1.5 text-sm rounded-full transition-colors flex items-center gap-1.5 ${
-              filter === key ? 'bg-primary-800 text-white' : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
+              filter === key
+                ? 'bg-primary-800 text-white'
+                : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
             }`}
           >
             {config.icon}
@@ -592,12 +753,17 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       {filteredMemories.length === 0 ? (
         <div className="text-center py-12 bg-primary-50 rounded-xl border border-dashed border-primary-200">
           <Sparkles className="w-12 h-12 text-primary-300 mx-auto mb-3" />
-          <h4 className="text-lg font-medium text-primary-700 mb-1">No memories yet</h4>
+          <h4 className="text-lg font-medium text-primary-700 mb-1">
+            No memories yet
+          </h4>
           <p className="text-sm text-primary-500 mb-4">
             Add context you want the AI to remember across all conversations
           </p>
           <button
-            onClick={() => { setEditingMemory(null); setShowEditor(true); }}
+            onClick={() => {
+              setEditingMemory(null);
+              setShowEditor(true);
+            }}
             className="px-4 py-2 bg-primary-800 text-white rounded-lg hover:bg-primary-900 text-sm"
           >
             Add Your First Memory
@@ -605,7 +771,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredMemories.map(memory => (
+          {filteredMemories.map((memory) => (
             <MemoryCard
               key={memory.id}
               memory={memory}
@@ -621,7 +787,8 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       {!canAddMore && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-700 text-sm">
           <AlertCircle className="w-4 h-4" />
-          You&apos;ve reached the maximum of {MEMORY_LIMITS.MAX_MEMORIES} memories. Delete some to add more.
+          You&apos;ve reached the maximum of {MEMORY_LIMITS.MAX_MEMORIES}{' '}
+          memories. Delete some to add more.
         </div>
       )}
 
@@ -630,7 +797,10 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
         <MemoryEditor
           memory={editingMemory}
           onSave={handleSave}
-          onClose={() => { setShowEditor(false); setEditingMemory(null); }}
+          onClose={() => {
+            setShowEditor(false);
+            setEditingMemory(null);
+          }}
         />
       )}
     </div>

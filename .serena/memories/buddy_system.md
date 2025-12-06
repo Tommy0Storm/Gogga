@@ -59,9 +59,10 @@ await processBuddyMessage(text);
 - Only visible for non-English languages
 - Hover shows full language name + confidence
 
-### Storage
-- BuddyProfile in localStorage (`gogga_buddy_profile`)
-- User memories in Dexie via MemoryManager
+### Storage (SPOT Architecture)
+- BuddyProfile in localStorage (`gogga_buddy_profile`) - preferences, points, relationship
+- **User name is NOT stored in localStorage** - it's read from Dexie memories (SPOT)
+- User memories in Dexie via MemoryManager (single source of truth for user data)
 
 ## Key APIs
 ```typescript

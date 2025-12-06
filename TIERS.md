@@ -892,6 +892,17 @@ GOGGA remembers you across conversations via the BuddySystem context injection:
 3. Context injected into chat messages for JIVE/JIGGA tiers
 4. GOGGA uses your name naturally (not every sentence, but when appropriate)
 
+**Memory Source Tracking:**
+
+Memories distinguish between user-created and AI-created entries:
+
+| Source | Created By | Can Delete | UI Badge | Description |
+|--------|-----------|------------|----------|-------------|
+| `user` | User manually | User only | 👤 User icon | User explicitly saved memory |
+| `gogga` | GOGGA AI | User or GOGGA | 🤖 "AI" badge | GOGGA inferred from conversation |
+
+This prevents GOGGA from deleting user-created memories while allowing cleanup of its own inferences. The MemoryManager dashboard displays source badges and separate statistics (e.g., "4 You • 2 AI").
+
 **Memory Context Format:**
 ```
 USER CONTEXT:

@@ -7,20 +7,23 @@
 import * as dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 dotenv.config() // Also load .env if it exists
-import { defineConfig, env } from 'prisma/config'
+import { defineConfig } from "prisma/config";
+
+// Use process.env with fallback for Docker build where DATABASE_URL might not be set
+// (prisma generate only needs schema, not actual DB connection)
+const databaseUrl = process.env.DATABASE_URL || "file:./data/gogga.db";
 
 export default defineConfig({
   // The main entry for your schema
-  schema: 'prisma/schema.prisma',
-  
+  schema: "prisma/schema.prisma",
+
   // Where migrations should be generated
   migrations: {
-    path: 'prisma/migrations',
+    path: "prisma/migrations",
   },
-  
+
   // The database URL for CLI operations
   datasource: {
-    // Type-safe env() helper (does not replace the need for dotenv)
-    url: env('DATABASE_URL'),
+    url: databaseUrl,
   },
-})
+});

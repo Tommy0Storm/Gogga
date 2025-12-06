@@ -7,8 +7,24 @@
 
 Enterprise-grade local RAG pipeline for browser-based semantic search using the E5-small-v2 ONNX model. Supports tiered access (FREE, JIVE, JIGGA) with automatic mode selection.
 
-## Recent Fixes (December 4, 2025)
+## Recent Fixes (December 2025)
 
+### December 6, 2025 - ONNX WASM Loading Fix
+1. **CDN WASM binaries**: Configured ONNX Runtime Web to load WASM files from jsDelivr CDN instead of Turbopack chunks
+2. **Single-threaded mode**: Set `ort.env.wasm.numThreads = 1` to avoid multi-threading chunk loading issues
+3. **Disabled proxy workers**: Set `ort.env.wasm.proxy = false` for simpler loading
+4. **File**: `gogga-frontend/src/lib/embeddingEngine.ts`
+
+```typescript
+async function configureOnnxRuntime(): Promise<void> {
+  const ort = await import('onnxruntime-web');
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/';
+  ort.env.wasm.proxy = false;
+}
+```
+
+### December 4, 2025
 1. **Webpack Config**: Force browser build with alias in `next.config.js`:
    ```javascript
    '@huggingface/transformers': path.join(__dirname, 'node_modules/@huggingface/transformers/dist/transformers.web.js')

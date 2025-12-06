@@ -19,6 +19,7 @@ import {
   updateSessionTitle,
   generateSessionId,
 } from '@/lib/db';
+import type { ChatMessageMeta } from '@/types/prisma-json';
 
 export type Tier = 'free' | 'jive' | 'jigga';
 
@@ -27,19 +28,7 @@ export interface Message {
   content: string;
   imageId?: number;
   thinking?: string; // JIGGA thinking block (collapsible in UI)
-  meta?: {
-    cost_zar?: number;
-    model?: string;
-    layer?: string;
-    latency_seconds?: number;
-    tier?: string;
-    provider?: string;
-    rag_context?: boolean;
-    memory_context?: boolean; // Long-term memory context was used
-    buddy_context?: boolean; // BuddySystem profile was used
-    location_context?: boolean; // Location context was included
-    has_thinking?: boolean;
-  };
+  meta?: ChatMessageMeta;
 }
 
 interface ChatHistoryState {

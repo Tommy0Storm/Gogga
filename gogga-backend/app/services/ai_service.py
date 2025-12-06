@@ -31,6 +31,7 @@ from app.core.router import (
 )
 from app.services.cost_tracker import track_usage
 from app.core.exceptions import InferenceError
+from app.tools.definitions import GOGGA_TOOLS, get_tools_for_tier, ToolCall
 
 
 logger = logging.getLogger(__name__)
@@ -162,14 +163,18 @@ class AIService:
             return await AIService._generate_cerebras(
                 user_id, message, history, layer,
                 use_cepo=False,
-                thinking_mode=True
+                thinking_mode=True,
+                enable_tools=True,
+                tier="jigga"
             )
         
         elif layer == CognitiveLayer.JIGGA_FAST:
             return await AIService._generate_cerebras(
                 user_id, message, history, layer,
                 use_cepo=False,
-                append_no_think=True
+                append_no_think=True,
+                enable_tools=True,
+                tier="jigga"
             )
         
         # Default fallback
@@ -207,7 +212,9 @@ class AIService:
         layer: CognitiveLayer,
         use_cepo: bool = False,
         thinking_mode: bool = False,
-        append_no_think: bool = False
+        append_no_think: bool = False,
+        enable_tools: bool = False,
+        tier: str = "jive"
     ) -> ResponseDict:
         """
         JIVE/JIGGA tier: Cerebras Llama or Qwen.
@@ -216,9 +223,11 @@ class AIService:
             use_cepo: Route through CePO sidecar (JIVE reasoning)
             thinking_mode: Use Qwen thinking settings (JIGGA)
             append_no_think: Append /no_think to message (JIGGA fast)
+            enable_tools: Enable tool calling (JIGGA only)
+            tier: User tier for tool selection
 
         Returns:
-            ResponseDict with 'response', 'thinking' (if applicable), and 'meta'
+            ResponseDict with 'response', 'thinking' (if applicable), 'tool_calls', and 'meta'
         """
         config = tier_router.get_model_config(layer)
         model_id = config["model"]
@@ -306,18 +315,32 @@ class AIService:
 
         try:
             client = get_client()
+            
+            # Get tools for this tier (JIGGA only)
+            tools = get_tools_for_tier(tier) if enable_tools else None
 
             # Retry loop with exponential backoff for rate limits
             last_error = None
             for attempt in range(MAX_RETRIES):
                 try:
+                    # Build API call kwargs
+                    api_kwargs = {
+                        "messages": messages,
+                        "model": model_id,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "top_p": top_p,
+                    }
+                    
+                    # Add tools if enabled (JIGGA tier only)
+                    if tools:
+                        api_kwargs["tools"] = tools
+                        api_kwargs["parallel_tool_calls"] = False
+                        logger.info(f"Tool calling enabled with {len(tools)} tools")
+                    
                     response = await asyncio.to_thread(
                         client.chat.completions.create,
-                        messages=messages,
-                        model=model_id,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        top_p=top_p
+                        **api_kwargs
                     )
                     break  # Success - exit retry loop
 
@@ -351,8 +374,26 @@ class AIService:
                     )
 
             usage = response.usage
-            raw_content = response.choices[0].message.content
+            choice = response.choices[0].message
+            raw_content = choice.content or ""
             latency = time.perf_counter() - start_time
+            
+            # Check for tool calls in the response
+            tool_calls_data = None
+            if hasattr(choice, 'tool_calls') and choice.tool_calls:
+                tool_calls_data = []
+                for tc in choice.tool_calls:
+                    import json
+                    try:
+                        args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        args = {}
+                    tool_calls_data.append({
+                        "id": tc.id,
+                        "name": tc.function.name,
+                        "arguments": args
+                    })
+                logger.info(f"Tool calls detected: {[tc['name'] for tc in tool_calls_data]}")
 
             # Parse thinking block from response (JIGGA thinking mode)
             # Qwen wraps its reasoning in <think>...</think> tags
@@ -402,6 +443,12 @@ class AIService:
             if thinking_block:
                 result["thinking"] = thinking_block
                 result["meta"]["has_thinking"] = True
+            
+            # Include tool calls if present (for frontend to execute)
+            if tool_calls_data:
+                result["tool_calls"] = tool_calls_data
+                result["meta"]["has_tool_calls"] = True
+                logger.info(f"Returning {len(tool_calls_data)} tool calls to frontend")
 
             return result
 
