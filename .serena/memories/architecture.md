@@ -96,6 +96,43 @@ IMAGE:           User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
 - FREE tier: No cost but still counted for usage limits
 - JIVE/JIGGA: Costs calculated and tracked per-request
 
+### Streaming Responses (JIVE/JIGGA Only)
+- **Endpoint**: `POST /api/v1/chat/stream`
+- **Transport**: Server-Sent Events (SSE)
+- **Implementation**: `AIService.generate_stream()` async generator
+- **Headers**: `Cache-Control: no-cache`, `X-Accel-Buffering: no`
+
+**SSE Event Types:**
+| Type | Description |
+|------|-------------|
+| `meta` | Initial metadata (tier, layer, model, thinking_mode) |
+| `content` | Main response text chunks |
+| `thinking_start` | Start of JIGGA thinking block |
+| `thinking` | Thinking block content (JIGGA only) |
+| `thinking_end` | End of JIGGA thinking block |
+| `done` | Final metadata with tokens, costs |
+| `error` | Error message |
+
+**Frontend Integration:**
+```javascript
+const response = await fetch('/api/v1/chat/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message, user_id, user_tier })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  // Parse SSE: "data: {...}\n\n"
+}
+```
+
 ### Universal Prompt Enhancement
 - Available to ALL tiers via "Enhance" button
 - Uses OpenRouter Llama 3.3 70B FREE

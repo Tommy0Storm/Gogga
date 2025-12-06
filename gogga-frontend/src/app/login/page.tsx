@@ -14,13 +14,20 @@ import { LoginClient } from './LoginClient'
 
 export default async function LoginPage() {
   // Server-side session check
-  const session = await auth()
-  
-  if (session) {
-    // Already logged in - redirect to main app
-    redirect('/')
+  // auth() returns null if no session, only throws on actual errors
+  let session = null;
+  try {
+    session = await auth();
+  } catch (error) {
+    // Log but don't crash - treat as not logged in
+    console.error('[LoginPage] Auth error (treating as no session):', error);
   }
-  
+
+  if (session?.user) {
+    // Already logged in - redirect to main app
+    redirect('/');
+  }
+
   // Not logged in - render login form
-  return <LoginClient />
+  return <LoginClient />;
 }

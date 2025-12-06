@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api.v1.endpoints import chat, payments, images, prompts
 from app.services.posthog_service import posthog_service
+from app.services.scheduler_service import scheduler_service
 from app.core.exceptions import (
     GoggaException,
     gogga_exception_handler,
@@ -43,10 +44,14 @@ async def lifespan(app: FastAPI):
     logger.info("JIGGA Tier: Cerebras %s (thinking)", settings.MODEL_COMPLEX)
     logger.info("CePO Enabled: %s (URL: %s)", settings.CEPO_ENABLED, settings.CEPO_URL)
     
+    # Start the scheduler for subscription management
+    scheduler_service.start()
+    
     yield
     
     # Shutdown
     logger.info("GOGGA API Shutting down...")
+    scheduler_service.stop()
     posthog_service.flush()  # Ensure all PostHog events are sent
 
 

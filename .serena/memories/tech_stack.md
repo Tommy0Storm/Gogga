@@ -47,12 +47,15 @@ asyncpg>=0.29.0
 ```json
 {
   "next": "16.0.7",
-  "react": "19.1.0",
+  "react": "19.2.1",
   "tailwindcss": "4.1.17",
   "@tailwindcss/postcss": "4.1.17",
   "@huggingface/transformers": "^3.8.1",
   "onnxruntime-web": "^1.23.2",
-  "lucide-react": "0.555.0",
+  "lucide-react": "0.556.0",
+  "posthog-js": "1.302.2",
+  "next-auth": "5.0.0-beta.30",
+  "@prisma/client": "5.22.0",
   "axios": "^1.6.2",
   "recharts": "^3.5.1",
   "dexie": "^4.2.1"

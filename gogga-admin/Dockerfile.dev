@@ -1,0 +1,35 @@
+# GOGGA Admin Panel - Development Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install Docker CLI, curl, and OpenSSL for Prisma
+RUN apk add --no-cache docker-cli curl openssl openssl-dev
+
+# Install pnpm
+RUN corepack enable pnpm
+
+# Copy package files
+COPY package.json pnpm-lock.yaml* ./
+
+# Install dependencies
+RUN pnpm i
+
+# Copy prisma schema
+COPY prisma ./prisma
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy SQLite tools (for database management)
+COPY tools ./tools
+RUN chmod +x ./tools/*
+
+# Copy rest of application
+COPY . .
+
+EXPOSE 3100
+
+# Run prisma generate on startup to handle volume mount overwriting node_modules
+# CI=true prevents pnpm from prompting for TTY
+CMD ["sh", "-c", "CI=true pnpm i && npx prisma generate && pnpm dev"]

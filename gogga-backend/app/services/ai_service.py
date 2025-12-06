@@ -522,6 +522,195 @@ class AIService:
                 "GOGGA AI is experiencing high demand. Please try again in a moment."
             ) from e
     
+
+    @staticmethod
+    async def generate_stream(
+        user_id: str,
+        message: str,
+        history: list[MessageDict] | None,
+        layer: CognitiveLayer,
+        thinking_mode: bool = False,
+        append_no_think: bool = False
+    ):
+        """
+        JIVE/JIGGA tier: Cerebras streaming response.
+
+        Yields chunks of the response as Server-Sent Events (SSE) format.
+
+        Args:
+            user_id: User identifier for tracking
+            message: The user's message
+            history: Previous conversation history
+            layer: The cognitive layer (JIVE_DIRECT, JIGGA_THINK, etc.)
+            thinking_mode: Use Qwen thinking settings (JIGGA)
+            append_no_think: Append /no_think to message (JIGGA fast)
+
+        Yields:
+            SSE-formatted strings: "data: {json}\n\n"
+        """
+        import json
+        
+        config = tier_router.get_model_config(layer)
+        model_id = config["model"]
+        system_prompt = tier_router.get_system_prompt(layer)
+
+        # Determine if this is JIGGA tier
+        is_jigga = layer in (CognitiveLayer.JIGGA_THINK, CognitiveLayer.JIGGA_FAST)
+        tier = "jigga" if is_jigga else "jive"
+
+        # Check for document/analysis request
+        actual_message = message
+        is_doc_request = is_document_analysis_request(message)
+        is_extended_request = is_extended_output_request(message)
+
+        if is_doc_request and thinking_mode:
+            actual_message = f"{message}{COMPREHENSIVE_OUTPUT_INSTRUCTION}"
+            logger.info("Document/analysis request detected - comprehensive output mode enabled")
+
+        # Append /no_think for JIGGA fast mode
+        if append_no_think:
+            actual_message = f"{actual_message} /no_think"
+            logger.info("JIGGA fast mode - appending /no_think")
+
+        start_time = time.perf_counter()
+
+        # Build messages
+        messages: list[MessageDict] = [{"role": "system", "content": system_prompt}]
+        if history:
+            messages.extend(history[-MAX_HISTORY_TURNS:])
+        messages.append({"role": "user", "content": actual_message})
+
+        # Set generation parameters based on tier and mode
+        if is_jigga:
+            if is_extended_request or is_doc_request:
+                max_tokens = JIGGA_MAX_TOKENS
+            else:
+                max_tokens = JIGGA_DEFAULT_TOKENS
+            
+            if thinking_mode:
+                temperature = QWEN_THINKING_SETTINGS["temperature"]
+                top_p = QWEN_THINKING_SETTINGS["top_p"]
+            else:
+                temperature = QWEN_FAST_SETTINGS["temperature"]
+                top_p = QWEN_FAST_SETTINGS["top_p"]
+        else:
+            # JIVE tier (Llama 3.3 70B)
+            temperature = DEFAULT_TEMPERATURE
+            top_p = DEFAULT_TOP_P
+            if is_extended_request or is_doc_request:
+                max_tokens = JIVE_MAX_TOKENS
+            else:
+                max_tokens = JIVE_DEFAULT_TOKENS
+
+        try:
+            client = get_client()
+            
+            # Send initial metadata
+            yield f"data: {json.dumps({'type': 'meta', 'tier': tier, 'layer': layer.value, 'model': model_id, 'thinking_mode': thinking_mode})}\n\n"
+
+            # Create streaming response
+            input_tokens = 0
+            output_tokens = 0
+            full_content = ""
+            in_thinking = False
+            thinking_buffer = ""
+            
+            # Use async iteration over sync stream via to_thread wrapper
+            def create_stream():
+                return client.chat.completions.create(
+                    messages=messages,
+                    model=model_id,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    stream=True
+                )
+            
+            stream = await asyncio.to_thread(create_stream)
+            
+            # Process stream chunks
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_content += content
+                    
+                    # Check for thinking tags in JIGGA mode
+                    if thinking_mode:
+                        # Detect start of thinking block
+                        if "<think" in content.lower() and not in_thinking:
+                            in_thinking = True
+                            yield f"data: {json.dumps({'type': 'thinking_start'})}\n\n"
+                        
+                        # Detect end of thinking block
+                        if "</think" in content.lower() and in_thinking:
+                            in_thinking = False
+                            yield f"data: {json.dumps({'type': 'thinking_end'})}\n\n"
+                        
+                        # Send content with appropriate type
+                        if in_thinking:
+                            yield f"data: {json.dumps({'type': 'thinking', 'content': content})}\n\n"
+                        else:
+                            yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+                
+                # Track usage from final chunk
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    input_tokens = chunk.usage.prompt_tokens
+                    output_tokens = chunk.usage.completion_tokens
+
+            latency = time.perf_counter() - start_time
+
+            # Parse thinking for accurate content separation
+            main_response, thinking_block = parse_thinking_response(full_content)
+
+            # Track usage with tier for proper pricing
+            cost_data = await track_usage(
+                user_id=user_id,
+                model=model_id,
+                layer=layer.value,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                tier=tier
+            )
+
+            logger.info(
+                "Cerebras stream complete | tier=%s | layer=%s | latency=%.2fs | tokens=%d/%d",
+                tier, layer.value, latency, input_tokens, output_tokens
+            )
+
+            # Send final metadata
+            final_meta = {
+                "type": "done",
+                "meta": {
+                    "tier": tier,
+                    "layer": layer.value,
+                    "model": model_id,
+                    "provider": "cerebras",
+                    "thinking_mode": thinking_mode,
+                    "no_think": append_no_think,
+                    "latency_seconds": round(latency, 3),
+                    "tokens": {
+                        "input": input_tokens,
+                        "output": output_tokens
+                    },
+                    "cost_usd": cost_data["usd"],
+                    "cost_zar": cost_data["zar"],
+                    "has_thinking": thinking_block is not None
+                }
+            }
+            yield f"data: {json.dumps(final_meta)}\n\n"
+
+        except Exception as e:
+            error_str = str(e)
+            logger.error("GOGGA streaming error: %s", error_str)
+            
+            error_response = {
+                "type": "error",
+                "error": "GOGGA AI encountered an issue. Please try again."
+            }
+            yield f"data: {json.dumps(error_response)}\n\n"
+
     @staticmethod
     async def health_check() -> ResponseDict:
         """Check Cerebras connection health."""

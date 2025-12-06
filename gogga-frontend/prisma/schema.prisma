@@ -4,20 +4,22 @@
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "./generated/prisma"
 }
 
 // Core user account - minimal data, user controls their data
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  subscription Subscription?
+  id              String        @id @default(cuid())
+  email           String        @unique
+  isAdmin         Boolean       @default(false)
+  isServiceAdmin  Boolean       @default(false)  // Can start/stop/restart services via shell
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  subscription    Subscription?
 }
 
 // One-time magic link tokens (15 min expiry)
@@ -46,14 +48,164 @@ model AuthLog {
 // Subscription state for tier management
 // Integrates with PayFast for ZAR payments
 model Subscription {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  tier         String    // FREE, JIVE, JIGGA
+  status       String    // pending, active, past_due, cancelled, expired
+  payfastToken String?   // PayFast subscription token for cancellation
+  
+  // Credit/Token tracking
+  credits      Int       @default(0)      // Current credit balance (purchased credits)
+  creditsUsed  Int       @default(0)      // Total credits used this billing cycle
+  
+  // Monthly limits based on tier (set when subscription activates)
+  monthlyCredits Int     @default(0)      // Credits granted per month (0 for FREE)
+  imagesUsed     Int     @default(0)      // Images generated this month
+  imagesLimit    Int     @default(50)     // Monthly image limit (50 FREE, 200 JIVE, 1000 JIGGA)
+  
+  // Billing cycle
+  startedAt    DateTime?
+  nextBilling  DateTime?
+  lastReset    DateTime?  // Last time monthly counters were reset
+  
+  // Payment failure tracking
+  paymentFailedAt DateTime? // When payment last failed
+  retryCount      Int       @default(0)   // PayFast retry attempts (max 3)
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id])
+}
+
+// Credit pack purchases (top-ups)
+model CreditPurchase {
   id          String    @id @default(cuid())
-  userId      String    @unique
-  tier        String    // FREE, JIVE, JIGGA
-  status      String    // pending, active, cancelled, expired
-  payfastToken String?  // PayFast subscription token for cancellation
-  startedAt   DateTime?
-  nextBilling DateTime?
+  userId      String
+  packSize    String    // "200", "500", "1000" (ZAR amount)
+  credits     Int       // Credits granted (50000, 150000, 350000)
+  pfPaymentId String?   // PayFast payment ID
+  status      String    // pending, complete, failed
+  expiresAt   DateTime? // Credits expire after 12 months (optional policy)
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id])
+}
+
+// Payment idempotency - prevents double-processing of ITN webhooks
+model ProcessedPayment {
+  id          String   @id @default(cuid())
+  pfPaymentId String   @unique  // PayFast payment ID - unique constraint prevents duplicates
+  type        String   // "subscription" | "credit_pack"
+  amount      Int      // Amount in cents (ZAR)
+  userId      String
+  processedAt DateTime @default(now())
+}
+
+// Recurring payment schedule for tokenization subscriptions
+// When using tokenization (subscription_type=2), WE control billing, not PayFast
+model RecurringSchedule {
+  id            String   @id @default(cuid())
+  userId        String
+  tier          String   // JIVE or JIGGA
+  amount        Int      // Amount in cents (ZAR)
+  token         String   // PayFast tokenization token for adhoc charges
+  frequency     String   @default("monthly") // monthly, yearly
+  
+  // Schedule tracking
+  nextChargeAt  DateTime // When to charge next
+  lastChargedAt DateTime? // When last successfully charged
+  chargeCount   Int      @default(0) // Number of successful charges
+  maxCharges    Int      @default(12) // Max charges (12 = 1 year for monthly)
+  
+  // Status
+  status        String   @default("active") // active, paused, cancelled, completed
+  failedCount   Int      @default(0) // Consecutive failed attempts
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([nextChargeAt])
+  @@index([status])
+}
+
+// ==================== ADMIN PANEL MODELS ====================
+
+// Voucher system for promotional codes and credits
+model Voucher {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  type        String    // JIGGA_1MONTH, JIVE_1MONTH, R200, R500, R1000
+  value       Int       @default(0)     // For credit vouchers, amount in cents
+  
+  // Creation metadata
+  createdBy   String    // Admin email who created
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  
+  // Void/cancellation
+  voided      Boolean   @default(false)
+  voidedAt    DateTime?
+  voidedBy    String?   // Admin email who voided
+  voidReason  String?
+  
+  // Redemption
+  redeemed    Boolean   @default(false)
+  redeemedAt  DateTime?
+  redeemedBy  String?   // User email who redeemed
+  userId      String?   // User ID who redeemed
+  
+  // Batch tracking
+  batchId     String?   // For bulk-created vouchers
+  
+  @@index([code])
+  @@index([type])
+  @@index([batchId])
+  @@index([createdBy])
+}
+
+// Voucher activity log
+model VoucherLog {
+  id        String   @id @default(cuid())
+  voucherId String
+  action    String   // created, redeemed, voided, deleted
+  actor     String   // Admin or user email performing action
+  meta      String?  // JSON metadata (old value, new value, reason, etc.)
+  createdAt DateTime @default(now())
+  
+  @@index([voucherId])
+  @@index([actor])
+}
+
+// Admin action audit log
+model AdminLog {
+  id         String   @id @default(cuid())
+  adminEmail String
+  action     String   // subscription_override, voucher_create, user_lookup, service_restart, etc.
+  targetUser String?  // User email being affected (if applicable)
+  targetId   String?  // ID of target entity (voucher, subscription, etc.)
+  meta       String?  // JSON metadata with action details
+  ip         String?  // Admin's IP address
+  createdAt  DateTime @default(now())
+  
+  @@index([adminEmail])
+  @@index([action])
+  @@index([targetUser])
+}
+
+// Subscription event log (for detailed history)
+model SubscriptionEvent {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  userId         String
+  event          String   // activated, upgraded, downgraded, cancelled, payment_failed, payment_succeeded, credits_reset, admin_override
+  fromTier       String?
+  toTier         String?
+  fromStatus     String?
+  toStatus       String?
+  actor          String?  // User email, admin email, or "system"
+  meta           String?  // JSON metadata
+  createdAt      DateTime @default(now())
+  
+  @@index([subscriptionId])
+  @@index([userId])
+  @@index([event])
 }

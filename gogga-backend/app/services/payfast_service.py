@@ -59,34 +59,68 @@ class PayFastService:
         return f"{PayFastService.SANDBOX_URL}/eng/process"
     
     @staticmethod
-    def generate_signature(data: dict[str, Any]) -> str:
+    def generate_signature(data: dict[str, Any], use_payfast_order: bool = True) -> str:
         """
         Generates the MD5 signature required by PayFast.
         
         Critical requirements:
-        1. Sort keys alphabetically
-        2. Filter empty values
-        3. URL encode values (spaces become +, not %20)
-        4. Append passphrase at the end
+        1. For form submissions (subscriptions, payments): use PayFast field order, NOT alphabetical
+        2. For API calls: use alphabetical order
+        3. Filter empty values
+        4. URL encode values (spaces become +, not %20)
+        5. Append passphrase at the end
+        
+        Note: PayFast docs explicitly state:
+        "The pairs must be listed in the order in which they appear in the attributes description"
+        "Do not use the API signature format, which uses alphabetical ordering!"
         
         Args:
             data: The payment data dictionary
+            use_payfast_order: If True, use PayFast documentation field order; if False, use alphabetical
             
         Returns:
             MD5 hash signature string
         """
-        # Sort and filter empty values
-        ordered_data = dict(
-            sorted(
-                ((k, v) for k, v in data.items() if v is not None and v != ""),
-                key=lambda x: x[0]
-            )
-        )
+        # PayFast's required field order for form submissions (subscriptions/payments)
+        PAYFAST_FIELD_ORDER = [
+            # Merchant details
+            "merchant_id", "merchant_key",
+            # Return URLs  
+            "return_url", "cancel_url", "notify_url",
+            # Buyer details
+            "name_first", "name_last", "email_address", "cell_number",
+            # Transaction details
+            "m_payment_id", "amount", "item_name", "item_description",
+            # Custom fields
+            "custom_int1", "custom_int2", "custom_int3", "custom_int4", "custom_int5",
+            "custom_str1", "custom_str2", "custom_str3", "custom_str4", "custom_str5",
+            # Subscription details
+            "subscription_type", "billing_date", "recurring_amount", "frequency", "cycles",
+            # Payment method
+            "payment_method", "email_confirmation", "confirmation_address",
+        ]
+        
+        if use_payfast_order:
+            # Build ordered dict following PayFast's required field order
+            ordered_items = []
+            for key in PAYFAST_FIELD_ORDER:
+                if key in data and data[key] is not None and data[key] != "":
+                    ordered_items.append((key, data[key]))
+            # Add any extra fields that aren't in the standard order (alphabetically)
+            for key, value in sorted(data.items()):
+                if key not in PAYFAST_FIELD_ORDER and value is not None and value != "":
+                    ordered_items.append((key, value))
+        else:
+            # API calls use alphabetical order
+            ordered_items = [
+                (k, v) for k, v in sorted(data.items()) 
+                if v is not None and v != ""
+            ]
         
         # Build query string with quote_plus for space -> +
         query_parts = [
             f"{key}={urllib.parse.quote_plus(str(value))}"
-            for key, value in ordered_data.items()
+            for key, value in ordered_items
         ]
         query_string = "&".join(query_parts)
         
@@ -128,7 +162,7 @@ class PayFastService:
             "merchant_key": settings.PAYFAST_MERCHANT_KEY,
             "return_url": f"{settings.APP_URL}/payment/success",
             "cancel_url": f"{settings.APP_URL}/payment/cancel",
-            "notify_url": f"{settings.API_URL}/api/v1/payments/notify",
+            "notify_url": f"{settings.APP_URL}/api/payfast/notify",
             
             # User Details
             "email_address": user_email,
@@ -154,6 +188,226 @@ class PayFastService:
             "process_url": PayFastService.get_process_url(),
             "payment_id": payment_id
         }
+
+    @staticmethod
+    def generate_onetime_payment_form(
+        user_email: str,
+        item_name: str,
+        amount: float,
+        payment_id: str | None = None,
+        custom_str1: str | None = None,
+        custom_str2: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Generates the payload for a One-Time Payment (no subscription).
+        
+        This data is sent to the Frontend to build the hidden form
+        that redirects to PayFast.
+        
+        Args:
+            user_email: Customer's email address
+            item_name: Description of the purchase
+            amount: Payment amount in ZAR
+            payment_id: Optional custom payment ID
+            custom_str1: Optional custom string field (e.g., 'tier_purchase' or 'credit_pack')
+            custom_str2: Optional custom string field (e.g., tier name or pack size)
+            
+        Returns:
+            Dict containing form data and signature
+        """
+        # Generate unique payment ID if not provided
+        if not payment_id:
+            payment_id = f"pay_{int(time.time())}"
+        
+        data = {
+            "merchant_id": settings.PAYFAST_MERCHANT_ID,
+            "merchant_key": settings.PAYFAST_MERCHANT_KEY,
+            "return_url": f"{settings.APP_URL}/payment/success",
+            "cancel_url": f"{settings.APP_URL}/payment/cancel",
+            "notify_url": f"{settings.APP_URL}/api/payfast/notify",
+            
+            # User Details
+            "email_address": user_email,
+            
+            # Item Details
+            "m_payment_id": payment_id,
+            "amount": f"{amount:.2f}",
+            "item_name": item_name,
+        }
+        
+        # Add optional custom fields for tracking payment type
+        if custom_str1:
+            data["custom_str1"] = custom_str1
+        if custom_str2:
+            data["custom_str2"] = custom_str2
+        
+        # Generate Signature
+        data["signature"] = PayFastService.generate_signature(data)
+        
+        return {
+            "form_data": data,
+            "process_url": PayFastService.get_process_url(),
+            "payment_id": payment_id
+        }
+
+    @staticmethod
+    def generate_tokenization_form(
+        user_email: str,
+        item_name: str,
+        amount: float,
+        payment_id: str | None = None,
+        custom_str1: str | None = None,
+        custom_str2: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Generates the payload for a Tokenization Payment (subscription_type=2).
+        
+        Tokenization allows storing the customer's card for future charges.
+        Unlike subscription (type=1), PayFast does NOT auto-charge monthly.
+        Instead, YOU call the adhoc charge API when you want to bill.
+        
+        This is ideal for:
+        - Flexible billing dates
+        - Variable amounts
+        - Programmatic control over billing
+        
+        Args:
+            user_email: Customer's email address
+            item_name: Description of the payment
+            amount: Initial payment amount in ZAR (can be 0 for card setup only)
+            payment_id: Optional custom payment ID
+            custom_str1: Optional custom field (e.g., 'tokenization_setup')
+            custom_str2: Optional custom field (e.g., tier name)
+            
+        Returns:
+            Dict containing form data and signature
+        """
+        # Generate unique payment ID if not provided
+        if not payment_id:
+            payment_id = f"tok_{int(time.time())}"
+        
+        data = {
+            "merchant_id": settings.PAYFAST_MERCHANT_ID,
+            "merchant_key": settings.PAYFAST_MERCHANT_KEY,
+            "return_url": f"{settings.APP_URL}/payment/success",
+            "cancel_url": f"{settings.APP_URL}/payment/cancel",
+            "notify_url": f"{settings.APP_URL}/api/payfast/notify",
+            
+            # User Details
+            "email_address": user_email,
+            
+            # Item Details
+            "m_payment_id": payment_id,
+            "amount": f"{amount:.2f}",
+            "item_name": item_name,
+            
+            # Tokenization - PayFast stores card, we charge via API
+            "subscription_type": "2",  # 2 = Tokenization
+        }
+        
+        # Add optional custom fields for tracking payment type
+        if custom_str1:
+            data["custom_str1"] = custom_str1
+        if custom_str2:
+            data["custom_str2"] = custom_str2
+        
+        # Generate Signature
+        data["signature"] = PayFastService.generate_signature(data)
+        
+        return {
+            "form_data": data,
+            "process_url": PayFastService.get_process_url(),
+            "payment_id": payment_id
+        }
+    
+    @staticmethod
+    async def charge_token(
+        token: str,
+        amount: float,
+        item_name: str,
+        payment_id: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Charge a stored tokenization token via PayFast adhoc API.
+        
+        This is used for recurring billing when you control the schedule.
+        The token was obtained during initial tokenization setup.
+        
+        Args:
+            token: The PayFast token from tokenization setup
+            amount: Amount to charge in ZAR
+            item_name: Description of the charge
+            payment_id: Optional unique payment ID for tracking
+            
+        Returns:
+            Dict with success status and response data
+        """
+        if not payment_id:
+            payment_id = f"chg_{int(time.time())}"
+        
+        endpoint = f"/subscriptions/{token}/adhoc"
+        url = f"{PayFastService.API_URL}{endpoint}"
+        
+        timestamp = time.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        # Headers for authentication
+        auth_payload = {
+            "merchant-id": settings.PAYFAST_MERCHANT_ID,
+            "version": "v1",
+            "timestamp": timestamp,
+        }
+        
+        # Generate signature for headers
+        signature = PayFastService.generate_signature(auth_payload, use_payfast_order=False)
+        
+        headers = {
+            "merchant-id": settings.PAYFAST_MERCHANT_ID,
+            "version": "v1",
+            "timestamp": timestamp,
+            "signature": signature,
+            "content-type": "application/json"
+        }
+        
+        # Request body for the charge
+        body = {
+            "amount": int(amount * 100),  # PayFast API expects cents
+            "item_name": item_name,
+            "m_payment_id": payment_id,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            # Use 'testing=true' query param if in sandbox
+            params = {"testing": "true"} if settings.PAYFAST_ENV == "sandbox" else {}
+            
+            try:
+                response = await client.post(url, headers=headers, json=body, params=params)
+                
+                logger.info(f"PayFast Adhoc Charge Response: {response.status_code} - {response.text}")
+                
+                if response.status_code == 200:
+                    resp_data = response.json()
+                    if resp_data.get('code') == 200 and resp_data.get('status') == 'success':
+                        return {
+                            "success": True,
+                            "payment_id": payment_id,
+                            "pf_payment_id": resp_data.get('data', {}).get('pf_payment_id'),
+                            "response": resp_data
+                        }
+                
+                return {
+                    "success": False,
+                    "payment_id": payment_id,
+                    "error": response.text,
+                    "status_code": response.status_code
+                }
+                
+            except Exception as e:
+                logger.error(f"PayFast Adhoc Charge Error: {e}")
+                return {
+                    "success": False,
+                    "payment_id": payment_id,
+                    "error": str(e)
+                }
     
     @staticmethod
     async def cancel_subscription(token: str) -> bool:
@@ -181,7 +435,8 @@ class PayFastService:
         }
         
         # Generate signature (passphrase is appended internally)
-        signature = PayFastService.generate_signature(auth_payload)
+        # API calls use alphabetical order, not PayFast form field order
+        signature = PayFastService.generate_signature(auth_payload, use_payfast_order=False)
         
         headers = {
             "merchant-id": settings.PAYFAST_MERCHANT_ID,

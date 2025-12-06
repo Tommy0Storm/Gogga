@@ -72,15 +72,19 @@ class Settings(BaseSettings):
     # Exchange Rate
     ZAR_USD_RATE: float = Field(default=18.50, ge=1.0, le=100.0)
     
-    # PayFast Configuration
-    PAYFAST_MERCHANT_ID: str = Field(default="10000100")
-    PAYFAST_MERCHANT_KEY: str = Field(default="46f0cd694581a")
-    PAYFAST_PASSPHRASE: str = Field(default="passphrase")
+    # PayFast Configuration (Sandbox credentials by default)
+    PAYFAST_MERCHANT_ID: str = Field(default="10043379")
+    PAYFAST_MERCHANT_KEY: str = Field(default="cv55nate9wgnf")
+    PAYFAST_PASSPHRASE: str = Field(default="gogga-testing")
     PAYFAST_ENV: Literal["sandbox", "production"] = "sandbox"
     
     # Application URLs
     APP_URL: str = "http://localhost:3000"
     API_URL: str = "http://localhost:8000"
+    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for internal API calls")
+    
+    # Internal API Key (for scheduler to call frontend internal APIs)
+    INTERNAL_API_KEY: str = Field(default="dev-internal-key-change-in-production")
     
     # CePO (Cerebras Planning Optimization) - OptiLLM sidecar
     # In Docker: http://cepo:8080, locally: http://localhost:8080

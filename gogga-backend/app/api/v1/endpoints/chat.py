@@ -17,6 +17,7 @@ from app.models.domain import ChatRequest, ChatResponse
 from app.services.ai_service import ai_service
 from app.services.openrouter_service import openrouter_service
 from app.services.posthog_service import posthog_service
+from app.services.subscription_service import subscription_service
 from app.core.router import CognitiveLayer, UserTier, tier_router, is_image_prompt
 from app.core.exceptions import InferenceError
 
@@ -29,6 +30,7 @@ class TieredChatRequest(BaseModel):
     """Extended chat request with tier support."""
     message: str = Field(..., min_length=1, max_length=32000)
     user_id: str = Field(default="anonymous")
+    user_email: str | None = Field(default=None, description="User email for subscription verification")
     user_tier: UserTier = Field(default=UserTier.FREE)
     history: list[dict[str, str]] | None = None
     context_tokens: int = Field(default=0, description="Token count for JIGGA thinking mode")
@@ -50,6 +52,9 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
     JIGGA Tier:
         Thinking → Cerebras Qwen 3 235B (temp=0.6, top_p=0.95)
         Fast → Cerebras Qwen 3 235B + /no_think
+    
+    Backend enforces tier limits by verifying subscription status.
+    Users out of credits are downgraded to FREE tier models.
     """
     try:
         # Check if this is an image request
@@ -59,14 +64,31 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
                 detail="This looks like an image request. Use /api/v1/images/generate instead."
             )
         
+        # BACKEND ENFORCEMENT: Verify subscription and determine effective tier
+        effective_tier = request.user_tier
+        if request.user_email and request.user_tier != UserTier.FREE:
+            sub_status = await subscription_service.verify_subscription(
+                user_email=request.user_email,
+                requested_tier=request.user_tier,
+            )
+            effective_tier = sub_status.effective_tier
+            
+            # Log if tier was downgraded due to credits
+            if effective_tier != request.user_tier:
+                logger.info(
+                    "Tier enforcement: %s → %s (credits: %d, status: %s)",
+                    request.user_tier.value, effective_tier.value,
+                    sub_status.credits_available, sub_status.status
+                )
+        
         # Resolve force_layer if provided
-        force_layer = _resolve_force_layer(request.force_layer, request.user_tier)
+        force_layer = _resolve_force_layer(request.force_layer, effective_tier)
         
         result = await ai_service.generate_response(
             user_id=request.user_id,
             message=request.message,
             history=request.history,
-            user_tier=request.user_tier,
+            user_tier=effective_tier,  # Use verified effective tier
             force_layer=force_layer,
             context_tokens=request.context_tokens
         )
@@ -75,7 +97,7 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
         meta = result.get("meta", {})
         posthog_service.track_chat_message(
             user_id=request.user_id,
-            tier=request.user_tier.value,
+            tier=effective_tier.value,  # Track effective tier, not requested
             model=meta.get("model", "unknown"),
             input_tokens=meta.get("input_tokens", 0),
             output_tokens=meta.get("output_tokens", 0),
@@ -84,10 +106,15 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
             has_thinking=result.get("thinking") is not None
         )
         
+        # Add tier enforcement info to meta
+        meta["requested_tier"] = request.user_tier.value
+        meta["effective_tier"] = effective_tier.value
+        meta["tier_enforced"] = effective_tier != request.user_tier
+        
         return ChatResponse(
             response=result["response"],
             thinking=result.get("thinking"),  # JIGGA thinking block for UI
-            meta=result.get("meta", {})
+            meta=meta
         )
         
     except InferenceError as e:
@@ -174,13 +201,82 @@ async def enhance_prompt(request: EnhanceRequest) -> dict[str, Any]:
 
 
 # =========================================================================
-# STREAMING (Placeholder)
+# STREAMING (JIVE/JIGGA Only)
 # =========================================================================
 
 @router.post("/stream")
 async def chat_stream(request: TieredChatRequest):
-    """Stream a response (not yet implemented)."""
-    raise HTTPException(status_code=501, detail="Streaming not yet implemented")
+    """
+    Stream a response using Server-Sent Events (SSE).
+    
+    Only available for JIVE and JIGGA tiers - FREE tier uses standard response.
+    
+    SSE Event Types:
+        - meta: Initial metadata (tier, layer, model)
+        - content: Main response text chunks
+        - thinking_start: Start of JIGGA thinking block
+        - thinking: Thinking block content chunks
+        - thinking_end: End of JIGGA thinking block
+        - done: Final metadata with usage stats and costs
+        - error: Error message if something goes wrong
+    
+    Returns:
+        StreamingResponse with text/event-stream content type
+    """
+    from fastapi.responses import StreamingResponse
+    
+    # Only JIVE and JIGGA support streaming
+    if request.user_tier == UserTier.FREE:
+        raise HTTPException(
+            status_code=400, 
+            detail="Streaming not available for FREE tier. Use the standard /chat endpoint."
+        )
+    
+    # Track analytics
+    await posthog_service.capture(
+        user_id=request.user_id,
+        event="chat_stream_started",
+        properties={
+            "tier": request.user_tier.value,
+            "message_length": len(request.message)
+        }
+    )
+    
+    # Route to appropriate layer
+    if request.force_layer:
+        layer = _resolve_force_layer(request.force_layer, request.user_tier)
+    else:
+        layer = tier_router.classify_intent(
+            request.message, 
+            request.user_tier, 
+            request.context_tokens
+        )
+    
+    # Determine streaming mode based on layer
+    is_jigga = request.user_tier == UserTier.JIGGA
+    thinking_mode = layer == CognitiveLayer.JIGGA_THINK
+    append_no_think = layer == CognitiveLayer.JIGGA_FAST
+    
+    async def event_generator():
+        async for chunk in ai_service.generate_stream(
+            user_id=request.user_id,
+            message=request.message,
+            history=request.history,
+            layer=layer,
+            thinking_mode=thinking_mode,
+            append_no_think=append_no_think
+        ):
+            yield chunk
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 
 # =========================================================================

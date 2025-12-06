@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  isAdmin         Boolean       @default(false)
+  isServiceAdmin  Boolean       @default(false)  // Can start/stop/restart services via shell
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  subscription    Subscription?
+}
+
+model LoginToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuthLog {
+  id        String   @id @default(cuid())
+  email     String?
+  action    String
+  ip        String?
+  meta      String?
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  tier            String
+  status          String
+  payfastToken    String?
+  credits         Int       @default(0)
+  creditsUsed     Int       @default(0)
+  monthlyCredits  Int       @default(0)
+  imagesUsed      Int       @default(0)
+  imagesLimit     Int       @default(50)
+  startedAt       DateTime?
+  nextBilling     DateTime?
+  lastReset       DateTime?
+  paymentFailedAt DateTime?
+  retryCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id])
+}
+
+model CreditPurchase {
+  id          String    @id @default(cuid())
+  userId      String
+  packSize    String
+  credits     Int
+  pfPaymentId String?
+  status      String
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model ProcessedPayment {
+  id          String   @id @default(cuid())
+  pfPaymentId String   @unique
+  type        String
+  amount      Int
+  userId      String
+  processedAt DateTime @default(now())
+}
+
+model Voucher {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  type       String
+  value      Int       @default(0)
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  voided     Boolean   @default(false)
+  voidedAt   DateTime?
+  voidedBy   String?
+  voidReason String?
+  redeemed   Boolean   @default(false)
+  redeemedAt DateTime?
+  redeemedBy String?
+  userId     String?
+  batchId    String?
+
+  @@index([code])
+  @@index([type])
+  @@index([batchId])
+  @@index([createdBy])
+}
+
+model VoucherLog {
+  id        String   @id @default(cuid())
+  voucherId String
+  action    String
+  actor     String
+  meta      String?
+  createdAt DateTime @default(now())
+
+  @@index([voucherId])
+  @@index([actor])
+}
+
+model AdminLog {
+  id         String   @id @default(cuid())
+  adminEmail String
+  action     String
+  targetUser String?
+  targetId   String?
+  meta       String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([adminEmail])
+  @@index([action])
+  @@index([targetUser])
+}
+
+model SubscriptionEvent {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  userId         String
+  event          String
+  fromTier       String?
+  toTier         String?
+  fromStatus     String?
+  toStatus       String?
+  actor          String?
+  meta           String?
+  createdAt      DateTime @default(now())
+
+  @@index([subscriptionId])
+  @@index([userId])
+  @@index([event])
+}
+
+// PayFast Tokenization - Recurring billing schedules
+model RecurringSchedule {
+  id              String   @id @default(cuid())
+  userId          String
+  email           String
+  tier            String   // JIVE or JIGGA
+  payfastToken    String   @unique // Token from PayFast for adhoc charges
+  amountCents     Int      // Amount to charge in cents (e.g., 9900 = R99)
+  currency        String   @default("ZAR")
+  frequency       String   @default("monthly") // monthly, annually
+  nextChargeDate  DateTime // When to charge next
+  lastChargedAt   DateTime? // Last successful charge
+  status          String   @default("active") // active, paused, cancelled, failed
+  failureCount    Int      @default(0) // Consecutive failures
+  failureReason   String?  // Last failure reason
+  metadata        String?  // JSON string for extra data
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([nextChargeDate])
+}

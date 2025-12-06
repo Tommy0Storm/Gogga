@@ -1,9 +1,23 @@
 import posthog from "posthog-js"
 
-posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-  api_host: "/ingest",
-  ui_host: "https://eu.posthog.com",
-  defaults: '2025-05-24',
-  capture_exceptions: true, // This enables capturing exceptions using Error Tracking, set to false if you don't want this
-  debug: process.env.NODE_ENV === "development",
-})
+// Only initialize PostHog if the key is configured and valid
+// Set NEXT_PUBLIC_POSTHOG_ENABLED=false to disable during development
+const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
+const posthogEnabled = process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== 'false';
+
+// Determine UI host based on API host region
+const isEU = posthogHost.includes('eu.');
+const uiHost = isEU ? 'https://eu.posthog.com' : 'https://us.posthog.com';
+
+// Accept phc_ (project) API keys only
+if (posthogEnabled && posthogKey && posthogKey.startsWith('phc_')) {
+  posthog.init(posthogKey, {
+    api_host: posthogHost,
+    ui_host: uiHost,
+    person_profiles: 'identified_only',
+    capture_pageview: false,
+    capture_pageleave: true,
+    debug: process.env.NODE_ENV === 'development',
+  });
+}

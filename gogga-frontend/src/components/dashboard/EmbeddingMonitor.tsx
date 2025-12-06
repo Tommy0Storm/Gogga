@@ -13,6 +13,13 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+
+// Client-side mount check to prevent SSR dimension errors
+function useIsMounted(): boolean {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+  return isMounted;
+}
 import {
   Cpu,
   Zap,
@@ -94,6 +101,44 @@ interface ProcessingHistory {
   chunks: number;
   latencyMs: number;
 }
+
+// ============================================================================
+// Client-Only Wrapper for ResponsiveContainer
+// ============================================================================
+
+interface ClientResponsiveContainerProps {
+  width?: string | number;
+  height?: string | number;
+  children: React.ReactElement;
+}
+
+const ClientResponsiveContainer: React.FC<ClientResponsiveContainerProps> = ({
+  width = '100%',
+  height = '100%',
+  children,
+}) => {
+  const isMounted = useIsMounted();
+  
+  if (!isMounted) {
+    return (
+      <div 
+        className="flex items-center justify-center bg-gray-50 rounded-lg animate-pulse"
+        style={{ 
+          width: typeof width === 'number' ? `${width}px` : width, 
+          height: typeof height === 'number' ? `${height}px` : height 
+        }}
+      >
+        <span className="text-xs text-gray-400">Loading...</span>
+      </div>
+    );
+  }
+  
+  return (
+    <ClientResponsiveContainer width={width} height={height}>
+      {children}
+    </ClientResponsiveContainer>
+  );
+};
 
 // ============================================================================
 // Constants
@@ -658,7 +703,7 @@ export const EmbeddingMonitor: React.FC = () => {
         <div className="bg-white rounded-xl border border-primary-200 p-6">
           <h3 className="text-lg font-semibold text-primary-900 mb-4">Processing History</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ClientResponsiveContainer width="100%" height="100%">
               <AreaChart data={processingHistory}>
                 <defs>
                   <linearGradient id="colorChunks" x1="0" y1="0" x2="0" y2="1">
@@ -706,7 +751,7 @@ export const EmbeddingMonitor: React.FC = () => {
                   fill="#a3a3a3"
                 />
               </AreaChart>
-            </ResponsiveContainer>
+            </ClientResponsiveContainer>
           </div>
         </div>
       )}

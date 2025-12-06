@@ -36,6 +36,7 @@ export interface Message {
     provider?: string;
     rag_context?: boolean;
     memory_context?: boolean; // Long-term memory context was used
+    buddy_context?: boolean; // BuddySystem profile was used
     location_context?: boolean; // Location context was included
     has_thinking?: boolean;
   };

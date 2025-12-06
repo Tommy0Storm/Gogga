@@ -7,6 +7,20 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
+
+// ============================================================================
+// Client-side mount check hook to prevent SSR dimension errors
+// ============================================================================
+
+function useIsMounted(): boolean {
+  const [isMounted, setIsMounted] = useState(false);
+  
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
+  return isMounted;
+}
 import {
   AreaChart,
   Area,
@@ -44,6 +58,45 @@ function useAnimateOnMount(): boolean {
 
   return shouldAnimate;
 }
+
+// ============================================================================
+// Client-Only Wrapper for ResponsiveContainer
+// Prevents "Cannot read properties of undefined (reading 'dimensions')" error
+// ============================================================================
+
+interface ClientResponsiveContainerProps {
+  width?: number | `${number}%`;
+  height?: number | `${number}%`;
+  children: React.ReactElement;
+}
+
+const ClientResponsiveContainer: React.FC<ClientResponsiveContainerProps> = ({
+  width = '100%',
+  height = '100%',
+  children,
+}) => {
+  const isMounted = useIsMounted();
+  
+  if (!isMounted) {
+    return (
+      <div 
+        className="flex items-center justify-center bg-primary-50 rounded-lg animate-pulse"
+        style={{ 
+          width: typeof width === 'number' ? `${width}px` : width, 
+          height: typeof height === 'number' ? `${height}px` : height 
+        }}
+      >
+        <span className="text-xs text-primary-400">Loading chart...</span>
+      </div>
+    );
+  }
+  
+  return (
+    <ResponsiveContainer width={width} height={height}>
+      {children}
+    </ResponsiveContainer>
+  );
+};
 
 // ============================================================================
 // Color Palette (Monochrome)
@@ -128,7 +181,7 @@ export const LatencyChart: React.FC<LatencyChartProps> = ({
       <h3 className="text-base font-semibold text-primary-800 mb-4">
         Query Latency
       </h3>
-      <ResponsiveContainer width="100%" height={height}>
+      <ClientResponsiveContainer width="100%" height={height}>
         <AreaChart
           data={data}
           margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -181,7 +234,7 @@ export const LatencyChart: React.FC<LatencyChartProps> = ({
             animationDuration={1000}
           />
         </AreaChart>
-      </ResponsiveContainer>
+      </ClientResponsiveContainer>
     </div>
   );
 };
@@ -218,7 +271,7 @@ export const StorageChart: React.FC<StorageChartProps> = ({
       <h3 className="text-base font-semibold text-primary-800 mb-4">
         Storage by Session
       </h3>
-      <ResponsiveContainer width="100%" height={height}>
+      <ClientResponsiveContainer width="100%" height={height}>
         <BarChart
           data={formattedData}
           layout="vertical"
@@ -251,7 +304,7 @@ export const StorageChart: React.FC<StorageChartProps> = ({
             animationDuration={1000}
           />
         </BarChart>
-      </ResponsiveContainer>
+      </ClientResponsiveContainer>
     </div>
   );
 };
@@ -291,7 +344,7 @@ export const QueryModePie: React.FC<QueryModePieProps> = ({
         Query Distribution
       </h3>
       <div className="flex items-center justify-center">
-        <ResponsiveContainer width={size} height={size}>
+        <ClientResponsiveContainer width={size} height={size}>
           <PieChart>
             <Pie
               data={data}
@@ -313,7 +366,7 @@ export const QueryModePie: React.FC<QueryModePieProps> = ({
             </Pie>
             <Tooltip />
           </PieChart>
-        </ResponsiveContainer>
+        </ClientResponsiveContainer>
       </div>
       <div className="flex justify-center gap-6 mt-4">
         <div className="flex items-center gap-2">
@@ -358,7 +411,7 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
       <h3 className="text-base font-semibold text-primary-800 mb-4">
         Performance Over Time
       </h3>
-      <ResponsiveContainer width="100%" height={height}>
+      <ClientResponsiveContainer width="100%" height={height}>
         <LineChart
           data={data}
           margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -404,7 +457,7 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
             animationDuration={1000}
           />
         </LineChart>
-      </ResponsiveContainer>
+      </ClientResponsiveContainer>
     </div>
   );
 };
@@ -433,7 +486,7 @@ export const ScoreHistogram: React.FC<ScoreHistogramProps> = ({
       <h3 className="text-base font-semibold text-primary-800 mb-4">
         Similarity Score Distribution
       </h3>
-      <ResponsiveContainer width="100%" height={height}>
+      <ClientResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
           <CartesianGrid
             strokeDasharray="3 3"
@@ -455,7 +508,7 @@ export const ScoreHistogram: React.FC<ScoreHistogramProps> = ({
             animationDuration={1000}
           />
         </BarChart>
-      </ResponsiveContainer>
+      </ClientResponsiveContainer>
     </div>
   );
 };
@@ -481,7 +534,7 @@ export const Sparkline: React.FC<SparklineProps> = ({
   const chartData = data.map((value, index) => ({ index, value }));
 
   return (
-    <ResponsiveContainer width={width} height={height}>
+    <ClientResponsiveContainer width={width} height={height}>
       <LineChart
         data={chartData}
         margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
@@ -496,7 +549,7 @@ export const Sparkline: React.FC<SparklineProps> = ({
           animationDuration={800}
         />
       </LineChart>
-    </ResponsiveContainer>
+    </ClientResponsiveContainer>
   );
 };
 
@@ -534,7 +587,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
   return (
     <div className="flex flex-col items-center">
       <div className="relative">
-        <ResponsiveContainer width={size} height={size / 2 + 20}>
+        <ClientResponsiveContainer width={size} height={size / 2 + 20}>
           <PieChart>
             <Pie
               data={data}
@@ -553,7 +606,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
               <Cell fill={COLORS.tertiary} />
             </Pie>
           </PieChart>
-        </ResponsiveContainer>
+        </ClientResponsiveContainer>
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center">
           <p className="text-2xl font-bold text-primary-900">
             {Math.round(percentage)}%
@@ -634,7 +687,7 @@ export const BrowserLoadChart: React.FC<BrowserLoadChartProps> = ({
           </div>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={height}>
+      <ClientResponsiveContainer width="100%" height={height}>
         <LineChart
           data={chartData}
           margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -701,7 +754,7 @@ export const BrowserLoadChart: React.FC<BrowserLoadChartProps> = ({
             animationDuration={1000}
           />
         </LineChart>
-      </ResponsiveContainer>
+      </ClientResponsiveContainer>
     </div>
   );
 };

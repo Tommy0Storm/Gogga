@@ -13,6 +13,13 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+
+// Client-side mount check to prevent SSR dimension errors
+function useIsMounted(): boolean {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+  return isMounted;
+}
 import {
   Zap,
   Clock,
@@ -75,6 +82,44 @@ interface TierStats {
   costZar: number;
   requestCount: number;
 }
+
+// ============================================================================
+// Client-Only Wrapper for ResponsiveContainer
+// ============================================================================
+
+interface ClientResponsiveContainerProps {
+  width?: string | number;
+  height?: string | number;
+  children: React.ReactElement;
+}
+
+const ClientResponsiveContainer: React.FC<ClientResponsiveContainerProps> = ({
+  width = '100%',
+  height = '100%',
+  children,
+}) => {
+  const isMounted = useIsMounted();
+  
+  if (!isMounted) {
+    return (
+      <div 
+        className="flex items-center justify-center bg-gray-50 rounded-lg animate-pulse"
+        style={{ 
+          width: typeof width === 'number' ? `${width}px` : width, 
+          height: typeof height === 'number' ? `${height}px` : height 
+        }}
+      >
+        <span className="text-xs text-gray-400">Loading...</span>
+      </div>
+    );
+  }
+  
+  return (
+    <ClientResponsiveContainer width={width} height={height}>
+      {children}
+    </ClientResponsiveContainer>
+  );
+};
 
 // ============================================================================
 // Constants
@@ -463,7 +508,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
           </div>
           <div className="h-64">
             {historyChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ClientResponsiveContainer width="100%" height="100%">
                 <AreaChart data={historyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
                   <XAxis 
@@ -495,7 +540,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
                     fill="#525252"
                   />
                 </AreaChart>
-              </ResponsiveContainer>
+              </ClientResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-primary-400">
                 No usage data yet
@@ -512,7 +557,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
           </div>
           <div className="h-64">
             {tierPieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ClientResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={tierPieData}
@@ -536,7 +581,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
                     formatter={(value: number) => formatTokenCount(value)}
                   />
                 </PieChart>
-              </ResponsiveContainer>
+              </ClientResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-primary-400">
                 No tier data today
@@ -567,7 +612,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
         </div>
         <div className="h-48">
           {historyChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ClientResponsiveContainer width="100%" height="100%">
               <BarChart data={historyChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
                 <XAxis 
@@ -591,7 +636,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
-            </ResponsiveContainer>
+            </ClientResponsiveContainer>
           ) : (
             <div className="h-full flex items-center justify-center text-primary-400">
               No cost data yet

@@ -1,0 +1,47 @@
+{
+  "name": "gogga-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3100",
+    "build": "npx prisma generate && next build",
+    "start": "next start -p 3100",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.1.0",
+    "@prisma/client": "^7.1.0",
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^16.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "next": "^16.0.7",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-icons": "^5.5.0",
+    "recharts": "^3.5.1",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/node": "^20.10.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.0.7",
+    "postcss": "^8.4.32",
+    "prisma": "^7.1.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom",
+    "better-sqlite3": "$better-sqlite3"
+  }
+}

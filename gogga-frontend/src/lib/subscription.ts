@@ -1,21 +1,36 @@
 /**
- * GOGGA - Subscription Utilities
+ * GOGGA - Subscription Utilities (Server-Side)
  * 
  * Helper functions for checking user tier and subscription status.
  * Use these throughout the app for consistent tier enforcement.
+ * 
+ * NOTE: This file contains server-side code (Prisma, auth).
+ * For client components, import from subscription-types.ts instead.
  */
 import prisma from '@/lib/prisma'
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 
-export type Tier = 'FREE' | 'JIVE' | 'JIGGA'
+// Re-export client-safe types and constants for backward compatibility
+export {
+  type Tier,
+  type SubscriptionStatus,
+  type UserSubscription,
+  CREDIT_PACKS,
+  TIER_CONFIG,
+  getTierInfo,
+  hasCredits,
+  canGenerateImage,
+  formatCredits,
+  getRemainingImages
+} from './subscription-types'
 
-export interface UserSubscription {
-  tier: Tier
-  status: 'pending' | 'active' | 'cancelled' | 'expired'
-  startedAt: Date | null
-  nextBilling: Date | null
-}
+import {
+  type Tier,
+  type SubscriptionStatus,
+  type UserSubscription,
+  TIER_CONFIG,
+} from './subscription-types';
 
 /**
  * Get the current user's subscription from the database.
@@ -33,23 +48,38 @@ export async function getUserSubscription(userId: string): Promise<UserSubscript
         userId,
         tier: 'FREE',
         status: 'active',
-        startedAt: new Date()
-      }
-    })
+        startedAt: new Date(),
+        credits: 0,
+        creditsUsed: 0,
+        monthlyCredits: 0,
+        imagesUsed: 0,
+        imagesLimit: 50,
+      },
+    });
     return {
       tier: 'FREE',
       status: 'active',
       startedAt: newSub.startedAt,
-      nextBilling: null
-    }
+      nextBilling: null,
+      credits: 0,
+      creditsUsed: 0,
+      monthlyCredits: 0,
+      imagesUsed: 0,
+      imagesLimit: 50,
+    };
   }
 
   return {
     tier: subscription.tier as Tier,
-    status: subscription.status as 'pending' | 'active' | 'cancelled' | 'expired',
+    status: subscription.status as SubscriptionStatus,
     startedAt: subscription.startedAt,
-    nextBilling: subscription.nextBilling
-  }
+    nextBilling: subscription.nextBilling,
+    credits: subscription.credits,
+    creditsUsed: subscription.creditsUsed,
+    monthlyCredits: subscription.monthlyCredits,
+    imagesUsed: subscription.imagesUsed,
+    imagesLimit: subscription.imagesLimit,
+  };
 }
 
 /**
@@ -83,28 +113,145 @@ export function hasTier(userTier: Tier, requiredTier: Tier): boolean {
 }
 
 /**
- * Get tier display info.
+ * Deduct credits from user account (server-side only)
  */
-export function getTierInfo(tier: Tier) {
-  const tiers = {
-    FREE: {
-      name: 'Free',
-      price: 'R0',
-      color: 'gray',
-      features: ['Basic AI chat', 'Limited images', 'No RAG']
-    },
-    JIVE: {
-      name: 'Jive',
-      price: 'R99/mo',
-      color: 'blue',
-      features: ['Fast AI (2,200 t/s)', '200 images/mo', '5 docs RAG', 'CePO reasoning']
-    },
-    JIGGA: {
-      name: 'Jigga',
-      price: 'R299/mo',
-      color: 'purple',
-      features: ['Thinking mode', '1,000 images/mo', '10 docs RAG', 'Semantic search', 'Dashboard']
+export async function deductCredits(userId: string, amount: number): Promise<boolean> {
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId }
+  })
+  
+  if (!subscription) return false
+  if (subscription.tier === 'FREE') return true // FREE doesn't use credits
+  if (subscription.credits < amount) return false
+  
+  await prisma.subscription.update({
+    where: { userId },
+    data: {
+      credits: { decrement: amount },
+      creditsUsed: { increment: amount }
     }
-  }
-  return tiers[tier]
+  })
+  
+  return true
+}
+
+/**
+ * Add credits to user account (from credit pack purchase)
+ */
+export async function addCredits(userId: string, amount: number): Promise<void> {
+  await prisma.subscription.update({
+    where: { userId },
+    data: {
+      credits: { increment: amount }
+    }
+  })
+}
+
+/**
+ * Increment image usage counter
+ */
+export async function useImage(userId: string): Promise<boolean> {
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId }
+  })
+  
+  if (!subscription) return false
+  if (subscription.imagesUsed >= subscription.imagesLimit) return false
+  
+  await prisma.subscription.update({
+    where: { userId },
+    data: {
+      imagesUsed: { increment: 1 }
+    }
+  })
+  
+  return true
+}
+
+/**
+ * Reset monthly counters (called on billing cycle reset)
+ */
+export async function resetMonthlyCounters(userId: string): Promise<void> {
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId },
+  });
+
+  if (!subscription) return;
+
+  const tierConfig = TIER_CONFIG[subscription.tier as Tier];
+
+  await prisma.subscription.update({
+    where: { userId },
+    data: {
+      credits: tierConfig.monthlyCredits,
+      creditsUsed: 0,
+      imagesUsed: 0,
+      lastReset: new Date(),
+    },
+  });
+}
+
+/**
+ * Activate a subscription (called after PayFast payment confirmation)
+ */
+export async function activateSubscription(
+  userId: string,
+  tier: 'JIVE' | 'JIGGA',
+  payfastToken?: string
+): Promise<void> {
+  const tierConfig = TIER_CONFIG[tier];
+  const now = new Date();
+  const nextBilling = new Date(now);
+  nextBilling.setMonth(nextBilling.getMonth() + 1);
+
+  await prisma.subscription.upsert({
+    where: { userId },
+    update: {
+      tier,
+      status: 'active',
+      payfastToken,
+      credits: tierConfig.monthlyCredits,
+      creditsUsed: 0,
+      monthlyCredits: tierConfig.monthlyCredits,
+      imagesUsed: 0,
+      imagesLimit: tierConfig.imagesLimit,
+      startedAt: now,
+      nextBilling,
+      lastReset: now,
+    },
+    create: {
+      userId,
+      tier,
+      status: 'active',
+      payfastToken,
+      credits: tierConfig.monthlyCredits,
+      creditsUsed: 0,
+      monthlyCredits: tierConfig.monthlyCredits,
+      imagesUsed: 0,
+      imagesLimit: tierConfig.imagesLimit,
+      startedAt: now,
+      nextBilling,
+      lastReset: now,
+    },
+  });
+}
+
+/**
+ * Downgrade user to FREE tier (when credits run out or subscription cancelled)
+ */
+export async function downgradeToFree(userId: string): Promise<void> {
+  await prisma.subscription.update({
+    where: { userId },
+    data: {
+      tier: 'FREE',
+      status: 'active',
+      credits: 0,
+      creditsUsed: 0,
+      monthlyCredits: 0,
+      imagesUsed: 0,
+      imagesLimit: 50,
+      payfastToken: null,
+      nextBilling: null,
+    },
+  });
 }

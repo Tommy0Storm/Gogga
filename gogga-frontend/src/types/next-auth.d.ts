@@ -16,6 +16,7 @@ declare module 'next-auth' {
       id: string
       email: string
       tier: UserTier
+      isAdmin?: boolean
       name?: string | null
       image?: string | null
     }
@@ -25,6 +26,7 @@ declare module 'next-auth' {
     id: string
     email: string
     tier: UserTier
+    isAdmin?: boolean
   }
 }
 

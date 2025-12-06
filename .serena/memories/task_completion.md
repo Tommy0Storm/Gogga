@@ -1,5 +1,103 @@
 # Task Completion Log
 
+## 2025-12-06 - Critical Subscription Infrastructure Complete
+
+### Completed Tasks:
+1. **Monthly Reset Cron Job** - APScheduler integrated into FastAPI lifespan
+   - `app/services/scheduler_service.py` - Daily cron at 00:05 UTC
+   - `api/internal/subscription-reset` - Frontend endpoint for reset processing
+   - `api/internal/credits-warning` - Low credits notification endpoint
+
+2. **Backend Usage Enforcement** - Prevents tier bypass
+   - `app/services/subscription_service.py` - Verifies credits with frontend
+   - `TieredChatRequest.user_email` - New field for verification
+   - Chat endpoint now uses `effective_tier` from verification
+
+3. **PayFast Cancellation API** - Proper subscription cancellation
+   - `api/subscription/cancel` - Calls PayFast API before DB update
+   - Handles network errors with appropriate warnings
+   - Logs all cancellation attempts
+
+4. **Payment Idempotency** - Prevents double-processing
+   - `ProcessedPayment` model with unique `pfPaymentId`
+   - ITN handler checks before processing any payment
+
+5. **Payment Failure Tracking** - Retry and downgrade logic
+   - `paymentFailedAt`, `retryCount` fields in Subscription
+   - ITN handler updates to `past_due` on FAILED
+   - Daily cron cancels after 3 retries
+
+### New Files Created:
+- `gogga-backend/app/services/scheduler_service.py`
+- `gogga-backend/app/services/subscription_service.py`
+- `gogga-frontend/src/app/api/internal/subscription-reset/route.ts`
+- `gogga-frontend/src/app/api/internal/credits-warning/route.ts`
+- `gogga-frontend/src/app/api/subscription/cancel/route.ts`
+
+### Modified Files:
+- `gogga-backend/requirements.txt` - Added apscheduler
+- `gogga-backend/app/config.py` - Added FRONTEND_URL, INTERNAL_API_KEY
+- `gogga-backend/app/main.py` - Scheduler lifecycle integration
+- `gogga-backend/app/api/v1/endpoints/chat.py` - Backend enforcement
+- `gogga-frontend/src/app/api/subscription/route.ts` - Internal API key support
+- `gogga-frontend/.env.local` - INTERNAL_API_KEY
+- `SUBSCRIPTION.md` - Updated status table
+
+### Remaining Items (Important, not Critical):
+1. ⏳ Email templates (EmailJS integration)
+2. ⏳ Admin subscription overrides panel
+3. ⏳ Credit expiry policy enforcement
+
+### Tests:
+- All 10 backend payment tests passing ✓
+- Prisma migration applied successfully ✓
+
+---
+
+## 2025-12-06 - PayFast Integration Complete
+
+### Completed Tasks:
+1. **Backend PayFast Integration** - Updated config, service, endpoints for subscriptions + credit packs
+2. **Subscription Tiers** - JIVE R99/mo, JIGGA R299/mo with PayFast recurring
+3. **Credit Packs** - R200/R500/R1000 once-off purchases
+4. **Frontend Upgrade Page** - `/upgrade` with tier comparison and PayFast redirect
+5. **Payment Pages** - `/payment/success` and `/payment/cancel` return URLs
+6. **AccountMenu Component** - Dropdown with email, tier, credits, upgrade options
+7. **ITN Handler Updated** - Handles both subscriptions and credit pack purchases
+8. **Subscription API** - `/api/subscription` returns user's tier/credits status
+9. **Usage Tracking** - `/api/subscription/usage` deducts credits after AI requests
+10. **Tier Enforcement** - useSubscription hook + CreditsWarning banner
+
+### Backend Files:
+- `app/config.py` - PayFast sandbox credentials
+- `app/models/domain.py` - PaymentType, CreditPackSize enums
+- `app/services/payfast_service.py` - generate_onetime_payment_form()
+- `app/api/v1/endpoints/payments.py` - Full rewrite with all endpoints
+
+### Frontend Files:
+- `src/app/upgrade/page.tsx` + `UpgradeClient.tsx` - Subscription page
+- `src/app/payment/success/page.tsx` - Success confirmation
+- `src/app/payment/cancel/page.tsx` - Cancellation handling
+- `src/app/api/payments/subscribe/route.ts` - Subscribe proxy
+- `src/app/api/payments/credit-pack/route.ts` - Credit pack proxy
+- `src/app/api/payfast/notify/route.ts` - Updated ITN handler
+- `src/app/api/subscription/route.ts` - Get subscription status
+- `src/app/api/subscription/usage/route.ts` - Report usage
+- `src/components/AccountMenu.tsx` - Account dropdown
+- `src/components/CreditsWarning.tsx` - Low credits banner
+- `src/hooks/useSubscription.ts` - Subscription state hook
+- `prisma/schema.prisma` - Subscription + CreditPurchase models
+
+### Sandbox Credentials:
+- Merchant ID: 10043379
+- Merchant Key: cv55nate9wgnf
+- Passphrase: testing-api-vcb
+
+### Tests:
+- All 10 backend payment tests passing ✓
+
+---
+
 ## 2025-12-05 - BuddySystem Memory + Material Icons Complete
 
 ### Completed Tasks:

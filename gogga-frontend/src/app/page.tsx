@@ -14,13 +14,24 @@ import { ChatClient } from './ChatClient'
 
 export default async function HomePage() {
   // Server-side session check
-  const session = await auth()
-  
-  if (!session) {
-    // Not logged in - redirect to login
-    redirect('/login')
+  let session = null;
+  try {
+    session = await auth();
+  } catch (error) {
+    // Log but don't crash - treat as not logged in
+    console.error('[HomePage] Auth error (treating as no session):', error);
   }
-  
-  // Logged in - render main chat UI
-  return <ChatClient />
+
+  if (!session?.user) {
+    // Not logged in - redirect to login
+    redirect('/login');
+  }
+
+  // Extract user info for client component
+  const userEmail = session.user.email || null;
+  const userTier =
+    (session.user as unknown as { tier?: string })?.tier || 'FREE';
+
+  // Logged in - render main chat UI with user context
+  return <ChatClient userEmail={userEmail} userTier={userTier} />;
 }

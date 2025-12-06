@@ -5,7 +5,9 @@
   "scripts": {
     "predev": "rm -rf .next 2>/dev/null || true",
     "dev": "next dev -H 0.0.0.0 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem",
-    "dev:http": "next dev -H 0.0.0.0",
+    "dev:http": "next dev -H 0.0.0.0 -p 3000",
+    "dev:network": "concurrently \"next dev -p 3000\" \"node scripts/network-proxy.js 3001 3000\"",
+    "proxy": "node scripts/network-proxy.js",
     "clean": "rm -rf .next node_modules/.cache",
     "build": "next build",
     "start": "next start",
@@ -15,8 +17,12 @@
   "dependencies": {
     "@emailjs/nodejs": "^5.0.2",
     "@huggingface/transformers": "^3.8.1",
+    "@libsql/client": "^0.15.15",
     "@openrouter/sdk": "^0.2.9",
-    "@prisma/client": "5.22.0",
+    "@prisma/adapter-better-sqlite3": "^7.1.0",
+    "@prisma/client": "^7.1.0",
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^16.5.0",
     "axios": "^1.6.2",
     "dexie": "^4.2.1",
     "flexsearch": "^0.8.212",
@@ -24,7 +30,7 @@
     "next": "^16.0.7",
     "next-auth": "5.0.0-beta.30",
     "onnxruntime-web": "^1.23.2",
-    "posthog-js": "^1.302.0",
+    "posthog-js": "^1.302.2",
     "posthog-node": "^5.17.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -37,7 +43,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
-    "@types/flexsearch": "^0.7.6",
     "@types/node": "^20.10.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -48,12 +53,14 @@
     "lucide-react": "^0.555.0",
     "null-loader": "^4.0.1",
     "postcss": "^8.4.32",
-    "prisma": "5.22.0",
+    "prisma": "^7.1.0",
+    "@types/better-sqlite3": "^7.6.13",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.3.3"
   },
   "overrides": {
     "react": "$react",
-    "react-dom": "$react-dom"
+    "react-dom": "$react-dom",
+    "better-sqlite3": "$better-sqlite3"
   }
 }

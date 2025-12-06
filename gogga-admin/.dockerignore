@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+npm-debug.log
+.pnpm-debug.log
+
+# Next.js
+.next
+out
+
+# Build outputs
+dist
+
+# Environment
+.env
+.env*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal

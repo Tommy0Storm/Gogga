@@ -2,6 +2,7 @@
 GOGGA Domain Models
 Pydantic models for API request/response validation.
 """
+from enum import Enum
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
@@ -83,17 +84,55 @@ class SubscriptionTier(BaseModel):
     features: List[str]
 
 
+class PaymentType(str, Enum):
+    """Type of payment - once-off, subscription, or tokenization."""
+    ONCE_OFF = "once_off"
+    SUBSCRIPTION = "subscription"
+    TOKENIZATION = "tokenization"  # Card stored, we charge via API
+
+
 class SubscriptionRequest(BaseModel):
-    """Request to create a subscription."""
+    """Request to create a subscription payment."""
     user_email: EmailStr
-    tier: str = Field(..., description="Subscription tier name")
+    tier: str = Field(..., description="Subscription tier: 'jive' or 'jigga'")
+    payment_type: PaymentType = Field(
+        default=PaymentType.SUBSCRIPTION,
+        description="Payment type: 'once_off' for single payment, 'subscription' for monthly recurring"
+    )
 
 
 class SubscriptionResponse(BaseModel):
-    """Response after subscription creation."""
+    """Response after subscription/payment creation."""
     payment_url: str
     payment_data: Dict[str, Any]
     signature: str
+    payment_id: str
+    payment_type: str
+
+
+# ============== Credit Pack Models ==============
+
+class CreditPackSize(str, Enum):
+    """Available credit pack sizes in ZAR."""
+    SMALL = "200"
+    MEDIUM = "500"
+    LARGE = "1000"
+
+
+class CreditPackRequest(BaseModel):
+    """Request to purchase a credit pack."""
+    user_email: EmailStr
+    pack_size: CreditPackSize = Field(..., description="Credit pack size: '200', '500', or '1000' ZAR")
+
+
+class CreditPackResponse(BaseModel):
+    """Response after credit pack purchase request."""
+    payment_url: str
+    payment_data: Dict[str, Any]
+    signature: str
+    payment_id: str
+    pack_size: str
+    credits_amount: int
 
 
 # ============== Payment Models ==============

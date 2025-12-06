@@ -54,6 +54,8 @@ import {
 import axios from 'axios';
 import { useBuddySystem } from '@/hooks/useBuddySystem';
 import { LanguageBadge } from '@/components/LanguageBadge';
+import { WeatherSlidePanel } from '@/components/ChatComponents';
+import { AccountMenu } from '@/components/AccountMenu';
 import type { SALanguage } from '@/lib/buddySystem';
 
 // Extended message with image and thinking support
@@ -70,7 +72,12 @@ const TIER_DISPLAY = {
   jigga: { name: 'JIGGA', icon: Sparkles, color: 'bg-gray-800' },
 };
 
-export function ChatClient() {
+interface ChatClientProps {
+  userEmail: string | null;
+  userTier: string;
+}
+
+export function ChatClient({ userEmail, userTier }: ChatClientProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tier, setTier] = useState<Tier>('free');
@@ -176,6 +183,28 @@ export function ChatClient() {
 
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
+
+  // Track when location was just determined (for weather panel auto-show)
+  const [locationJustDetermined, setLocationJustDetermined] = useState(false);
+  const previousLocationRef = useRef<typeof userLocation>(null);
+
+  // External weather location (from AI tool call - triggers weather panel)
+  const [externalWeatherLocation, setExternalWeatherLocation] = useState<{
+    lat: number;
+    lon: number;
+    name: string;
+  } | null>(null);
+
+  // Detect when location transitions from null to a value
+  useEffect(() => {
+    if (previousLocationRef.current === null && userLocation !== null) {
+      // Location was just determined!
+      setLocationJustDetermined(true);
+      // Reset after animation completes
+      setTimeout(() => setLocationJustDetermined(false), 10000);
+    }
+    previousLocationRef.current = userLocation;
+  }, [userLocation]);
 
   // Use appropriate messages based on tier
   const displayMessages = isPersistenceEnabled ? messages : freeMessages;
@@ -409,6 +438,21 @@ export function ChatClient() {
         await addMessage(botMsg);
       } else {
         setFreeMessages((prev) => [...prev, botMsg]);
+      }
+
+      // Check for weather panel trigger from AI tool call
+      if (data.weather_panel) {
+        console.log(
+          '[GOGGA] Weather panel triggered by AI:',
+          data.weather_panel
+        );
+        setExternalWeatherLocation({
+          lat: data.weather_panel.lat,
+          lon: data.weather_panel.lon,
+          name: data.weather_panel.name,
+        });
+        // Clear after panel has shown
+        setTimeout(() => setExternalWeatherLocation(null), 10000);
       }
     } catch (error: any) {
       console.error('Chat Error:', error);
@@ -809,11 +853,18 @@ export function ChatClient() {
             </span>
           </div>
 
-          {/* Tier Badge */}
-          <div className={`header-btn font-bold ${TIER_DISPLAY[tier].color}`}>
-            <TierIcon size={16} />
-            <span>{TIER_DISPLAY[tier].name}</span>
-          </div>
+          {/* Account Menu (replaces simple tier badge) */}
+          {userEmail ? (
+            <AccountMenu 
+              userEmail={userEmail}
+              currentTier={userTier as 'FREE' | 'JIVE' | 'JIGGA'}
+            />
+          ) : (
+            <div className={`header-btn font-bold ${TIER_DISPLAY[tier].color}`}>
+              <TierIcon size={16} />
+              <span>{TIER_DISPLAY[tier].name}</span>
+            </div>
+          )}
           <span className="header-btn bg-primary-600/50 text-[10px]">
             Beta v1.0
           </span>
@@ -1571,6 +1622,16 @@ export function ChatClient() {
           setShowManualLocation(false);
           setManualLocationInput('');
         }}
+      />
+
+      {/* Gogga Weather - Slides out from right edge */}
+      <WeatherSlidePanel
+        latitude={userLocation?.lat}
+        longitude={userLocation?.lon}
+        locationName={userLocation?.city || userLocation?.displayName}
+        locationJustDetermined={locationJustDetermined}
+        autoHideDelay={5000}
+        externalLocation={externalWeatherLocation}
       />
     </div>
   );
