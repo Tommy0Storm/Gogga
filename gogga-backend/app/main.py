@@ -238,7 +238,7 @@ async def health_check():
         "tiers": {
             "free": {
                 "text": "OpenRouter Llama 3.3 70B FREE",
-                "images": f"LongCat Flash ({IMAGE_LIMITS[UserTier.FREE]}/month)",
+                "images": f"Pollinations.ai ({IMAGE_LIMITS[UserTier.FREE]}/month)",
                 "cost": "FREE"
             },
             "jive": {

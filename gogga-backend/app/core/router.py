@@ -2,7 +2,7 @@
 GOGGA Tier-Based Cognitive Router
 
 Routes requests based on user subscription tier:
-- FREE: OpenRouter Llama 3.3 70B (text) + LongCat Flash (images)
+- FREE: OpenRouter Llama 3.3 70B (text) + Pollinations.ai (images)
 - JIVE: Cerebras Llama 3.1 8B + CePO (text) + FLUX 1.1 Pro (images, capped)
 - JIGGA: Cerebras Qwen 3 235B think/no_think (text) + FLUX 1.1 Pro (images, higher cap)
 
@@ -27,7 +27,7 @@ class CognitiveLayer(str, Enum):
     """Enumeration of available cognitive layers."""
     # FREE tier layers (OpenRouter)
     FREE_TEXT = "free_text"              # Llama 3.3 70B FREE (OpenRouter)
-    FREE_IMAGE = "free_image"            # LongCat Flash FREE (OpenRouter)
+    FREE_IMAGE = "free_image"            # Pollinations.ai (FREE)
     
     # JIVE tier layers (Cerebras + CePO)
     JIVE_SPEED = "jive_speed"            # Llama 3.1 8B direct (fast queries)
@@ -46,7 +46,7 @@ class CognitiveLayer(str, Enum):
 
 # Image generation limits per tier (per month)
 IMAGE_LIMITS: Final[dict[UserTier, int]] = {
-    UserTier.FREE: 50,      # 50 LongCat images/month
+    UserTier.FREE: 50,      # 50 Pollinations images/month
     UserTier.JIVE: 200,     # 200 FLUX images/month
     UserTier.JIGGA: 1000,   # 1000 FLUX images/month
 }
@@ -299,7 +299,7 @@ class TierRouter:
     
     FREE Tier:
         Text → OpenRouter Llama 3.3 70B FREE
-        Image → OpenRouter LongCat Flash FREE
+        Image → Pollinations.ai FREE
         
     JIVE Tier (Pro):
         Simple text → Cerebras Llama 3.1 8B direct

@@ -1,13 +1,18 @@
 """
 Image Generation Service - Tier-Based Pipeline.
 
-FREE Tier:
-    User → Llama 3.3 FREE (enhance) → LongCat Flash FREE → Image
+FREE Tier (via /api/v1/images endpoint):
+    User → Llama 3.3 FREE (enhance) → Pollinations.ai → Image
     
-JIVE/JIGGA Tier:
-    User → Llama 3.3 FREE (enhance) → FLUX 1.1 Pro → Image
+JIVE/JIGGA Tier (via tool calling):
+    AI calls generate_image tool → Pollinations.ai → Image
+    
+GOGGA PRO (Image Button - Paid Subscribers):
+    User → Llama 3.3 FREE (enhance) → FLUX 1.1 Pro → Premium Image
 
 Prompt enhancement is ALWAYS via OpenRouter Llama 3.3 70B FREE.
+
+Named after Irma Stern, pioneering South African expressionist painter (1894-1966).
 """
 
 import logging
@@ -83,27 +88,34 @@ class ImageService:
         user_tier: UserTier = UserTier.FREE,
         size: str = DEFAULT_IMAGE_SIZE,
         enhance_prompt: bool = True,
+        use_premium: bool = False,
     ) -> ImageGenerationResponse:
         """
         Generate an image based on user tier.
         
-        FREE: Llama → LongCat
-        JIVE/JIGGA: Llama → FLUX
+        FREE: Llama → Pollinations.ai (free)
+        JIVE/JIGGA (tool call): Pollinations.ai (free)
+        JIVE/JIGGA (button, use_premium=True): GOGGA Pro (FLUX 1.1)
         
         Args:
             prompt: Image description
             user_id: User identifier
             user_tier: User's subscription tier
-            size: Image dimensions (FLUX only)
+            size: Image dimensions (GOGGA Pro only)
             enhance_prompt: Whether to enhance prompt first
+            use_premium: Use GOGGA Pro (FLUX) instead of Pollinations
             
         Returns:
             ImageGenerationResponse with image data
         """
         if user_tier == UserTier.FREE:
             return await self._generate_free(prompt, user_id, enhance_prompt)
-        else:
+        elif use_premium:
+            # GOGGA Pro - Premium FLUX generation (image button)
             return await self._generate_flux(prompt, user_id, user_tier, size, enhance_prompt)
+        else:
+            # Default to Pollinations for tool calling
+            return await self._generate_free(prompt, user_id, enhance_prompt)
     
     async def _generate_free(
         self,
@@ -112,17 +124,19 @@ class ImageService:
         enhance_prompt: bool
     ) -> ImageGenerationResponse:
         """
-        FREE tier: Llama 3.3 → LongCat Flash.
+        FREE tier: Llama 3.3 → Pollinations.ai
         
-        Uses OpenRouter's free models entirely.
-        Cost: $0.00 (still tracked for usage limits)
+        Uses OpenRouter for enhancement + Pollinations.ai for generation.
+        Cost: $0.00 (completely free, no API key)
         """
+        import urllib.parse
+        
         start_time = time.perf_counter()
         original_prompt = prompt
         enhancement_meta = {}
         
         logger.info(
-            "FREE image pipeline | user=%s | enhance=%s",
+            "FREE image pipeline (Pollinations) | user=%s | enhance=%s",
             user_id or "anonymous",
             enhance_prompt
         )
@@ -137,12 +151,9 @@ class ImageService:
                 logger.warning("Prompt enhancement failed: %s", e)
                 enhancement_meta = {"error": str(e)}
         
-        # Step 2: Generate with LongCat
-        result = await openrouter_service.generate_image_free(
-            prompt=prompt,
-            user_id=user_id,
-            enhance=False  # Already enhanced above
-        )
+        # Step 2: Generate with Pollinations.ai (FREE, no API key needed)
+        encoded_prompt = urllib.parse.quote(prompt)
+        pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
         
         total_latency = time.perf_counter() - start_time
         
@@ -150,7 +161,7 @@ class ImageService:
         cost_data = await track_image_usage(
             user_id=user_id or "anonymous",
             tier="free",
-            generator="longcat",
+            generator="pollinations",
             image_count=1
         )
         
@@ -158,13 +169,14 @@ class ImageService:
             success=True,
             original_prompt=original_prompt,
             enhanced_prompt=prompt,
-            image_data=result["content"],
-            size=None,  # LongCat doesn't have size
+            image_data=pollinations_url,  # Direct URL to image
+            size=None,  # Pollinations auto-sizes
             meta={
                 "tier": "free",
-                "pipeline": "llama-longcat",
+                "pipeline": "llama-pollinations",
                 "enhancement": enhancement_meta,
-                "generation_model": self._settings.OPENROUTER_MODEL_LONGCAT,
+                "generation_model": "pollinations.ai (FLUX-based)",
+                "image_url": pollinations_url,
                 "latency_seconds": round(total_latency, 3),
                 "cost_usd": cost_data["usd"],
                 "cost_zar": cost_data["zar"],
@@ -181,17 +193,18 @@ class ImageService:
         enhance_prompt: bool
     ) -> ImageGenerationResponse:
         """
-        JIVE/JIGGA tier: Llama 3.3 → FLUX 1.1 Pro.
+        GOGGA PRO: Premium image generation with FLUX 1.1 Pro.
         
+        Named after Irma Stern, pioneering SA expressionist painter.
         Uses OpenRouter for enhancement, DeepInfra for generation.
-        Cost: $0.04 per image
+        Cost: $0.04 per image (JIVE/JIGGA subscribers only)
         """
         start_time = time.perf_counter()
         original_prompt = prompt
         enhancement_meta = {}
         
         logger.info(
-            "FLUX image pipeline | user=%s | tier=%s | size=%s | enhance=%s",
+            "GOGGA PRO (FLUX) | user=%s | tier=%s | size=%s | enhance=%s",
             user_id or "anonymous",
             user_tier.value,
             size,
@@ -213,7 +226,7 @@ class ImageService:
                 logger.warning("Prompt enhancement failed: %s", e)
                 enhancement_meta = {"error": str(e)}
         
-        # Step 2: Generate with FLUX
+        # Step 2: Generate with FLUX 1.1 Pro (premium quality)
         payload = {
             "model": self._settings.DEEPINFRA_IMAGE_MODEL,
             "prompt": prompt,
@@ -246,7 +259,7 @@ class ImageService:
             )
             
             logger.info(
-                "FLUX image complete | user=%s | tier=%s | latency=%.2fs | cost=$%.4f",
+                "GOGGA PRO complete | user=%s | tier=%s | latency=%.2fs | cost=$%.4f",
                 user_id or "anonymous",
                 user_tier.value,
                 total_latency,
@@ -261,7 +274,8 @@ class ImageService:
                 size=size,
                 meta={
                     "tier": user_tier.value,
-                    "pipeline": "llama-flux",
+                    "pipeline": "gogga-pro",
+                    "generator": "GOGGA Pro (FLUX 1.1)",
                     "enhancement": enhancement_meta,
                     "generation_model": self._settings.DEEPINFRA_IMAGE_MODEL,
                     "latency_seconds": round(total_latency, 3),
@@ -273,13 +287,13 @@ class ImageService:
             
         except httpx.HTTPStatusError as e:
             logger.error(
-                "FLUX API error | status=%d | response=%s",
+                "GOGGA PRO API error | status=%d | response=%s",
                 e.response.status_code,
                 e.response.text[:200]
             )
             raise
         except Exception as e:
-            logger.exception("FLUX generation failed: %s", str(e))
+            logger.exception("GOGGA PRO generation failed: %s", str(e))
             raise
     
     async def close(self) -> None:

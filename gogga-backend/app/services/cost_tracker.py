@@ -125,13 +125,14 @@ async def track_image_usage(
     Track image generation usage and cost.
     
     Pricing:
-    - FREE tier (LongCat): $0.00 per image
-    - JIVE/JIGGA tier (FLUX 1.1 Pro): $0.04 per image
+    - FREE tier (Pollinations.ai): $0.00 per image
+    - JIVE/JIGGA tier tool calling (Pollinations.ai): $0.00 per image
+    - JIVE/JIGGA tier GOGGA Pro (FLUX 1.1 Pro): $0.04 per image
     
     Args:
         user_id: The user's unique identifier (email-based)
         tier: User tier: "free", "jive", or "jigga"
-        generator: Image generator used: "longcat" or "flux"
+        generator: Image generator used: "pollinations", "longcat" (legacy), or "flux"
         image_count: Number of images generated
         
     Returns:
@@ -140,7 +141,9 @@ async def track_image_usage(
     tier_lower = tier.lower()
     
     # Determine cost per image
-    if tier_lower == "free" or generator.lower() == "longcat":
+    # Pollinations.ai and LongCat (legacy) are free
+    generator_lower = generator.lower()
+    if tier_lower == "free" or generator_lower in ("pollinations", "longcat"):
         cost_per_image = settings.COST_LONGCAT_IMAGE  # $0.00
     else:
         cost_per_image = settings.COST_FLUX_IMAGE  # $0.04
