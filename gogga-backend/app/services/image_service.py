@@ -15,8 +15,10 @@ Prompt enhancement is ALWAYS via OpenRouter Llama 3.3 70B FREE.
 Named after Irma Stern, pioneering South African expressionist painter (1894-1966).
 """
 
+import asyncio
 import logging
 import time
+import urllib.parse
 from typing import Any, Final
 
 import httpx
@@ -28,6 +30,12 @@ from app.services.openrouter_service import openrouter_service
 from app.services.cost_tracker import track_image_usage
 
 logger = logging.getLogger(__name__)
+
+# AI Horde API endpoints (free, community-powered)
+AI_HORDE_API_URL: Final[str] = "https://aihorde.net/api/v2"
+AI_HORDE_ANON_KEY: Final[str] = "0000000000"  # Anonymous key for free usage
+AI_HORDE_POLL_INTERVAL: Final[float] = 2.0  # seconds between status checks
+AI_HORDE_TIMEOUT: Final[float] = 60.0  # max wait time for generation
 
 # Constants
 DEEPINFRA_API_URL: Final[str] = "https://api.deepinfra.com/v1/openai/images/generations"
@@ -48,7 +56,8 @@ class ImageGenerationResponse(BaseModel):
     success: bool = True
     original_prompt: str
     enhanced_prompt: str
-    image_data: str  # Base64 for FLUX, content for LongCat
+    image_data: str  # Primary image URL/data
+    image_urls: list[str] = []  # All successful image URLs (for dual generation)
     size: str | None = None
     meta: dict[str, Any] = {}
 
@@ -66,6 +75,7 @@ class ImageService:
     
     def __init__(self) -> None:
         self._flux_client: httpx.AsyncClient | None = None
+        self._horde_client: httpx.AsyncClient | None = None
         self._settings = get_settings()
     
     @property
@@ -80,6 +90,20 @@ class ImageService:
                 }
             )
         return self._flux_client
+
+    @property
+    def horde_client(self) -> httpx.AsyncClient:
+        """Lazy initialization of AI Horde HTTP client."""
+        if self._horde_client is None:
+            self._horde_client = httpx.AsyncClient(
+                timeout=AI_HORDE_TIMEOUT,
+                headers={
+                    "Content-Type": "application/json",
+                    "apikey": AI_HORDE_ANON_KEY,
+                    "Client-Agent": "Gogga:1.0:gogga@southafrica.ai",
+                }
+            )
+        return self._horde_client
     
     async def generate_image(
         self,
@@ -116,6 +140,101 @@ class ImageService:
         else:
             # Default to Pollinations for tool calling
             return await self._generate_free(prompt, user_id, enhance_prompt)
+
+    async def _generate_horde_image(self, prompt: str) -> str | None:
+        """
+        Generate image via AI Horde (community-powered, free).
+        
+        Returns image URL on success, None on failure (silently handles errors).
+        """
+        try:
+            # Step 1: Submit async generation request
+            # Using smaller size (512x512 < 588x588 limit) and low steps to avoid kudos requirement
+            generate_payload = {
+                "prompt": prompt,
+                "params": {
+                    "cfg_scale": 7,
+                    "sampler_name": "k_euler",
+                    "height": 512,
+                    "width": 512,
+                    "steps": 15,  # Low steps to avoid kudos upfront requirement
+                    "karras": True,
+                    "n": 1
+                },
+                "nsfw": False,
+                "censor_nsfw": True,
+                "trusted_workers": False,  # Allow all workers for faster processing
+                "models": [],  # Empty = any model, faster queue
+                "r2": True,  # Return URL instead of base64
+                "shared": False,
+                "slow_workers": True  # Allow slow workers for availability
+            }
+            
+            response = await self.horde_client.post(
+                f"{AI_HORDE_API_URL}/generate/async",
+                json=generate_payload
+            )
+            
+            if response.status_code != 202:
+                logger.debug("AI Horde submit failed: %s", response.text)
+                return None
+            
+            result = response.json()
+            request_id = result.get("id")
+            if not request_id:
+                return None
+            
+            logger.debug("AI Horde request submitted: %s", request_id)
+            
+            # Step 2: Poll for completion (with timeout)
+            start = time.monotonic()
+            while time.monotonic() - start < AI_HORDE_TIMEOUT:
+                check_response = await self.horde_client.get(
+                    f"{AI_HORDE_API_URL}/generate/check/{request_id}"
+                )
+                
+                if check_response.status_code != 200:
+                    await asyncio.sleep(AI_HORDE_POLL_INTERVAL)
+                    continue
+                
+                check_data = check_response.json()
+                if check_data.get("finished", 0) >= 1:
+                    break
+                if check_data.get("faulted"):
+                    logger.debug("AI Horde generation faulted")
+                    return None
+                    
+                await asyncio.sleep(AI_HORDE_POLL_INTERVAL)
+            else:
+                # Timeout - cancel request silently
+                logger.debug("AI Horde timeout, cancelling request")
+                await self.horde_client.delete(
+                    f"{AI_HORDE_API_URL}/generate/status/{request_id}"
+                )
+                return None
+            
+            # Step 3: Get completed image
+            status_response = await self.horde_client.get(
+                f"{AI_HORDE_API_URL}/generate/status/{request_id}"
+            )
+            
+            if status_response.status_code != 200:
+                return None
+            
+            status_data = status_response.json()
+            generations = status_data.get("generations", [])
+            
+            if generations and generations[0].get("img"):
+                image_url = generations[0]["img"]
+                logger.info("AI Horde image generated successfully")
+                return image_url
+            
+            return None
+            
+        except Exception as e:
+            # Silent failure - don't let Horde errors affect user experience
+            logger.debug("AI Horde error (silent): %s", e)
+            return None
     
     async def _generate_free(
         self,
@@ -124,19 +243,20 @@ class ImageService:
         enhance_prompt: bool
     ) -> ImageGenerationResponse:
         """
-        FREE tier: Llama 3.3 → Pollinations.ai
+        FREE tier: Dual generation (Pollinations.ai + AI Horde)
         
-        Uses OpenRouter for enhancement + Pollinations.ai for generation.
-        Cost: $0.00 (completely free, no API key)
+        Calls both generators in parallel. Returns all successful images.
+        If one fails, silently returns just the other. User never sees errors.
+        
+        Uses OpenRouter for enhancement + dual free generators.
+        Cost: $0.00 (completely free, no API keys needed)
         """
-        import urllib.parse
-        
         start_time = time.perf_counter()
         original_prompt = prompt
         enhancement_meta = {}
         
         logger.info(
-            "FREE image pipeline (Pollinations) | user=%s | enhance=%s",
+            "FREE image pipeline (dual: Pollinations + AI Horde) | user=%s | enhance=%s",
             user_id or "anonymous",
             enhance_prompt
         )
@@ -151,9 +271,29 @@ class ImageService:
                 logger.warning("Prompt enhancement failed: %s", e)
                 enhancement_meta = {"error": str(e)}
         
-        # Step 2: Generate with Pollinations.ai (FREE, no API key needed)
+        # Step 2: Generate with BOTH providers in parallel
+        # Pollinations is instant (URL-based), Horde is async (may take 10-60s)
         encoded_prompt = urllib.parse.quote(prompt)
         pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+        
+        # Fire AI Horde request in parallel (returns None on failure/timeout)
+        horde_task = asyncio.create_task(self._generate_horde_image(prompt))
+        
+        # Collect all successful image URLs
+        image_urls = [pollinations_url]  # Pollinations always "succeeds" (URL-based)
+        
+        # Wait for Horde with timeout (don't block user forever)
+        try:
+            horde_url = await asyncio.wait_for(horde_task, timeout=AI_HORDE_TIMEOUT + 5)
+            if horde_url:
+                image_urls.append(horde_url)
+                logger.info("Both Pollinations and AI Horde succeeded")
+            else:
+                logger.debug("AI Horde returned None (silent fallback to Pollinations only)")
+        except asyncio.TimeoutError:
+            logger.debug("AI Horde timed out (silent fallback to Pollinations only)")
+        except Exception as e:
+            logger.debug("AI Horde error (silent): %s", e)
         
         total_latency = time.perf_counter() - start_time
         
@@ -161,22 +301,23 @@ class ImageService:
         cost_data = await track_image_usage(
             user_id=user_id or "anonymous",
             tier="free",
-            generator="pollinations",
-            image_count=1
+            generator="pollinations+horde" if len(image_urls) > 1 else "pollinations",
+            image_count=len(image_urls)
         )
         
         return ImageGenerationResponse(
             success=True,
             original_prompt=original_prompt,
             enhanced_prompt=prompt,
-            image_data=pollinations_url,  # Direct URL to image
-            size=None,  # Pollinations auto-sizes
+            image_data=image_urls[0],  # Primary image (Pollinations - always first)
+            image_urls=image_urls,  # All successful images
+            size=None,  # Auto-sized
             meta={
                 "tier": "free",
-                "pipeline": "llama-pollinations",
+                "pipeline": "llama-dual-free",
                 "enhancement": enhancement_meta,
-                "generation_model": "pollinations.ai (FLUX-based)",
-                "image_url": pollinations_url,
+                "generators": ["pollinations"] + (["ai-horde"] if len(image_urls) > 1 else []),
+                "image_count": len(image_urls),
                 "latency_seconds": round(total_latency, 3),
                 "cost_usd": cost_data["usd"],
                 "cost_zar": cost_data["zar"],
@@ -301,6 +442,9 @@ class ImageService:
         if self._flux_client:
             await self._flux_client.aclose()
             self._flux_client = None
+        if self._horde_client:
+            await self._horde_client.aclose()
+            self._horde_client = None
 
 
 # Singleton instance

@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.v1.endpoints import chat, payments, images, prompts
+from app.api.v1.endpoints import chat, payments, images, prompts, tools
 from app.services.posthog_service import posthog_service
 from app.services.scheduler_service import scheduler_service
 from app.core.exceptions import (
@@ -110,6 +110,7 @@ app.include_router(chat.router, prefix=settings.API_V1_STR)
 app.include_router(payments.router, prefix=settings.API_V1_STR)
 app.include_router(images.router, prefix=settings.API_V1_STR)
 app.include_router(prompts.router, prefix=settings.API_V1_STR)
+app.include_router(tools.router, prefix=f"{settings.API_V1_STR}/tools")
 
 
 # Root endpoint
