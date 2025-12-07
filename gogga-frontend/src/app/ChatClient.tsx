@@ -459,18 +459,37 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         console.log('[GOGGA] Tool calls received:', data.tool_calls);
 
         try {
+          // Check if this is an image generation tool call
+          const hasImageTool = data.tool_calls.some(
+            (tc: { function?: { name?: string } }) => tc.function?.name === 'generate_image'
+          );
+          
+          // Add temporary "painting" message for image generation
+          if (hasImageTool && botMsg.content) {
+            const tempContent = botMsg.content + '\n\n*🎨 GOGGA is painting your image...*';
+            if (isPersistenceEnabled) {
+              await addMessage({ ...botMsg, content: tempContent });
+            } else {
+              setFreeMessages((prev) => [...prev, { ...botMsg, content: tempContent }]);
+            }
+          }
+          
           // Execute the tool calls on the frontend
           const toolResults = await executeToolCalls(
             data.tool_calls as ToolCall[]
           );
           console.log('[GOGGA] Tool results:', toolResults);
 
-          // Add tool execution info to the message
+          // Add tool execution info to the message (no label for images)
           const toolSummary = formatToolResultsMessage(toolResults);
           if (toolSummary) {
+            // Check if result contains images (no prefix) or memory operations (add prefix)
+            const hasImages = toolSummary.includes('![Generated Image');
+            const prefix = hasImages ? '' : '**Memory Updated:**\n';
+            
             // Append tool results to the response
             botMsg.content = botMsg.content
-              ? `${botMsg.content}\n\n---\n**Memory Updated:**\n${toolSummary}`
+              ? `${botMsg.content}\n\n---\n${prefix}${toolSummary}`
               : toolSummary;
           }
 
