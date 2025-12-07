@@ -1,6 +1,6 @@
 # GOGGA Tier System
 
-> **Last Updated:** December 5, 2025
+> **Last Updated:** December 7, 2025
 
 ## Overview
 
@@ -519,7 +519,7 @@ PAYFAST_ENV=sandbox  # or production
 | **11 SA Languages** | ✅ | ✅ | ✅ |
 | **Text Model** | Llama 3.3 70B | Llama 3.3 70B | Qwen 3 32B |
 | **Provider** | OpenRouter | Cerebras (~2,200 t/s) | Cerebras (~1,400 t/s) |
-| **Image Generator** | LongCat Flash (text) | FLUX 1.1 Pro | FLUX 1.1 Pro |
+| **Image Generator** | Pollinations.ai (text) | Pollinations + AI Horde | Pollinations + AI Horde |
 | **Image Limit** | 50/month | 200/month | 1,000/month |
 | **RAG Documents** | ❌ | 5 per session | 10 per session |
 | **Cross-Session Docs** | ❌ | ❌ | ✅ |
@@ -563,14 +563,14 @@ PAYFAST_ENV=sandbox  # or production
 
 ```text
 TEXT:  User → Llama 3.3 70B → Response
-IMAGE: User → Prompt Enhancement → LongCat Flash → Text Description
+IMAGE: User → Prompt Enhancement → Pollinations.ai → Image URL
 ```
 
 ### Limitations
 
 - No document upload (RAG)
 - No chat history persistence
-- Image "generation" produces descriptions only
+- No tool calling (image generation via direct endpoint only)
 - 50 image requests/month
 
 ---
@@ -614,7 +614,8 @@ IMAGE: User → Prompt Enhancement → LongCat Flash → Text Description
 ```text
 TEXT (simple):  User → Llama 3.1 8B → Response
 TEXT (complex): User → Llama 3.1 8B + CePO → Enhanced Response
-IMAGE:          User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
+IMAGE (tool):   User → generate_image tool → Pollinations + AI Horde → Dual Images
+IMAGE (button): User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
 ```
 
 ### CePO (Cerebras Planning Optimization)
@@ -713,7 +714,8 @@ For prompts with >100k context tokens, use `/no_think` to disable reasoning and 
 ```text
 TEXT (thinking): User → Qwen 3 32B (temp=0.6) → <thinking>...</thinking> → Response
 TEXT (fast):     User + /no_think → Qwen 3 32B → Quick Response
-IMAGE:           User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
+IMAGE (tool):    User → generate_image tool → Pollinations + AI Horde → Dual Images
+IMAGE (button):  User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
 ```
 
 ### Thinking Mode UI
@@ -1103,9 +1105,16 @@ Access developer features:
 
 ### AI Image Models
 
+**Tool Calling (generate_image tool) - JIVE/JIGGA:**
+| Provider | Model | Quality | Speed |
+|----------|-------|---------|-------|
+| Pollinations.ai | FLUX-based | 1024x1024 | Instant |
+| AI Horde | Community models | 512x512 | 10-60s |
+
+**Image Button - Premium:**
 | Tier | Model | Provider | Quality |
 |------|-------|----------|---------|
-| FREE | LongCat Flash | OpenRouter | Text descriptions |
+| FREE | Pollinations.ai | Direct URL | 1024x1024 |
 | JIVE | FLUX 1.1 Pro | DeepInfra | HD images |
 | JIGGA | FLUX 1.1 Pro | DeepInfra | HD images |
 
@@ -1127,6 +1136,16 @@ Response: { response, thinking?, meta: { tier, layer, model, tokens, cost_zar } 
 POST /api/v1/images/generate
 Body: { prompt, user_id, user_tier, enhance_prompt? }
 ```
+
+### Tool Execution (JIVE/JIGGA)
+
+```http
+POST /api/v1/tools/execute
+Body: { tool_name: "generate_image", arguments: { prompt } }
+Response: { success, result: { image_url, image_urls[], providers[], image_count } }
+```
+
+Executes `generate_image` tool with dual Pollinations + AI Horde generation.
 
 ### Prompt Enhancement
 
