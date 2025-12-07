@@ -25,7 +25,7 @@ POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt"
 # AI Horde settings
 AI_HORDE_API_URL = "https://aihorde.net/api/v2"
 AI_HORDE_API_KEY = os.getenv("AI_HORDE_API_KEY", "0000000000")
-AI_HORDE_TIMEOUT = 60.0
+AI_HORDE_TIMEOUT = 15.0  # Short timeout - return Pollinations quickly if Horde is slow
 AI_HORDE_POLL_INTERVAL = 2.0
 
 
