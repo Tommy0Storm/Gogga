@@ -1,7 +1,7 @@
 # GOGGA Tool Calling Implementation
 
 ## Last Updated
-December 7, 2025
+December 7, 2025 (HD quality + auto-image injection)
 
 ## Overview
 JIGGA tier supports tool calling, allowing the AI to execute functions during conversations.
@@ -88,3 +88,36 @@ Dual parallel generation with silent fallback:
 | JIVE/JIGGA `use_premium=true` | GOGGA Pro (FLUX 1.1 Pro) | $0.04/image |
 
 Named after Irma Stern, pioneering South African expressionist painter (1894-1966).
+
+## HD Quality Settings
+
+All image prompts automatically get quality suffix:
+`, masterpiece, best quality, hyperdetailed, highly detailed, sharp focus, HD, 4K, ultra high resolution`
+
+**Pollinations.ai Settings:**
+- `enhance=true` - AI enhancement
+- `nologo=true` - No watermarks
+- `width=1024&height=1024` - HD resolution
+
+**AI Horde Settings:**
+- `steps=20` - Higher quality
+- `cfg_scale=7.5` - Better prompt adherence
+- `censor_nsfw=false` - Disabled overly aggressive filter (GOGGA has own moderation)
+- Negative prompt: lowres, blurry, watermark, etc.
+
+## Auto-Image Injection
+
+For CePO (JIVE) and Qwen thinking (JIGGA) responses:
+- Triggers every 2nd or 3rd response
+- Only for informal/educational content (school, projects, tutorials, history, science, etc.)
+- Excludes legal, medical, abuse topics
+- Inserts Pollinations FLUX images at natural paragraph breaks
+- Images appear seamlessly within content (same thumbnail size as tool-generated)
+
+**File:** `gogga-frontend/src/lib/autoImageInjector.ts`
+
+## Display Improvements
+
+- Removed "Memory Updated:" prefix - results speak for themselves
+- Provider badge shows engine: "FLUX" (Pollinations) or "Horde" (AI Horde)
+- Thumbnails use `object-contain` to show full image without cropping

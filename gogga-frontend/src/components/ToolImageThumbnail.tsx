@@ -55,10 +55,10 @@ export default function ToolImageThumbnail({ imageUrl, prompt, provider }: ToolI
             Expand
           </span>
         </div>
-        {/* Provider badge */}
+        {/* Engine badge - show underlying AI engine */}
         {provider && (
           <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded">
-            {provider}
+            {provider === 'pollinations' ? 'FLUX' : provider === 'ai-horde' ? 'Horde' : provider}
           </div>
         )}
       </div>

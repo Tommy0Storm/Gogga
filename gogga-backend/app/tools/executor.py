@@ -152,7 +152,7 @@ async def _generate_horde_image(prompt: str) -> str | None:
 
 
 # HD Quality enhancement keywords
-HD_QUALITY_SUFFIX = ", masterpiece, best quality, highly detailed, sharp focus, HD, 4K"
+HD_QUALITY_SUFFIX = ", masterpiece, best quality, hyperdetailed, highly detailed, sharp focus, HD, 4K, ultra high resolution"
 
 async def execute_generate_image(
     prompt: str,

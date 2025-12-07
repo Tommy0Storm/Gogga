@@ -485,7 +485,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
           if (toolSummary) {
             // Check if result contains images (no prefix) or memory operations (add prefix)
             const hasImages = toolSummary.includes('![Generated Image');
-            const prefix = hasImages ? '' : '**Memory Updated:**\n';
+            const prefix = ''; // No prefix - results speak for themselves
             
             // Append tool results to the response
             botMsg.content = botMsg.content
@@ -500,6 +500,20 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         } catch (toolError) {
           console.error('[GOGGA] Tool execution failed:', toolError);
         }
+      }
+
+      // Auto-inject contextual images for long CePO/Qwen responses
+      // Only for informal educational content, every 2nd-3rd response
+      if (data.meta?.layer && (tier === 'jive' || tier === 'jigga')) {
+        const { processResponseForImages } = await import('@/lib/autoImageInjector');
+        const responseCount = displayMessages.filter(m => m.role === 'assistant').length + 1;
+        botMsg.content = processResponseForImages(
+          botMsg.content,
+          text,
+          tier,
+          data.meta.layer,
+          responseCount
+        );
       }
 
       if (isPersistenceEnabled) {
