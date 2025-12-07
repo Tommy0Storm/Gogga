@@ -146,95 +146,111 @@ class ImageService:
         Generate image via AI Horde (community-powered, free).
         
         Returns image URL on success, None on failure (silently handles errors).
+        Includes retry logic for 429 rate limits.
         """
-        try:
-            # Step 1: Submit async generation request
-            # Using smaller size (512x512 < 588x588 limit) and low steps to avoid kudos requirement
-            generate_payload = {
-                "prompt": prompt,
-                "params": {
-                    "cfg_scale": 7,
-                    "sampler_name": "k_euler",
-                    "height": 512,
-                    "width": 512,
-                    "steps": 15,  # Low steps to avoid kudos upfront requirement
-                    "karras": True,
-                    "n": 1
-                },
-                "nsfw": False,
-                "censor_nsfw": True,
-                "trusted_workers": False,  # Allow all workers for faster processing
-                "models": [],  # Empty = any model, faster queue
-                "r2": True,  # Return URL instead of base64
-                "shared": False,
-                "slow_workers": True  # Allow slow workers for availability
-            }
-            
-            response = await self.horde_client.post(
-                f"{AI_HORDE_API_URL}/generate/async",
-                json=generate_payload
-            )
-            
-            if response.status_code != 202:
-                logger.debug("AI Horde submit failed: %s", response.text)
-                return None
-            
-            result = response.json()
-            request_id = result.get("id")
-            if not request_id:
-                return None
-            
-            logger.debug("AI Horde request submitted: %s", request_id)
-            
-            # Step 2: Poll for completion (with timeout)
-            start = time.monotonic()
-            while time.monotonic() - start < AI_HORDE_TIMEOUT:
-                check_response = await self.horde_client.get(
-                    f"{AI_HORDE_API_URL}/generate/check/{request_id}"
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Step 1: Submit async generation request
+                # Using smaller size (512x512 < 588x588 limit) and low steps to avoid kudos requirement
+                generate_payload = {
+                    "prompt": prompt,
+                    "params": {
+                        "cfg_scale": 7,
+                        "sampler_name": "k_euler",
+                        "height": 512,
+                        "width": 512,
+                        "steps": 15,  # Low steps to avoid kudos upfront requirement
+                        "karras": True,
+                        "n": 1
+                    },
+                    "nsfw": False,
+                    "censor_nsfw": True,
+                    "trusted_workers": False,  # Allow all workers for faster processing
+                    "models": [],  # Empty = any model, faster queue
+                    "r2": True,  # Return URL instead of base64
+                    "shared": False,
+                    "slow_workers": True  # Allow slow workers for availability
+                }
+                
+                response = await self.horde_client.post(
+                    f"{AI_HORDE_API_URL}/generate/async",
+                    json=generate_payload
                 )
                 
-                if check_response.status_code != 200:
-                    await asyncio.sleep(AI_HORDE_POLL_INTERVAL)
+                if response.status_code == 429:
+                    # Rate limited - wait and retry
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    logger.debug("AI Horde rate limited, retrying in %ds (attempt %d/%d)", retry_after, attempt + 1, max_retries)
+                    await asyncio.sleep(retry_after)
                     continue
                 
-                check_data = check_response.json()
-                if check_data.get("finished", 0) >= 1:
-                    break
-                if check_data.get("faulted"):
-                    logger.debug("AI Horde generation faulted")
+                if response.status_code != 202:
+                    logger.debug("AI Horde submit failed: %s", response.text)
                     return None
+                
+                result = response.json()
+                request_id = result.get("id")
+                if not request_id:
+                    return None
+                
+                logger.debug("AI Horde request submitted: %s", request_id)
+                
+                # Step 2: Poll for completion (with timeout)
+                start = time.monotonic()
+                while time.monotonic() - start < AI_HORDE_TIMEOUT:
+                    check_response = await self.horde_client.get(
+                        f"{AI_HORDE_API_URL}/generate/check/{request_id}"
+                    )
                     
-                await asyncio.sleep(AI_HORDE_POLL_INTERVAL)
-            else:
-                # Timeout - cancel request silently
-                logger.debug("AI Horde timeout, cancelling request")
-                await self.horde_client.delete(
+                    if check_response.status_code != 200:
+                        await asyncio.sleep(AI_HORDE_POLL_INTERVAL)
+                        continue
+                    
+                    check_data = check_response.json()
+                    if check_data.get("finished", 0) >= 1:
+                        break
+                    if check_data.get("faulted"):
+                        logger.debug("AI Horde generation faulted")
+                        return None
+                        
+                    await asyncio.sleep(AI_HORDE_POLL_INTERVAL)
+                else:
+                    # Timeout - cancel request silently
+                    logger.debug("AI Horde timeout, cancelling request")
+                    await self.horde_client.delete(
+                        f"{AI_HORDE_API_URL}/generate/status/{request_id}"
+                    )
+                    return None
+                
+                # Step 3: Get completed image
+                status_response = await self.horde_client.get(
                     f"{AI_HORDE_API_URL}/generate/status/{request_id}"
                 )
+                
+                if status_response.status_code != 200:
+                    return None
+                
+                status_data = status_response.json()
+                generations = status_data.get("generations", [])
+                
+                if generations and generations[0].get("img"):
+                    image_url = generations[0]["img"]
+                    logger.info("AI Horde image generated successfully")
+                    return image_url
+                
                 return None
-            
-            # Step 3: Get completed image
-            status_response = await self.horde_client.get(
-                f"{AI_HORDE_API_URL}/generate/status/{request_id}"
-            )
-            
-            if status_response.status_code != 200:
+                
+            except Exception as e:
+                # Silent failure - don't let Horde errors affect user experience
+                logger.debug("AI Horde error (silent): %s", e)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)  # Brief pause before retry
+                    continue
                 return None
-            
-            status_data = status_response.json()
-            generations = status_data.get("generations", [])
-            
-            if generations and generations[0].get("img"):
-                image_url = generations[0]["img"]
-                logger.info("AI Horde image generated successfully")
-                return image_url
-            
-            return None
-            
-        except Exception as e:
-            # Silent failure - don't let Horde errors affect user experience
-            logger.debug("AI Horde error (silent): %s", e)
-            return None
+        
+        return None
     
     async def _generate_free(
         self,
