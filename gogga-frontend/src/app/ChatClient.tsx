@@ -774,6 +774,68 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       );
     }
 
+    // Check for tool-generated images (Pollinations + AI Horde)
+    if (msg.content.includes('__TOOL_IMAGES__:')) {
+      const ToolImageThumbnail = require('@/components/ToolImageThumbnail').default;
+      const parts = msg.content.split('__TOOL_IMAGES__:');
+      const elements: React.ReactNode[] = [];
+      
+      parts.forEach((part, idx) => {
+        if (idx === 0 && part.trim()) {
+          // Text before first image marker
+          elements.push(
+            <MarkdownRenderer
+              key={`text-${idx}`}
+              content={part.trim()}
+              variant={isUser ? 'user' : 'assistant'}
+            />
+          );
+        } else if (idx > 0) {
+          // Parse image JSON and remaining text
+          const newlineIdx = part.indexOf('\n');
+          const jsonStr = newlineIdx > 0 ? part.slice(0, newlineIdx) : part;
+          const textAfter = newlineIdx > 0 ? part.slice(newlineIdx + 1).trim() : '';
+          
+          try {
+            const imageData = JSON.parse(jsonStr);
+            elements.push(
+              <div key={`images-${idx}`} className="flex flex-wrap gap-2 my-2">
+                {imageData.urls.map((url: string, i: number) => (
+                  <ToolImageThumbnail
+                    key={url}
+                    imageUrl={url}
+                    prompt={imageData.prompt}
+                    provider={imageData.providers?.[i]}
+                  />
+                ))}
+              </div>
+            );
+          } catch {
+            // Fallback: show as markdown
+            elements.push(
+              <MarkdownRenderer
+                key={`fallback-${idx}`}
+                content={part}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+          
+          if (textAfter) {
+            elements.push(
+              <MarkdownRenderer
+                key={`textafter-${idx}`}
+                content={textAfter}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+        }
+      });
+      
+      return <div>{elements}</div>;
+    }
+
     // Check for inline base64 image (FREE tier)
     if (msg.content.includes('![Generated Image](data:image')) {
       const match = msg.content.match(

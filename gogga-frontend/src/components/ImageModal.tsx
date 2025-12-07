@@ -13,9 +13,10 @@ interface ImageModalProps {
   imageData: string;
   mimeType: string;
   prompt: string;
-  enhancedPrompt: string;
+  enhancedPrompt?: string;
   onClose: () => void;
   onDelete?: () => void;
+  isUrl?: boolean; // If true, imageData is a URL, not base64
 }
 
 export default function ImageModal({
@@ -26,6 +27,7 @@ export default function ImageModal({
   enhancedPrompt,
   onClose,
   onDelete,
+  isUrl = false,
 }: ImageModalProps) {
   // Handle escape key
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -48,17 +50,39 @@ export default function ImageModal({
 
   if (!isOpen) return null;
 
-  const imageSrc = imageData.startsWith('data:') 
+  // Handle both URLs and base64 data
+  const imageSrc = isUrl 
     ? imageData 
-    : `data:${mimeType};base64,${imageData}`;
+    : (imageData.startsWith('data:') 
+        ? imageData 
+        : `data:${mimeType};base64,${imageData}`);
 
-  const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = imageSrc;
-    link.download = `gogga-image-${Date.now()}.${mimeType.split('/')[1]}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async () => {
+    if (isUrl) {
+      // For URLs, fetch and download
+      try {
+        const response = await fetch(imageData);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `gogga-image-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {
+        // Fallback: open in new tab
+        window.open(imageData, '_blank');
+      }
+    } else {
+      const link = document.createElement('a');
+      link.href = imageSrc;
+      link.download = `gogga-image-${Date.now()}.${mimeType.split('/')[1]}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -118,14 +142,16 @@ export default function ImageModal({
         
         {/* Prompt info */}
         <div className="mt-6 w-full max-w-2xl bg-white/10 rounded-lg p-4 text-white">
-          <div className="mb-3">
-            <span className="text-xs text-gray-400 uppercase tracking-wide">Original Prompt</span>
+          <div className={enhancedPrompt ? 'mb-3' : ''}>
+            <span className="text-xs text-gray-400 uppercase tracking-wide">Prompt</span>
             <p className="text-sm mt-1">{prompt}</p>
           </div>
-          <div>
-            <span className="text-xs text-gray-400 uppercase tracking-wide">Enhanced Prompt</span>
-            <p className="text-sm mt-1 text-gray-300">{enhancedPrompt}</p>
-          </div>
+          {enhancedPrompt && (
+            <div>
+              <span className="text-xs text-gray-400 uppercase tracking-wide">Enhanced Prompt</span>
+              <p className="text-sm mt-1 text-gray-300">{enhancedPrompt}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
