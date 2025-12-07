@@ -6,6 +6,7 @@ Frontend-only tools (memory, charts) are handled by the frontend.
 """
 
 import asyncio
+import os
 import time
 import urllib.parse
 import httpx
@@ -23,7 +24,7 @@ POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt"
 
 # AI Horde settings
 AI_HORDE_API_URL = "https://aihorde.net/api/v2"
-AI_HORDE_ANON_KEY = "0000000000"
+AI_HORDE_API_KEY = os.getenv("AI_HORDE_API_KEY", "0000000000")
 AI_HORDE_TIMEOUT = 60.0
 AI_HORDE_POLL_INTERVAL = 2.0
 
@@ -42,7 +43,7 @@ async def _generate_horde_image(prompt: str) -> str | None:
                 timeout=AI_HORDE_TIMEOUT,
                 headers={
                     "Content-Type": "application/json",
-                    "apikey": AI_HORDE_ANON_KEY,
+                    "apikey": AI_HORDE_API_KEY,
                     "Client-Agent": "Gogga:1.0:gogga@southafrica.ai",
                 }
             ) as client:

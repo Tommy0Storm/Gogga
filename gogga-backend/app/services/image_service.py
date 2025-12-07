@@ -17,6 +17,7 @@ Named after Irma Stern, pioneering South African expressionist painter (1894-196
 
 import asyncio
 import logging
+import os
 import time
 import urllib.parse
 from typing import Any, Final
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # AI Horde API endpoints (free, community-powered)
 AI_HORDE_API_URL: Final[str] = "https://aihorde.net/api/v2"
-AI_HORDE_ANON_KEY: Final[str] = "0000000000"  # Anonymous key for free usage
+AI_HORDE_API_KEY: Final[str] = os.getenv("AI_HORDE_API_KEY", "0000000000")  # Registered key or anonymous
 AI_HORDE_POLL_INTERVAL: Final[float] = 2.0  # seconds between status checks
 AI_HORDE_TIMEOUT: Final[float] = 60.0  # max wait time for generation
 
@@ -99,7 +100,7 @@ class ImageService:
                 timeout=AI_HORDE_TIMEOUT,
                 headers={
                     "Content-Type": "application/json",
-                    "apikey": AI_HORDE_ANON_KEY,
+                    "apikey": AI_HORDE_API_KEY,
                     "Client-Agent": "Gogga:1.0:gogga@southafrica.ai",
                 }
             )
