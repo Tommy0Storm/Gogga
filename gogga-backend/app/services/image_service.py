@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 AI_HORDE_API_URL: Final[str] = "https://aihorde.net/api/v2"
 AI_HORDE_API_KEY: Final[str] = os.getenv("AI_HORDE_API_KEY", "0000000000")  # Registered key or anonymous
 AI_HORDE_POLL_INTERVAL: Final[float] = 2.0  # seconds between status checks
-AI_HORDE_TIMEOUT: Final[float] = 15.0  # Short timeout - return Pollinations quickly if Horde is slow
+AI_HORDE_TIMEOUT: Final[float] = 30.0  # Reasonable timeout for registered users
 
 # Constants
 DEEPINFRA_API_URL: Final[str] = "https://api.deepinfra.com/v1/openai/images/generations"

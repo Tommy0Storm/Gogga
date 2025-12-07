@@ -127,9 +127,9 @@ GENERATE_IMAGE_TOOL: ToolDefinition = {
         "description": (
             "Generate an image from a text description using AI. "
             "Use this when the user asks you to create, draw, generate, or make an image. "
-            "Provide a detailed English description for best results. "
-            "Examples: 'Draw a sunset over Johannesburg', 'Create a logo for my business', "
-            "'Generate a picture of a cat wearing sunglasses'."
+            "IMPORTANT: The prompt must ONLY describe what the user explicitly asked for. "
+            "Do NOT inject user memories, preferences, or unrelated context into the image prompt. "
+            "If user says 'draw a superhero', the prompt should be about superheroes only."
         ),
         "parameters": {
             "type": "object",
@@ -137,7 +137,8 @@ GENERATE_IMAGE_TOOL: ToolDefinition = {
                 "prompt": {
                     "type": "string",
                     "description": (
-                        "Detailed description of the image to generate in English. "
+                        "Detailed description of ONLY what the user asked for in English. "
+                        "Do NOT add user memories or unrelated personal context. "
                         "Be specific about style, colors, composition, and details. "
                         "Example: 'A vibrant African sunset over the Johannesburg skyline, "
                         "with orange and purple clouds, photorealistic style'"

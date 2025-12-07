@@ -25,7 +25,7 @@ POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt"
 # AI Horde settings
 AI_HORDE_API_URL = "https://aihorde.net/api/v2"
 AI_HORDE_API_KEY = os.getenv("AI_HORDE_API_KEY", "0000000000")
-AI_HORDE_TIMEOUT = 15.0  # Short timeout - return Pollinations quickly if Horde is slow
+AI_HORDE_TIMEOUT = 30.0  # Reasonable timeout for registered users
 AI_HORDE_POLL_INTERVAL = 2.0
 
 
@@ -35,12 +35,15 @@ async def _generate_horde_image(prompt: str) -> str | None:
     Returns image URL on success, None on failure (silently handles errors).
     Includes retry logic for 429 rate limits.
     """
-    max_retries = 3
+    max_retries = 2  # Reduced from 3 to be faster
+    
+    # Create client once outside retry loop for efficiency
+    timeout = httpx.Timeout(10.0, connect=5.0)  # 5s connect, 10s total per request
     
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(
-                timeout=AI_HORDE_TIMEOUT,
+                timeout=timeout,
                 headers={
                     "Content-Type": "application/json",
                     "apikey": AI_HORDE_API_KEY,
@@ -69,6 +72,7 @@ async def _generate_horde_image(prompt: str) -> str | None:
                     "slow_workers": True  # Allow slow workers for availability
                 }
                 
+                logger.debug("AI Horde: Submitting request (attempt %d)", attempt + 1)
                 response = await client.post(
                     f"{AI_HORDE_API_URL}/generate/async",
                     json=generate_payload
@@ -76,7 +80,7 @@ async def _generate_horde_image(prompt: str) -> str | None:
                 
                 if response.status_code == 429:
                     # Rate limited - wait and retry
-                    retry_after = int(response.headers.get("Retry-After", 5))
+                    retry_after = int(response.headers.get("Retry-After", 3))
                     logger.debug("AI Horde rate limited, retrying in %ds (attempt %d/%d)", retry_after, attempt + 1, max_retries)
                     await asyncio.sleep(retry_after)
                     continue
