@@ -24,9 +24,15 @@ export default function ToolImageThumbnail({ imageUrl, prompt, provider }: ToolI
 
   if (error) {
     return (
-      <div className="w-32 h-24 bg-gray-300 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-400">
+      <div className="relative w-32 h-24 bg-gray-300 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-400">
         <ImageOff size={24} className="text-gray-500 mb-1" />
         <span className="text-gray-500 text-[10px] font-medium">Failed to load</span>
+        {/* Show provider badge even on error */}
+        {provider && (
+          <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded">
+            {provider === 'pollinations' ? 'FLUX' : provider === 'ai-horde' ? 'Horde' : provider}
+          </div>
+        )}
       </div>
     );
   }

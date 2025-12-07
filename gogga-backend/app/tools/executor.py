@@ -189,10 +189,11 @@ async def execute_generate_image(
     # Add HD quality suffix for maximum quality
     full_prompt = f"{full_prompt}{HD_QUALITY_SUFFIX}"
     
-    # URL encode for Pollinations with HD parameters
+    # URL encode for Pollinations - optimized for speed
     encoded_prompt = urllib.parse.quote(full_prompt)
-    # Add quality parameters: enhance=true for AI enhancement, nologo=true, larger size
-    pollinations_url = f"{POLLINATIONS_BASE_URL}/{encoded_prompt}?enhance=true&nologo=true&width=1024&height=1024"
+    # Speed optimized: no enhance (prompt already enhanced), smaller size for faster generation
+    # nologo=true removes watermark, model=flux for best quality/speed balance
+    pollinations_url = f"{POLLINATIONS_BASE_URL}/{encoded_prompt}?nologo=true&width=768&height=768&model=flux"
     
     # Fire both generators in parallel
     horde_task = asyncio.create_task(_generate_horde_image(full_prompt))
