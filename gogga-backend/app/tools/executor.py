@@ -66,7 +66,7 @@ async def _generate_horde_image(prompt: str) -> str | None:
                         "n": 1
                     },
                     "nsfw": False,
-                    "censor_nsfw": True,
+                    "censor_nsfw": False,  # Disable overly aggressive filter (GOGGA has own moderation)
                     "trusted_workers": False,  # Allow all workers for faster processing
                     "models": [],  # Empty = any model, faster queue
                     "r2": True,
