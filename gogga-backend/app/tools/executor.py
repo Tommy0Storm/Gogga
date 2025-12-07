@@ -50,16 +50,18 @@ async def _generate_horde_image(prompt: str) -> str | None:
                     "Client-Agent": "Gogga:1.0:gogga@southafrica.ai",
                 }
             ) as client:
-                # Submit async generation request
-                # Using smaller size (512x512 < 588x588 limit) and low steps to avoid kudos requirement
+                # Submit async generation request with HD quality settings
+                # Negative prompt for best quality output
+                negative_prompt = "lowres, text, error, cropped, worst quality, low quality, jpeg artifacts, ugly, duplicate, blurry, bad anatomy, watermark, signature"
+                
                 generate_payload = {
                     "prompt": prompt,
                     "params": {
-                        "cfg_scale": 7,
+                        "cfg_scale": 7.5,
                         "sampler_name": "k_euler",
                         "height": 512,
                         "width": 512,
-                        "steps": 15,  # Low steps to avoid kudos upfront requirement
+                        "steps": 20,  # Increased for better quality
                         "karras": True,
                         "n": 1
                     },
@@ -69,7 +71,8 @@ async def _generate_horde_image(prompt: str) -> str | None:
                     "models": [],  # Empty = any model, faster queue
                     "r2": True,
                     "shared": False,
-                    "slow_workers": True  # Allow slow workers for availability
+                    "slow_workers": True,  # Allow slow workers for availability
+                    "replacement_filter": True  # Filter bad quality outputs
                 }
                 
                 logger.debug("AI Horde: Submitting request (attempt %d)", attempt + 1)
@@ -148,6 +151,9 @@ async def _generate_horde_image(prompt: str) -> str | None:
     return None
 
 
+# HD Quality enhancement keywords
+HD_QUALITY_SUFFIX = ", masterpiece, best quality, highly detailed, sharp focus, HD, 4K"
+
 async def execute_generate_image(
     prompt: str,
     style: str | None = None,
@@ -171,18 +177,22 @@ async def execute_generate_image(
     full_prompt = prompt
     if style:
         style_hints = {
-            "photorealistic": "photorealistic, highly detailed, 8k resolution",
-            "artistic": "artistic, painterly, expressive brushstrokes",
-            "cartoon": "cartoon style, colorful, animated",
-            "sketch": "pencil sketch, hand-drawn, black and white",
-            "3d-render": "3D render, CGI, volumetric lighting",
+            "photorealistic": "photorealistic, highly detailed, 8k resolution, professional photography",
+            "artistic": "artistic, painterly, expressive brushstrokes, fine art",
+            "cartoon": "cartoon style, colorful, animated, vibrant",
+            "sketch": "pencil sketch, hand-drawn, detailed linework",
+            "3d-render": "3D render, CGI, volumetric lighting, octane render",
         }
         if style in style_hints:
             full_prompt = f"{prompt}, {style_hints[style]}"
     
-    # URL encode for Pollinations
+    # Add HD quality suffix for maximum quality
+    full_prompt = f"{full_prompt}{HD_QUALITY_SUFFIX}"
+    
+    # URL encode for Pollinations with HD parameters
     encoded_prompt = urllib.parse.quote(full_prompt)
-    pollinations_url = f"{POLLINATIONS_BASE_URL}/{encoded_prompt}"
+    # Add quality parameters: enhance=true for AI enhancement, nologo=true, larger size
+    pollinations_url = f"{POLLINATIONS_BASE_URL}/{encoded_prompt}?enhance=true&nologo=true&width=1024&height=1024"
     
     # Fire both generators in parallel
     horde_task = asyncio.create_task(_generate_horde_image(full_prompt))

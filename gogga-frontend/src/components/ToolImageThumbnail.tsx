@@ -24,7 +24,7 @@ export default function ToolImageThumbnail({ imageUrl, prompt, provider }: ToolI
 
   if (error) {
     return (
-      <div className="w-32 h-32 bg-gray-300 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-400">
+      <div className="w-32 h-24 bg-gray-300 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-400">
         <ImageOff size={24} className="text-gray-500 mb-1" />
         <span className="text-gray-500 text-[10px] font-medium">Failed to load</span>
       </div>
@@ -38,7 +38,7 @@ export default function ToolImageThumbnail({ imageUrl, prompt, provider }: ToolI
         onClick={() => setIsModalOpen(true)}
       >
         {loading && (
-          <div className="absolute inset-0 bg-gray-200 rounded-lg flex items-center justify-center z-10">
+          <div className="w-32 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
             <Loader2 size={20} className="text-gray-400 animate-spin" />
           </div>
         )}
@@ -46,7 +46,7 @@ export default function ToolImageThumbnail({ imageUrl, prompt, provider }: ToolI
         <img
           src={imageUrl}
           alt={prompt || 'Generated image'}
-          className="w-32 h-32 object-cover rounded-lg shadow-md transition-transform group-hover:scale-[1.02]"
+          className="w-32 h-auto max-h-32 object-contain rounded-lg shadow-md transition-transform group-hover:scale-[1.02] bg-gray-100"
           onLoad={() => setLoading(false)}
           onError={() => { setLoading(false); setError(true); }}
         />
