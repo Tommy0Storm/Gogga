@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AudioRecorder from '@/components/AudioRecorder';
+import VoiceRecordingModal from '@/components/VoiceRecordingModal';
 import AdminPanel from '@/components/AdminPanel';
 import PromptManager from '@/components/PromptManager';
 import FileUpload from '@/components/FileUpload';
@@ -25,6 +26,7 @@ import { useChatHistory, type Message } from '@/hooks/useChatHistory';
 import { useImageStorage } from '@/hooks/useImageStorage';
 import { useTokenTracking, formatTokenCount } from '@/hooks/useTokenTracking';
 import { useLocation } from '@/hooks/useLocation';
+import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import {
   softDeleteImage,
   RAG_LIMITS,
@@ -185,6 +187,22 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     detectLanguage: detectMessageLanguage,
     getAIContext: getBuddyContext,
   } = useBuddySystem();
+
+  // Voice recording hook
+  const {
+    isRecording,
+    recordingTime,
+    error: voiceError,
+    isModalOpen: isVoiceModalOpen,
+    startRecording,
+    stopRecording,
+    closeModal: closeVoiceModal,
+  } = useVoiceRecording({
+    onAudioReady: (audioBlob: Blob) => {
+      console.log('Audio recorded:', audioBlob.size, 'bytes');
+      // TODO: Implement transcription when backend is ready
+    },
+  });
 
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
@@ -542,10 +560,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     }
   };
 
-  const handleAudio = (audioBlob: Blob) => {
-    console.log('Audio recorded:', audioBlob.size, 'bytes');
-    alert('Audio Captured! Transcription coming soon.');
-  };
+
 
   const handleFileUpload = async (file: File) => {
     // Both JIVE and JIGGA can upload documents
@@ -1394,7 +1409,10 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
             <div className="max-w-4xl mx-auto flex items-center gap-2">
               {/* Left buttons - aligned center with 48px height */}
               <div className="flex items-center gap-2 h-12">
-                <AudioRecorder onAudioReady={handleAudio} />
+                <AudioRecorder 
+                  onStartRecording={startRecording}
+                  disabled={isLoading || isRecording}
+                />
 
                 {/* File Upload (JIVE/JIGGA) */}
                 {tier !== 'free' && (
@@ -1722,6 +1740,16 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         locationJustDetermined={locationJustDetermined}
         autoHideDelay={5000}
         externalLocation={externalWeatherLocation}
+      />
+
+      {/* Voice Recording Modal */}
+      <VoiceRecordingModal
+        isOpen={isVoiceModalOpen}
+        isRecording={isRecording}
+        recordingTime={recordingTime}
+        error={voiceError}
+        onClose={closeVoiceModal}
+        onStop={stopRecording}
       />
     </div>
   );
