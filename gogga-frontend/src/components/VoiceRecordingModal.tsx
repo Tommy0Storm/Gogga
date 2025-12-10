@@ -133,7 +133,7 @@ export default function VoiceRecordingModal({
               </div>
               <p className="text-white text-lg mb-2">Recording Complete</p>
               <p className="text-gray-400 text-sm">
-                Audio captured successfully. Transcription coming soon.
+                Audio captured successfully.
               </p>
             </>
           )}
