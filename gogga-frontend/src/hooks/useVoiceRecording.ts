@@ -50,9 +50,10 @@ export function useVoiceRecording({ onAudioReady }: UseVoiceRecordingProps) {
       streamRef.current = stream;
 
       // Determine supported mimeType (Safari supports mp4/aac, Chrome webm/opus)
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/mp4';
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      }
 
       mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
@@ -105,10 +106,20 @@ export function useVoiceRecording({ onAudioReady }: UseVoiceRecordingProps) {
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
-      // Stop the recorder without triggering onAudioReady
-      mediaRecorderRef.current.ondataavailable = null;
-      mediaRecorderRef.current.onstop = null;
-      mediaRecorderRef.current.stop();
+      const recorder = mediaRecorderRef.current;
+      
+      // Remove event handlers before stopping to prevent callbacks
+      if (recorder.ondataavailable) {
+        recorder.ondataavailable = () => {}; // Empty function instead of null
+      }
+      if (recorder.onstop) {
+        recorder.onstop = () => {}; // Empty function instead of null
+      }
+      
+      // Stop the recorder
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
+      }
       
       // Release hardware resources
       if (streamRef.current) {

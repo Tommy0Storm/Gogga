@@ -5,8 +5,8 @@
 
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
-import { X, Mic, Square, AlertCircle } from 'lucide-react';
+import { useEffect, useCallback } from 'react';
+import { X, Mic, Square, AlertCircle, Check } from 'lucide-react';
 
 interface VoiceRecordingModalProps {
   isOpen: boolean;
@@ -127,7 +127,7 @@ export default function VoiceRecordingModal({
               <div className="w-24 h-24 rounded-full bg-green-500/20 flex items-center justify-center mb-6">
                 <div className="w-20 h-20 rounded-full bg-green-500/40 flex items-center justify-center">
                   <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-                    ✓
+                    <Check size={32} className="text-white" strokeWidth={3} />
                   </div>
                 </div>
               </div>
