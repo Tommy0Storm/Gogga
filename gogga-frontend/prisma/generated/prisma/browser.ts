@@ -72,3 +72,18 @@ export type AdminLog = Prisma.AdminLogModel
  * 
  */
 export type SubscriptionEvent = Prisma.SubscriptionEventModel
+/**
+ * Model Usage
+ * 
+ */
+export type Usage = Prisma.UsageModel
+/**
+ * Model UsageSummary
+ * 
+ */
+export type UsageSummary = Prisma.UsageSummaryModel
+/**
+ * Model DebugSubmission
+ * 
+ */
+export type DebugSubmission = Prisma.DebugSubmissionModel

@@ -38,10 +38,5 @@
     "@types/better-sqlite3": "^7.6.13",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.3.3"
-  },
-  "overrides": {
-    "react": "$react",
-    "react-dom": "$react-dom",
-    "better-sqlite3": "$better-sqlite3"
   }
 }

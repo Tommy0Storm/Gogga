@@ -70,6 +70,11 @@ export type CreditPurchase = Prisma.CreditPurchaseModel
  */
 export type ProcessedPayment = Prisma.ProcessedPaymentModel
 /**
+ * Model RecurringSchedule
+ * 
+ */
+export type RecurringSchedule = Prisma.RecurringScheduleModel
+/**
  * Model Voucher
  * 
  */
@@ -90,7 +95,17 @@ export type AdminLog = Prisma.AdminLogModel
  */
 export type SubscriptionEvent = Prisma.SubscriptionEventModel
 /**
- * Model RecurringSchedule
+ * Model Usage
  * 
  */
-export type RecurringSchedule = Prisma.RecurringScheduleModel
+export type Usage = Prisma.UsageModel
+/**
+ * Model UsageSummary
+ * 
+ */
+export type UsageSummary = Prisma.UsageSummaryModel
+/**
+ * Model DebugSubmission
+ * 
+ */
+export type DebugSubmission = Prisma.DebugSubmissionModel

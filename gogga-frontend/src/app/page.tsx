@@ -31,7 +31,9 @@ export default async function HomePage() {
   const userEmail = session.user.email || null;
   const userTier =
     (session.user as unknown as { tier?: string })?.tier || 'FREE';
+  const isTester =
+    (session.user as unknown as { isTester?: boolean })?.isTester || false;
 
   // Logged in - render main chat UI with user context
-  return <ChatClient userEmail={userEmail} userTier={userTier} />;
+  return <ChatClient userEmail={userEmail} userTier={userTier} isTester={isTester} />;
 }

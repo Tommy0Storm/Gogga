@@ -11,6 +11,10 @@ Universal prompt enhancement: OpenRouter Llama 3.3 70B FREE (all tiers)
 Rate Limit Handling:
 - Retry with exponential backoff (3 attempts)
 - Fallback to OpenRouter when Cerebras is rate-limited
+
+Plugin System:
+- Language Detection: Runs on EVERY request (cannot be disabled)
+- Enriches context with language intelligence before LLM processing
 """
 import logging
 import time
@@ -32,6 +36,7 @@ from app.core.router import (
 from app.services.cost_tracker import track_usage
 from app.core.exceptions import InferenceError
 from app.tools.definitions import GOGGA_TOOLS, get_tools_for_tier, ToolCall
+from app.plugins import LanguageDetectorPlugin, Plugin
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +67,9 @@ ResponseDict = dict[str, Any]
 # Cerebras client (lazy init)
 _client: Cerebras | None = None
 
+# Plugin system (lazy init)
+_plugins: list[Plugin] | None = None
+
 
 def get_client() -> Cerebras:
     """Get or create the Cerebras client instance."""
@@ -69,6 +77,71 @@ def get_client() -> Cerebras:
     if _client is None:
         _client = Cerebras(api_key=settings.CEREBRAS_API_KEY)
     return _client
+
+
+def get_plugins() -> list[Plugin]:
+    """
+    Get or create the plugin instances.
+    
+    Plugins run on EVERY request and CANNOT be disabled.
+    They enrich context before LLM processing.
+    """
+    global _plugins
+    if _plugins is None:
+        _plugins = [
+            LanguageDetectorPlugin(),  # MANDATORY: Language intelligence for SA languages
+        ]
+        logger.info(f"Initialized {len(_plugins)} plugins: {[p.name for p in _plugins]}")
+    return _plugins
+
+
+async def run_plugins_before_request(request: dict[str, Any]) -> dict[str, Any]:
+    """
+    Run all plugins' before_request hooks.
+    
+    Plugins process the request sequentially and can enrich metadata,
+    modify messages, or add system prompts.
+    
+    Args:
+        request: Chat completion request
+        
+    Returns:
+        Modified request with plugin enrichments
+    """
+    plugins = get_plugins()
+    
+    for plugin in plugins:
+        try:
+            request = await plugin.before_request(request)
+        except Exception as e:
+            logger.error(f"Plugin {plugin.name} before_request error: {e}", exc_info=True)
+            # Continue pipeline even if plugin fails
+    
+    return request
+
+
+async def run_plugins_after_response(response: dict[str, Any]) -> dict[str, Any]:
+    """
+    Run all plugins' after_response hooks.
+    
+    Plugins can transform LLM output or add metadata.
+    
+    Args:
+        response: LLM response
+        
+    Returns:
+        Modified response with plugin transformations
+    """
+    plugins = get_plugins()
+    
+    for plugin in plugins:
+        try:
+            response = await plugin.after_response(response)
+        except Exception as e:
+            logger.error(f"Plugin {plugin.name} after_response error: {e}", exc_info=True)
+            # Continue pipeline even if plugin fails
+    
+    return response
 
 
 def parse_thinking_response(content: str) -> tuple[str, str | None]:
@@ -126,6 +199,9 @@ class AIService:
         """
         Generate a response based on user tier.
         
+        CRITICAL: This method runs plugins on EVERY request before LLM processing.
+        Plugins CANNOT be disabled and enrich context with intelligence (language, etc.).
+        
         Args:
             user_id: Unique identifier for the user
             message: The user's input message
@@ -137,35 +213,68 @@ class AIService:
         Returns:
             Dict containing the response and metadata
         """
+        # Build request object for plugins
+        request = {
+            "user_id": user_id,
+            "message": message,
+            "messages": [],  # Will be built by internal methods
+            "history": history,
+            "user_tier": user_tier.value,
+            "metadata": {
+                "original_message": message,
+                "user_tier": user_tier.value,
+                "context_tokens": context_tokens
+            }
+        }
+        
+        # Build messages for plugin processing
+        if history:
+            request["messages"].extend(history[-MAX_HISTORY_TURNS:])
+        request["messages"].append({"role": "user", "content": message})
+        
+        # RUN PLUGINS: Enrich context with language intelligence (MANDATORY)
+        request = await run_plugins_before_request(request)
+        
+        # Extract potentially modified message and history
+        # Plugins may have added system prompts or modified content
+        messages = request.get("messages", [])
+        modified_history = [msg for msg in messages if msg.get("role") != "user"]
+        
+        # Use last user message in case plugin modified it
+        last_user_msg = next(
+            (msg["content"] for msg in reversed(messages) if msg.get("role") == "user"),
+            message
+        )
+        
         # Determine which layer to use
         if force_layer:
             layer = force_layer
         else:
-            layer = tier_router.classify_intent(message, user_tier, context_tokens)
+            layer = tier_router.classify_intent(last_user_msg, user_tier, context_tokens)
         
         # Route based on layer
         if layer == CognitiveLayer.FREE_TEXT:
-            return await AIService._generate_free(user_id, message, history)
+            response = await AIService._generate_free(user_id, last_user_msg, modified_history or history)
         
         elif layer == CognitiveLayer.JIVE_SPEED:
-            return await AIService._generate_cerebras(
-                user_id, message, history, layer,
+            response = await AIService._generate_cerebras(
+                user_id, last_user_msg, modified_history or history, layer,
                 use_cepo=False,
                 enable_tools=True,
                 tier="jive"
             )
         
         elif layer == CognitiveLayer.JIVE_REASONING:
-            return await AIService._generate_cerebras(
-                user_id, message, history, layer,
+            response = await AIService._generate_cerebras(
+                user_id, last_user_msg, modified_history or history, layer,
                 use_cepo=True,
                 enable_tools=True,
                 tier="jive"
             )
         
         elif layer == CognitiveLayer.JIGGA_THINK:
-            return await AIService._generate_cerebras(
-                user_id, message, history, layer,
+            response = await AIService._generate_cerebras(
+                user_id, last_user_msg, modified_history or history, layer,
                 use_cepo=False,
                 thinking_mode=True,
                 enable_tools=True,
@@ -173,16 +282,27 @@ class AIService:
             )
         
         elif layer == CognitiveLayer.JIGGA_FAST:
-            return await AIService._generate_cerebras(
-                user_id, message, history, layer,
+            response = await AIService._generate_cerebras(
+                user_id, last_user_msg, modified_history or history, layer,
                 use_cepo=False,
                 append_no_think=True,
                 enable_tools=True,
                 tier="jigga"
             )
+        else:
+            # Default fallback
+            response = await AIService._generate_free(user_id, last_user_msg, modified_history or history)
         
-        # Default fallback
-        return await AIService._generate_free(user_id, message, history)
+        # Merge plugin metadata into response
+        if "metadata" in request:
+            if "meta" not in response:
+                response["meta"] = {}
+            response["meta"]["plugin_metadata"] = request["metadata"]
+        
+        # RUN PLUGINS: Post-process response (if needed)
+        response = await run_plugins_after_response(response)
+        
+        return response
     
     @staticmethod
     async def _generate_free(
@@ -761,6 +881,287 @@ class AIService:
                 "error": "GOGGA AI encountered an issue. Please try again."
             }
             yield f"data: {json.dumps(error_response)}\n\n"
+
+    @staticmethod
+    async def generate_response_with_tools_stream(
+        user_id: str,
+        message: str,
+        history: list[MessageDict] | None,
+        layer: CognitiveLayer,
+        thinking_mode: bool = False,
+        append_no_think: bool = False,
+        tier: str = "jive",
+        force_tool: str | None = None,  # ToolShed: Force specific tool by name
+    ):
+        """
+        Generate response with streaming tool execution logs.
+        
+        Yields SSE events:
+        - tool_start: Math tool execution starting
+        - tool_log: Execution progress log
+        - tool_complete: Tool finished
+        - content: Response text chunks
+        - done: Final metadata
+        """
+        import json
+        import time
+        from app.tools.executor import execute_math_tool
+        from app.tools.definitions import get_tools_for_tier
+        
+        config = tier_router.get_model_config(layer)
+        model_id = config["model"]
+        system_prompt = tier_router.get_system_prompt(layer)
+        
+        # ToolShed: Add force tool instruction if specified
+        if force_tool:
+            system_prompt += f"\n\n**USER HAS REQUESTED SPECIFIC TOOL**\nThe user wants you to use the `{force_tool}` tool for this request. You MUST call this tool with appropriate parameters based on their message. Do not skip the tool call."
+            logger.info(f"[ToolShed] Forcing tool: {force_tool}")
+        
+        # Send initial metadata
+        yield f"data: {json.dumps({'type': 'meta', 'tier': tier, 'layer': layer.value, 'model': model_id, 'force_tool': force_tool})}\n\n"
+        
+        start_time = time.perf_counter()
+        
+        # Build messages
+        messages: list[MessageDict] = [{"role": "system", "content": system_prompt}]
+        if history:
+            messages.extend(history[-MAX_HISTORY_TURNS:])
+        messages.append({"role": "user", "content": message})
+        
+        # First LLM call - check for tool calls
+        client = get_client()
+        tools = get_tools_for_tier(tier)
+        
+        try:
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=model_id,
+                messages=messages,
+                tools=tools if tools else None,
+                temperature=config.get("temperature", 0.6),
+                top_p=config.get("top_p", 0.95),
+                max_completion_tokens=config.get("max_tokens", 4096)
+            )
+            
+            choice = response.choices[0].message
+            assistant_content = choice.content or ""
+            
+            # Check for math tool calls
+            math_tool_calls = []
+            other_tool_calls = []
+            
+            if hasattr(choice, 'tool_calls') and choice.tool_calls:
+                for tc in choice.tool_calls:
+                    try:
+                        args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        args = {}
+                    tool_data = {
+                        "id": tc.id,
+                        "name": tc.function.name,
+                        "arguments": args
+                    }
+                    if tc.function.name.startswith("math_"):
+                        math_tool_calls.append(tool_data)
+                    else:
+                        other_tool_calls.append(tool_data)
+            
+            # If no math tools, just stream the content
+            if not math_tool_calls:
+                if assistant_content:
+                    yield f"data: {json.dumps({'type': 'content', 'content': assistant_content})}\n\n"
+                
+                # Send done event with any other tool calls (charts, images, etc.)
+                latency = time.perf_counter() - start_time
+                usage = response.usage
+                cost_data = await track_usage(
+                    user_id=user_id,
+                    model=model_id,
+                    layer=layer.value,
+                    input_tokens=usage.prompt_tokens,
+                    output_tokens=usage.completion_tokens,
+                    tier=tier
+                )
+                done_data = {
+                    'type': 'done', 
+                    'latency': round(latency, 3), 
+                    'tokens': {'input': usage.prompt_tokens, 'output': usage.completion_tokens}, 
+                    'cost_zar': cost_data['zar']
+                }
+                # Include non-math tool calls for frontend execution (charts, images)
+                if other_tool_calls:
+                    done_data['tool_calls'] = [{
+                        'function': {'name': tc['name'], 'arguments': tc['arguments']},
+                        'id': tc['id']
+                    } for tc in other_tool_calls]
+                yield f"data: {json.dumps(done_data)}\n\n"
+                return
+            
+            # MATH TOOL EXECUTION - Stream execution logs
+            yield f"data: {json.dumps({'type': 'tool_start', 'tools': [tc['name'] for tc in math_tool_calls]})}\n\n"
+            
+            tool_results = []
+            for tc in math_tool_calls:
+                tool_name = tc["name"]
+                args = tc["arguments"]
+                
+                # Log: Starting tool
+                yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': f'[>] Starting {tool_name}...', 'icon': 'wrench'})}\n\n"
+                
+                # Log: Arguments
+                args_summary = ", ".join([f"{k}={v}" for k, v in list(args.items())[:5]])
+                yield f"data: {json.dumps({'type': 'tool_log', 'level': 'debug', 'message': f'Args: {args_summary}', 'icon': '•'})}\n\n"
+                
+                try:
+                    # Execute the tool
+                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[~] Executing calculation...', 'icon': 'calc'})}\n\n"
+                    
+                    result = await execute_math_tool(
+                        tool_name=tool_name,
+                        arguments=args,
+                        tier=tier
+                    )
+                    
+                    # Convert result
+                    if hasattr(result, '__dict__') and not isinstance(result, dict):
+                        result_dict = dict(result) if hasattr(result, 'keys') else vars(result)
+                    else:
+                        result_dict = result
+                    
+                    # Log: Success
+                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'success', 'message': f'[+] {tool_name} completed', 'icon': 'check'})}\n\n"
+                    
+                    tool_results.append({
+                        "tool_call_id": tc["id"],
+                        "role": "tool",
+                        "name": tool_name,
+                        "content": json.dumps(result_dict, default=str)
+                    })
+                    
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'error', 'message': f'[!] {tool_name} failed: {str(e)}', 'icon': 'error'})}\n\n"
+                    tool_results.append({
+                        "tool_call_id": tc["id"],
+                        "role": "tool",
+                        "name": tool_name,
+                        "content": json.dumps({"success": False, "error": str(e)})
+                    })
+            
+            yield f"data: {json.dumps({'type': 'tool_complete', 'count': len(math_tool_calls)})}\n\n"
+            
+            # Build continuation messages
+            extended_history = list(history or [])
+            extended_history.append({"role": "user", "content": message})
+            
+            assistant_msg = {"role": "assistant", "content": assistant_content or ""}
+            assistant_msg["tool_calls"] = [
+                {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"])}}
+                for tc in math_tool_calls
+            ]
+            extended_history.append(assistant_msg)
+            
+            for tr in tool_results:
+                extended_history.append(tr)
+            
+            # Log: Sending to LLM
+            yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Sending results to AI...', 'icon': 'ai'})}\n\n"
+            
+            # Second LLM call - get final response (streaming)
+            # Include non-math tools (charts, images) so AI can call them after processing results
+            non_math_tools = [t for t in (tools or []) if not t.get("function", {}).get("name", "").startswith("math_")]
+            final_messages = [{"role": "system", "content": system_prompt}] + extended_history
+            
+            def create_stream():
+                api_kwargs = {
+                    "model": model_id,
+                    "messages": final_messages,
+                    "temperature": config.get("temperature", 0.6),
+                    "top_p": config.get("top_p", 0.95),
+                    "max_completion_tokens": config.get("max_tokens", 4096),
+                    "stream": True
+                }
+                # Include chart/image tools for second pass
+                if non_math_tools:
+                    api_kwargs["tools"] = non_math_tools
+                return client.chat.completions.create(**api_kwargs)
+            
+            # Use non-streaming for second call to capture tool calls properly
+            final_api_kwargs = {
+                "model": model_id,
+                "messages": final_messages,
+                "temperature": config.get("temperature", 0.6),
+                "top_p": config.get("top_p", 0.95),
+                "max_completion_tokens": config.get("max_tokens", 4096)
+            }
+            # Include chart/image tools for second pass
+            if non_math_tools:
+                final_api_kwargs["tools"] = non_math_tools
+                logger.info(f"Second LLM call with {len(non_math_tools)} non-math tools")
+            
+            final_response = await asyncio.to_thread(
+                client.chat.completions.create,
+                **final_api_kwargs
+            )
+            
+            final_choice = final_response.choices[0].message
+            final_content = final_choice.content or ""
+            
+            # Stream the final content in chunks for UX
+            chunk_size = 50
+            for i in range(0, len(final_content), chunk_size):
+                chunk = final_content[i:i+chunk_size]
+                yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+            
+            # Capture any tool calls from the second response (charts, images)
+            second_pass_tools = []
+            if hasattr(final_choice, 'tool_calls') and final_choice.tool_calls:
+                for tc in final_choice.tool_calls:
+                    try:
+                        args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        args = {}
+                    second_pass_tools.append({
+                        "id": tc.id,
+                        "name": tc.function.name,
+                        "arguments": args
+                    })
+                logger.info(f"Second pass tool calls: {[tc['name'] for tc in second_pass_tools]}")
+            
+            # Combine any tool calls from first pass (other_tool_calls) with second pass
+            all_frontend_tools = other_tool_calls + second_pass_tools
+            
+            # Final done event
+            latency = time.perf_counter() - start_time
+            total_input = response.usage.prompt_tokens + final_response.usage.prompt_tokens
+            output_tokens = final_response.usage.completion_tokens
+            cost_data = await track_usage(
+                user_id=user_id,
+                model=model_id,
+                layer=layer.value,
+                input_tokens=total_input,
+                output_tokens=output_tokens,
+                tier=tier
+            )
+            
+            done_data = {
+                'type': 'done', 
+                'latency': round(latency, 3), 
+                'math_tools_executed': [tc['name'] for tc in math_tool_calls], 
+                'math_tool_count': len(math_tool_calls), 
+                'cost_zar': cost_data['zar']
+            }
+            # Include all frontend tool calls (charts, images from either pass)
+            if all_frontend_tools:
+                done_data['tool_calls'] = [{
+                    'function': {'name': tc['name'], 'arguments': tc['arguments']},
+                    'id': tc['id']
+                } for tc in all_frontend_tools]
+                logger.info(f"Returning {len(all_frontend_tools)} tool calls to frontend: {[tc['name'] for tc in all_frontend_tools]}")
+            yield f"data: {json.dumps(done_data)}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Streaming with tools failed: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     @staticmethod
     async def health_check() -> ResponseDict:

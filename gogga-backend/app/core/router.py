@@ -35,8 +35,9 @@ class CognitiveLayer(str, Enum):
     JIVE_IMAGE = "jive_image"            # FLUX 1.1 Pro (capped)
     
     # JIGGA tier layers (Cerebras Qwen)
-    JIGGA_THINK = "jigga_think"          # Qwen 3 235B with thinking (temp=0.6, top_p=0.95)
-    JIGGA_FAST = "jigga_fast"            # Qwen 3 235B + /no_think (fast response)
+    JIGGA_THINK = "jigga_think"          # Qwen 3 32B with thinking (temp=0.6, top_p=0.95)
+    JIGGA_FAST = "jigga_fast"            # Qwen 3 32B + /no_think (fast response)
+    JIGGA_MULTILINGUAL = "jigga_multilingual"  # Qwen 3 235B Instruct (African languages, long output)
     JIGGA_IMAGE = "jigga_image"          # FLUX 1.1 Pro (higher cap)
     
     # Universal layers
@@ -60,10 +61,11 @@ JIVE_MAX_TOKENS: Final[int] = 8000  # Llama 3.3 70B extended output (max: 40,000
 JIVE_DEFAULT_TOKENS: Final[int] = 4096  # Default for normal requests
 
 # JIGGA Token limits (Qwen 3 32B)
-# Context: 131k tokens | Max Output: 8k tokens
-# For long contexts (>100k), consider using /no_think to save context budget
+# Context: 65k tokens (free) / 131k (paid) | Max Output: 8k tokens
+# Since JIGGA always uses thinking mode (removed /no_think), default to max output
+# This prevents truncation on analysis and document processing
 JIGGA_MAX_TOKENS: Final[int] = 8000  # Qwen 3 32B max output
-JIGGA_DEFAULT_TOKENS: Final[int] = 4096  # Default for casual chat
+JIGGA_DEFAULT_TOKENS: Final[int] = 8000  # Always use max for JIGGA tier
 
 # DO NOT use greedy decoding (temp=0) - causes performance degradation and endless repetitions
 # For long contexts (>100k tokens), use /no_think to disable reasoning and save context budget
@@ -211,6 +213,52 @@ IMAGE_KEYWORDS: Final[frozenset[str]] = frozenset([
     "visualize this", "show me a picture", "can you draw",
 ])
 
+# South African Bantu language indicators
+# These trigger 235B model for better multilingual support
+# The 235B Instruct model has "powerful multilingual capabilities" (Cerebras docs)
+SA_BANTU_LANGUAGE_PATTERNS: Final[frozenset[str]] = frozenset([
+    # Language names (when user mentions them)
+    "isizulu", "zulu", "isixhosa", "xhosa", "sesotho", "sotho", 
+    "setswana", "tswana", "sepedi", "pedi", "northern sotho",
+    "isindebele", "ndebele", "siswati", "swati", "swazi",
+    "tshivenda", "venda", "xitsonga", "tsonga",
+    
+    # Common Zulu words/phrases
+    "sawubona", "yebo", "ngiyabonga", "unjani", "ngiyaphila",
+    "umuntu", "abantu", "ubuntu", "inkosi", "indaba",
+    "isibongo", "igama", "umsebenzi", "uthando", "amandla",
+    
+    # Common Xhosa words/phrases  
+    "molo", "enkosi", "uxolo", "camagu", "ewe", "hayi",
+    "umntu", "ukutya", "umzi", "intombi", "inkwenkwe",
+    
+    # Common Sotho/Tswana words/phrases
+    "dumela", "kea leboha", "ke a leboga", "re a leboga",
+    "motho", "batho", "ntate", "mme", "ngwana", "mosadi",
+    "monna", "kgosi", "morena", "thuto", "bophelo",
+    
+    # Common Venda/Tsonga words
+    "ndaa", "ndi a livhuwa", "ndo livhuwa", "ahee",
+    "munhu", "vhathu", "mufunzi", "khosi",
+    
+    # SA context that often involves African languages
+    "ka sesotho", "ka isizulu", "ka isixhosa", "ngesi",
+    "translate to zulu", "translate to xhosa", "translate to sotho",
+    "in zulu", "in xhosa", "in sotho", "in tswana",
+])
+
+
+def contains_african_language(message: str) -> bool:
+    """
+    Detect if message contains South African Bantu language content.
+    This triggers the 235B model for better multilingual handling.
+    
+    The Qwen 3 235B Instruct model has "powerful multilingual capabilities"
+    and is better suited for African language content than the 32B model.
+    """
+    message_lower = message.lower()
+    return any(pattern in message_lower for pattern in SA_BANTU_LANGUAGE_PATTERNS)
+
 
 def is_image_prompt(prompt: str) -> bool:
     """
@@ -267,29 +315,14 @@ def should_use_thinking(message: str, context_tokens: int = 0) -> bool:
     """
     Determine if JIGGA tier should use thinking mode.
     
-    Returns False (use /no_think) if:
-    - Message contains fast mode keywords
-    - Context is very long (131k+ tokens)
-    
-    Returns True (use thinking) if:
-    - Message contains thinking keywords
-    - Default for complex queries
+    NOTE: As of 2025-12-07, JIGGA always uses thinking mode for better quality.
+    This function is kept for backwards compatibility but always returns True.
+    The /no_think feature was removed due to poor output quality for
+    analysis and long document processing.
     """
-    message_lower = message.lower()
-    
-    # Fast mode keywords → disable thinking
-    if any(keyword in message_lower for keyword in FAST_MODE_KEYWORDS):
-        return False
-    
-    # Long context → disable thinking for accuracy
-    if context_tokens > 100000:  # ~100k tokens
-        return False
-    
-    # Thinking keywords → enable thinking
-    if any(keyword in message_lower for keyword in THINKING_KEYWORDS):
-        return True
-    
-    # Default: use thinking for JIGGA tier
+    # Always use thinking mode for JIGGA tier
+    # Previous fast mode logic has been removed for better output quality
+    _ = message, context_tokens  # Suppress unused parameter warnings
     return True
 
 
@@ -353,11 +386,13 @@ class TierRouter:
             return CognitiveLayer.JIVE_SPEED
         
         else:  # JIGGA
-            # Determine thinking vs fast mode
-            if should_use_thinking(message, context_tokens):
-                return CognitiveLayer.JIGGA_THINK
-            else:
-                return CognitiveLayer.JIGGA_FAST
+            # Check for African language content → 235B Instruct model
+            # The 235B model has better multilingual support and longer output (up to 40k tokens)
+            if contains_african_language(message):
+                return CognitiveLayer.JIGGA_MULTILINGUAL
+            
+            # Default: 32B with thinking mode for better quality analysis
+            return CognitiveLayer.JIGGA_THINK
     
     @staticmethod
     def get_model_config(layer: CognitiveLayer) -> dict:
@@ -426,6 +461,14 @@ class TierRouter:
                 "use_cepo": False,
                 "append_no_think": True,  # Append /no_think to prompt
             },
+            CognitiveLayer.JIGGA_MULTILINGUAL: {
+                "provider": "cerebras",
+                "model": settings.MODEL_COMPLEX_235B,  # Qwen 3 235B Instruct
+                "settings": QWEN_FAST_SETTINGS,  # Non-thinking model, use fast settings
+                "use_cepo": False,
+                "append_no_think": False,  # 235B Instruct is already non-thinking
+                "max_tokens": 32000,  # 235B supports up to 40k output tokens
+            },
             CognitiveLayer.JIGGA_IMAGE: {
                 "provider": "deepinfra",
                 "model": settings.DEEPINFRA_IMAGE_MODEL,  # FLUX 1.1 Pro
@@ -458,6 +501,7 @@ class TierRouter:
             CognitiveLayer.JIVE_REASONING: "jive_reasoning",
             CognitiveLayer.JIGGA_THINK: "jigga_think",
             CognitiveLayer.JIGGA_FAST: "jigga_fast",
+            CognitiveLayer.JIGGA_MULTILINGUAL: "jigga_multilingual",  # 235B for African languages
             CognitiveLayer.ENHANCE_PROMPT: "enhance_prompt",
         }
         

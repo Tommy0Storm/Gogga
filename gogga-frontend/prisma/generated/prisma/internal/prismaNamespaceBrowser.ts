@@ -61,7 +61,10 @@ export const ModelName = {
   Voucher: 'Voucher',
   VoucherLog: 'VoucherLog',
   AdminLog: 'AdminLog',
-  SubscriptionEvent: 'SubscriptionEvent'
+  SubscriptionEvent: 'SubscriptionEvent',
+  Usage: 'Usage',
+  UsageSummary: 'UsageSummary',
+  DebugSubmission: 'DebugSubmission'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -82,6 +85,7 @@ export const UserScalarFieldEnum = {
   email: 'email',
   isAdmin: 'isAdmin',
   isServiceAdmin: 'isServiceAdmin',
+  isTester: 'isTester',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -245,6 +249,65 @@ export const SubscriptionEventScalarFieldEnum = {
 } as const
 
 export type SubscriptionEventScalarFieldEnum = (typeof SubscriptionEventScalarFieldEnum)[keyof typeof SubscriptionEventScalarFieldEnum]
+
+
+export const UsageScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalTokens: 'totalTokens',
+  costCents: 'costCents',
+  model: 'model',
+  provider: 'provider',
+  endpoint: 'endpoint',
+  tier: 'tier',
+  conversationId: 'conversationId',
+  requestId: 'requestId',
+  durationMs: 'durationMs',
+  createdAt: 'createdAt'
+} as const
+
+export type UsageScalarFieldEnum = (typeof UsageScalarFieldEnum)[keyof typeof UsageScalarFieldEnum]
+
+
+export const UsageSummaryScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  year: 'year',
+  month: 'month',
+  totalTokens: 'totalTokens',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalCostCents: 'totalCostCents',
+  chatRequests: 'chatRequests',
+  enhanceRequests: 'enhanceRequests',
+  imageRequests: 'imageRequests',
+  imagesUsed: 'imagesUsed',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UsageSummaryScalarFieldEnum = (typeof UsageSummaryScalarFieldEnum)[keyof typeof UsageSummaryScalarFieldEnum]
+
+
+export const DebugSubmissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  reason: 'reason',
+  consoleLogs: 'consoleLogs',
+  networkLogs: 'networkLogs',
+  errorStack: 'errorStack',
+  userAgent: 'userAgent',
+  url: 'url',
+  screenSize: 'screenSize',
+  status: 'status',
+  adminNotes: 'adminNotes',
+  resolvedAt: 'resolvedAt',
+  resolvedBy: 'resolvedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type DebugSubmissionScalarFieldEnum = (typeof DebugSubmissionScalarFieldEnum)[keyof typeof DebugSubmissionScalarFieldEnum]
 
 
 export const SortOrder = {

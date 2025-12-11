@@ -25,8 +25,8 @@ POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt"
 # AI Horde settings
 AI_HORDE_API_URL = "https://aihorde.net/api/v2"
 AI_HORDE_API_KEY = os.getenv("AI_HORDE_API_KEY", "0000000000")
-AI_HORDE_TIMEOUT = 30.0  # Reasonable timeout for registered users
-AI_HORDE_POLL_INTERVAL = 2.0
+AI_HORDE_TIMEOUT = 25.0  # Reasonable timeout for registered users
+AI_HORDE_POLL_INTERVAL = 1.0  # Poll every 1s for faster response detection
 
 
 async def _generate_horde_image(prompt: str) -> str | None:
@@ -57,21 +57,21 @@ async def _generate_horde_image(prompt: str) -> str | None:
                 generate_payload = {
                     "prompt": prompt,
                     "params": {
-                        "cfg_scale": 7.5,
-                        "sampler_name": "k_euler",
+                        "cfg_scale": 7.0,
+                        "sampler_name": "k_euler",  # Good quality sampler
                         "height": 512,
                         "width": 512,
-                        "steps": 20,  # Increased for better quality
+                        "steps": 15,  # Reduced for speed (still good quality)
                         "karras": True,
                         "n": 1
                     },
                     "nsfw": False,
                     "censor_nsfw": False,  # Disable overly aggressive filter (GOGGA has own moderation)
                     "trusted_workers": False,  # Allow all workers for faster processing
-                    "models": [],  # Empty = any model, faster queue
+                    "models": ["Deliberate", "stable_diffusion"],  # Fast popular models
                     "r2": True,
                     "shared": False,
-                    "slow_workers": True,  # Allow slow workers for availability
+                    "slow_workers": False,  # Only fast workers for speed
                     "replacement_filter": True  # Filter bad quality outputs
                 }
                 
@@ -304,6 +304,111 @@ def execute_create_chart(
 # Tool Execution Router
 # =============================================================================
 
+
+# =============================================================================
+# Math Tool Execution
+# =============================================================================
+
+async def execute_math_tool(
+    tool_name: str,
+    arguments: dict[str, Any],
+    tier: str = "free"
+) -> dict[str, Any]:
+    """
+    Execute a math tool using MathService.
+    
+    Args:
+        tool_name: Name of the math tool (math_statistics, math_financial, etc.)
+        arguments: Tool arguments
+        tier: User tier (affects available operations)
+    
+    Returns:
+        Tool execution result with display_type for frontend rendering
+    """
+    from app.services.math_service import get_math_service
+    
+    service = get_math_service()
+    
+    try:
+        if tool_name == "math_statistics":
+            return service.calculate_statistics(
+                operation=arguments.get("operation", "summary"),
+                data=arguments.get("data", []),
+                percentile_value=arguments.get("percentile_value")
+            )
+        
+        elif tool_name == "math_financial":
+            return service.calculate_financial(
+                operation=arguments.get("operation", "compound_interest"),
+                principal=arguments.get("principal"),
+                rate=arguments.get("rate"),
+                periods=arguments.get("periods"),
+                payment=arguments.get("payment"),
+                cash_flows=arguments.get("cash_flows"),
+                compound_frequency=arguments.get("compound_frequency", "monthly")
+            )
+        
+        elif tool_name == "math_sa_tax":
+            return service.calculate_sa_tax(
+                annual_income=arguments.get("annual_income", 0),
+                age=arguments.get("age", 30),
+                medical_scheme_members=arguments.get("medical_scheme_members", 0),
+                retirement_contributions=arguments.get("retirement_contributions", 0)
+            )
+        
+        elif tool_name == "math_fraud_analysis":
+            # Check tier - fraud analysis is JIGGA only
+            if tier.lower() != "jigga":
+                return {
+                    "success": False,
+                    "error": "Fraud analysis is only available on JIGGA tier",
+                    "display_type": "alert_cards",
+                    "data": {"message": "Upgrade to JIGGA for fraud analysis features"}
+                }
+            
+            return service.fraud_analysis(
+                operation=arguments.get("operation", "benfords_law"),
+                data=arguments.get("data", []),
+                threshold=arguments.get("threshold"),
+                sensitivity=arguments.get("sensitivity", "medium")
+            )
+        
+        elif tool_name == "math_probability":
+            return service.calculate_probability(
+                operation=arguments.get("operation"),
+                n=arguments.get("n"),
+                r=arguments.get("r"),
+                p=arguments.get("p"),
+                mean=arguments.get("mean"),
+                std_dev=arguments.get("std_dev"),
+                x=arguments.get("x"),
+                values=arguments.get("values"),
+                probabilities=arguments.get("probabilities")
+            )
+        
+        elif tool_name == "math_conversion":
+            return service.convert_units(
+                value=arguments.get("value", 0),
+                from_unit=arguments.get("from_unit", ""),
+                to_unit=arguments.get("to_unit", "")
+            )
+        
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown math tool: {tool_name}",
+                "display_type": "alert_cards"
+            }
+    
+    except Exception as e:
+        logger.error(f"Math tool execution error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "display_type": "alert_cards"
+        }
+
+
 async def execute_backend_tool(
     tool_name: str,
     arguments: dict[str, Any],
@@ -336,6 +441,10 @@ async def execute_backend_tool(
             y_label=arguments.get("y_label"),
             colors=arguments.get("colors")
         )
+    
+    # Math tools - execute via MathService
+    elif tool_name.startswith("math_"):
+        return await execute_math_tool(tool_name, arguments, tier)
     
     else:
         return {

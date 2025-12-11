@@ -300,8 +300,19 @@ export const MarkdownRenderer = memo(({ content, variant = 'assistant', classNam
   const components = variant === 'user' ? userComponents : assistantComponents;
 
   // Pre-process content to convert [icon_name] syntax to Material Icons
+  // Also strip <think> tags which are handled separately in the UI
   const processedContent = useMemo(() => {
-    return processIconSyntax(content, variant === 'user');
+    // Strip <think>...</think> and <thinking>...</thinking> tags (complete blocks)
+    let cleaned = content
+      .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '')
+      // Also strip unclosed <think> tags (during streaming)
+      .replace(/<think(?:ing)?>([\s\S]*)$/gi, '')
+      // Strip any orphaned closing tags
+      .replace(/<\/think(?:ing)?>/gi, '')
+      // Strip standalone opening tags
+      .replace(/<think(?:ing)?>/gi, '')
+      .trim();
+    return processIconSyntax(cleaned, variant === 'user');
   }, [content, variant]);
 
   return (

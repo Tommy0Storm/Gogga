@@ -28,13 +28,14 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 class TieredChatRequest(BaseModel):
     """Extended chat request with tier support."""
-    message: str = Field(..., min_length=1, max_length=32000)
+    message: str = Field(..., min_length=1, max_length=100000)
     user_id: str = Field(default="anonymous")
     user_email: str | None = Field(default=None, description="User email for subscription verification")
     user_tier: UserTier = Field(default=UserTier.FREE)
     history: list[dict[str, str]] | None = None
     context_tokens: int = Field(default=0, description="Token count for JIGGA thinking mode")
     force_layer: str | None = None
+    force_tool: str | None = Field(default=None, description="ToolShed: Force a specific tool by name")
 
 
 @router.post("", response_model=ChatResponse)
@@ -50,8 +51,8 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
         Complex → Cerebras Llama 3.1 8B + CePO
         
     JIGGA Tier:
-        Thinking → Cerebras Qwen 3 235B (temp=0.6, top_p=0.95)
-        Fast → Cerebras Qwen 3 235B + /no_think
+        All → Cerebras Qwen 3 32B with thinking (temp=0.6, top_p=0.95)
+        NOTE: /no_think removed for better quality on analysis/long docs
     
     Backend enforces tier limits by verifying subscription status.
     Users out of credits are downgraded to FREE tier models.
@@ -85,9 +86,40 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
         # Resolve force_layer if provided
         force_layer = _resolve_force_layer(request.force_layer, effective_tier)
         
+        # Truncate oversized messages to fit context window (65k tokens ≈ 50k chars safely)
+        MAX_MESSAGE_CHARS = 50000
+        message = request.message
+        if len(message) > MAX_MESSAGE_CHARS:
+            logger.warning(
+                "Message too long (%d chars), truncating to %d for user %s",
+                len(message), MAX_MESSAGE_CHARS, request.user_id
+            )
+            # Try to preserve the instruction and truncate the data
+            lines = message.split('\n')
+            # Keep first 5 lines (usually instructions) and last line
+            header_lines = lines[:5]
+            # Find data lines and limit them
+            truncated = '\n'.join(header_lines)
+            remaining_budget = MAX_MESSAGE_CHARS - len(truncated) - 200  # Buffer for footer
+            
+            # Add as many data lines as we can fit
+            data_lines = lines[5:]
+            current_size = 0
+            included_lines = []
+            for line in data_lines:
+                if current_size + len(line) + 1 < remaining_budget:
+                    included_lines.append(line)
+                    current_size += len(line) + 1
+                else:
+                    break
+            
+            truncated += '\n' + '\n'.join(included_lines)
+            truncated += f'\n\n[DATA TRUNCATED: Showing {len(included_lines)} of {len(data_lines)} rows. For full analysis, please send smaller datasets.]'
+            message = truncated
+        
         result = await ai_service.generate_response(
             user_id=request.user_id,
-            message=request.message,
+            message=message,
             history=request.history,
             user_tier=effective_tier,  # Use verified effective tier
             force_layer=force_layer,
@@ -163,8 +195,16 @@ def _resolve_force_layer(
     
     # JIGGA tier layers
     if user_tier == UserTier.JIGGA:
+        # User toggle: Force 235B multilingual model
+        if "235b" in force_lower or "235" in force_lower or "multilingual" in force_lower:
+            return CognitiveLayer.JIGGA_MULTILINGUAL
+        # User toggle: Force 32B model
+        if "32b" in force_lower or "32" in force_lower:
+            return CognitiveLayer.JIGGA_THINK
+        # Legacy: fast mode
         if "fast" in force_lower or "quick" in force_lower:
             return CognitiveLayer.JIGGA_FAST
+        # Default to thinking mode
         return CognitiveLayer.JIGGA_THINK
     
     return None
@@ -257,7 +297,11 @@ async def chat_stream(request: TieredChatRequest):
     # Determine streaming mode based on layer
     is_jigga = request.user_tier == UserTier.JIGGA
     thinking_mode = layer == CognitiveLayer.JIGGA_THINK
-    append_no_think = layer == CognitiveLayer.JIGGA_FAST
+    
+    # Auto-enable /no_think for very long contexts (100k+ tokens) per Cerebras recommendation
+    # This improves accuracy for long context scenarios
+    long_context_threshold = 100000
+    append_no_think = is_jigga and request.context_tokens >= long_context_threshold
     
     async def event_generator():
         async for chunk in ai_service.generate_stream(
@@ -277,6 +321,76 @@ async def chat_stream(request: TieredChatRequest):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
+
+
+@router.post("/stream-with-tools")
+async def chat_stream_with_tools(request: TieredChatRequest):
+    """
+    Stream a response with live tool execution logs.
+    
+    Provides real-time visibility into math tool execution via SSE.
+    
+    SSE Event Types:
+        - meta: Initial metadata (tier, layer, model)
+        - tool_start: Math tool execution starting (includes tool names)
+        - tool_log: Real-time execution log entry (level, message, icon)
+        - tool_complete: All tools finished
+        - content: Main response text chunks
+        - thinking_start/thinking/thinking_end: JIGGA thinking blocks
+        - done: Final metadata with usage stats, costs, tool info
+        - error: Error message if something goes wrong
+    
+    Returns:
+        StreamingResponse with text/event-stream content type
+    """
+    from fastapi.responses import StreamingResponse
+    
+    # Only JIVE and JIGGA support tool streaming
+    if request.user_tier == UserTier.FREE:
+        raise HTTPException(
+            status_code=400, 
+            detail="Tool streaming not available for FREE tier. Use /chat endpoint."
+        )
+    
+    # Route to appropriate layer
+    if request.force_layer:
+        layer = _resolve_force_layer(request.force_layer, request.user_tier)
+    else:
+        layer = tier_router.classify_intent(
+            request.message, 
+            request.user_tier, 
+            request.context_tokens
+        )
+    
+    is_jigga = request.user_tier == UserTier.JIGGA
+    thinking_mode = layer == CognitiveLayer.JIGGA_THINK
+    tier = "jigga" if is_jigga else "jive"
+    
+    # Auto /no_think for long contexts
+    append_no_think = is_jigga and request.context_tokens >= 100000
+    
+    async def event_generator():
+        async for chunk in ai_service.generate_response_with_tools_stream(
+            user_id=request.user_id,
+            message=request.message,
+            history=request.history,
+            layer=layer,
+            thinking_mode=thinking_mode,
+            append_no_think=append_no_think,
+            tier=tier,
+            force_tool=request.force_tool,  # ToolShed: Force specific tool
+        ):
+            yield chunk
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
         }
     )
 
@@ -341,18 +455,12 @@ async def list_tiers():
                 "id": "jigga",
                 "name": "Jigga Tier (Advanced)",
                 "text": {
-                    "thinking": {
-                        "model": settings.MODEL_COMPLEX,
-                        "name": "Qwen 3 235B",
-                        "provider": "Cerebras",
-                        "settings": "temp=0.6, top_p=0.95"
-                    },
-                    "fast": {
-                        "model": settings.MODEL_COMPLEX,
-                        "name": "Qwen 3 235B + /no_think",
-                        "provider": "Cerebras",
-                        "note": "Appends /no_think for fast responses"
-                    }
+                    "model": settings.MODEL_COMPLEX,
+                    "name": "Qwen 3 32B",
+                    "provider": "Cerebras",
+                    "settings": "temp=0.6, top_p=0.95, top_k=20",
+                    "mode": "thinking (always enabled)",
+                    "note": "/no_think removed for better quality on analysis and long documents"
                 },
                 "images": {
                     "model": settings.DEEPINFRA_IMAGE_MODEL,

@@ -25,9 +25,10 @@ class Settings(BaseSettings):
     
     # Model Identification (Cerebras)
     # JIVE tier: Llama 3.3 70B via CePO at ~2,200 tokens/s
-    # JIGGA tier: Qwen 3 32B with thinking mode at ~1,400 tokens/s
+    # JIGGA tier: Qwen 3 32B (fast/general) + Qwen 3 235B (thinking/complex/African languages)
     MODEL_SPEED: str = "llama3.3-70b"  # JIVE tier (was llama3.1-8b, now unified)
-    MODEL_COMPLEX: str = "qwen-3-32b"  # JIGGA tier - Qwen 3 32B
+    MODEL_COMPLEX: str = "qwen-3-32b"  # JIGGA tier - Qwen 3 32B (cost-effective, general chat)
+    MODEL_COMPLEX_235B: str = "qwen-3-235b-a22b-instruct-2507"  # JIGGA tier - Qwen 3 235B (thinking, African languages)
     MODEL_CEPO: str = "llama3.3-70b"  # JIVE reasoning model (same as MODEL_SPEED)
     
     # Model Settings (JIGGA Qwen)
@@ -58,6 +59,10 @@ class Settings(BaseSettings):
     # JIGGA tier: Qwen 3 32B (via Cerebras)
     COST_JIGGA_INPUT: float = 0.40   # $0.40 per M tokens
     COST_JIGGA_OUTPUT: float = 0.80  # $0.80 per M tokens
+    
+    # JIGGA tier 235B: Qwen 3 235B Instruct (via Cerebras)
+    COST_JIGGA_235B_INPUT: float = 0.60   # $0.60 per M tokens
+    COST_JIGGA_235B_OUTPUT: float = 1.20  # $1.20 per M tokens
     
     # Legacy pricing (kept for backwards compatibility)
     COST_SPEED_INPUT: float = 0.10

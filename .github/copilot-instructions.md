@@ -1,5 +1,15 @@
 # GOGGA AI Assistant - Copilot Instructions
 
+## MCP Tools (MANDATORY - USE EVERY PROMPT)
+
+> **ALWAYS use these MCP servers for every task:**
+> - **#oraios/serena** - Project context, symbol navigation, code editing
+> - **#context7** - Library documentation, API references, troubleshooting
+> - **#doist/todoist-ai** - Track tasks, create todos for multi-step work
+>
+> Never forget to leverage these tools. Check Serena memories first, use context7 for external library docs.
+> Use Todoist to track complex multi-step tasks and maintain visible progress.
+
 ## Architecture: 3-Tier SA AI Platform
 
 ```

@@ -30,16 +30,17 @@ const RELATIONSHIP_CONFIG = {
 // ============================================================================
 
 export const BuddyPanel: React.FC = () => {
-  const { 
-    profile, 
-    stats, 
-    isLoading, 
+  const {
+    profile,
+    stats,
+    isLoading,
     greeting,
     sarcasticIntro,
     setUserName,
     setLanguage,
+    setPersonalityMode,
     setHumorEnabled,
-    languages 
+    languages,
   } = useBuddySystem();
 
   const [expanded, setExpanded] = useState(false);
@@ -78,7 +79,7 @@ export const BuddyPanel: React.FC = () => {
   return (
     <div className="bg-primary-50 border border-primary-200 rounded-lg overflow-hidden">
       {/* Header */}
-      <div 
+      <div
         className="p-4 cursor-pointer hover:bg-primary-100/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
@@ -92,14 +93,16 @@ export const BuddyPanel: React.FC = () => {
                 <h3 className="font-semibold text-primary-900">
                   {stats.name ? `Hey ${stats.name}!` : 'Buddy System'}
                 </h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${relationship.color} text-primary-700`}>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${relationship.color} text-primary-700`}
+                >
                   {relationship.label}
                 </span>
               </div>
               <p className="text-sm text-primary-600">{greeting}</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="flex items-center gap-1 text-sa-gold">
@@ -108,7 +111,11 @@ export const BuddyPanel: React.FC = () => {
               </div>
               <span className="text-xs text-primary-500">buddy points</span>
             </div>
-            {expanded ? <ChevronUp className="w-5 h-5 text-primary-400" /> : <ChevronDown className="w-5 h-5 text-primary-400" />}
+            {expanded ? (
+              <ChevronUp className="w-5 h-5 text-primary-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-primary-400" />
+            )}
           </div>
         </div>
 
@@ -116,11 +123,20 @@ export const BuddyPanel: React.FC = () => {
         {nextMilestone && (
           <div className="mt-3">
             <div className="flex justify-between text-xs text-primary-500 mb-1">
-              <span>Progress to {stats.relationshipStatus === 'stranger' ? 'Acquaintance' : stats.relationshipStatus === 'acquaintance' ? 'Friend' : 'Bestie'}</span>
-              <span>{stats.buddyPoints}/{nextMilestone}</span>
+              <span>
+                Progress to{' '}
+                {stats.relationshipStatus === 'stranger'
+                  ? 'Acquaintance'
+                  : stats.relationshipStatus === 'acquaintance'
+                  ? 'Friend'
+                  : 'Bestie'}
+              </span>
+              <span>
+                {stats.buddyPoints}/{nextMilestone}
+              </span>
             </div>
             <div className="h-1.5 bg-primary-200 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-sa-green rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
               />
@@ -138,7 +154,9 @@ export const BuddyPanel: React.FC = () => {
               <Sparkles className="w-3 h-3" />
               <span>Current greeting style</span>
             </div>
-            <p className="text-sm text-primary-700 italic">"{sarcasticIntro}"</p>
+            <p className="text-sm text-primary-700 italic">
+              "{sarcasticIntro}"
+            </p>
           </div>
 
           {/* Name Setting */}
@@ -203,38 +221,83 @@ export const BuddyPanel: React.FC = () => {
             </select>
           </div>
 
-          {/* Humor Toggle */}
-          <div className="flex items-center justify-between">
+          {/* Personality Mode */}
+          <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-primary-700">
               <MessageCircle className="w-4 h-4" />
-              Sarcastic humor
+              Personality Mode
             </label>
-            <button
-              onClick={() => setHumorEnabled(!profile.humorEnabled)}
-              className={`
-                relative w-12 h-6 rounded-full transition-colors
-                ${profile.humorEnabled ? 'bg-sa-green' : 'bg-primary-300'}
-              `}
-            >
-              <div className={`
-                absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform
-                ${profile.humorEnabled ? 'left-7' : 'left-1'}
-              `} />
-            </button>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setPersonalityMode('system')}
+                className={`
+                  px-3 py-2 text-xs rounded-lg border transition-all
+                  ${
+                    profile.personalityMode === 'system'
+                      ? 'bg-primary-600 text-white border-primary-700 shadow-md'
+                      : 'bg-white border-primary-200 text-primary-700 hover:bg-primary-50'
+                  }
+                `}
+              >
+                <div className="font-semibold">System</div>
+                <div className="text-[10px] opacity-80">Balanced</div>
+              </button>
+              <button
+                onClick={() => setPersonalityMode('dark')}
+                className={`
+                  px-3 py-2 text-xs rounded-lg border transition-all
+                  ${
+                    profile.personalityMode === 'dark'
+                      ? 'bg-primary-900 text-white border-primary-950 shadow-md'
+                      : 'bg-white border-primary-200 text-primary-700 hover:bg-primary-50'
+                  }
+                `}
+              >
+                <div className="font-semibold">Dark Gogga</div>
+                <div className="text-[10px] opacity-80">Sarcastic</div>
+              </button>
+              <button
+                onClick={() => setPersonalityMode('goody')}
+                className={`
+                  px-3 py-2 text-xs rounded-lg border transition-all
+                  ${
+                    profile.personalityMode === 'goody'
+                      ? 'bg-sa-green text-white border-sa-green shadow-md'
+                      : 'bg-white border-primary-200 text-primary-700 hover:bg-primary-50'
+                  }
+                `}
+              >
+                <div className="font-semibold">Goody Gogga</div>
+                <div className="text-[10px] opacity-80">Positive</div>
+              </button>
+            </div>
+            <p className="text-xs text-primary-500 italic">
+              {profile.personalityMode === 'system' &&
+                'Balanced and professional'}
+              {profile.personalityMode === 'dark' && 'Witty and sarcastic edge'}
+              {profile.personalityMode === 'goody' &&
+                'Uplifting and encouraging (default)'}
+            </p>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-primary-200">
             <div className="text-center p-2 bg-primary-100/50 rounded">
-              <div className="text-lg font-bold text-primary-800">{stats.totalInteractions}</div>
+              <div className="text-lg font-bold text-primary-800">
+                {stats.totalInteractions}
+              </div>
               <div className="text-xs text-primary-500">Chats</div>
             </div>
             <div className="text-center p-2 bg-primary-100/50 rounded">
-              <div className="text-lg font-bold text-primary-800">{stats.daysSinceFirst}</div>
+              <div className="text-lg font-bold text-primary-800">
+                {stats.daysSinceFirst}
+              </div>
               <div className="text-xs text-primary-500">Days</div>
             </div>
             <div className="text-center p-2 bg-primary-100/50 rounded">
-              <div className="text-lg font-bold text-primary-800">{stats.buddyPoints}</div>
+              <div className="text-lg font-bold text-primary-800">
+                {stats.buddyPoints}
+              </div>
               <div className="text-xs text-primary-500">Points</div>
             </div>
           </div>

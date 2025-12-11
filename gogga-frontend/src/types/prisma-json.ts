@@ -198,7 +198,7 @@ export interface ChatMessageMeta {
   
   // Model info
   model?: string;
-  layer?: 'speed' | 'complex' | 'free_text' | 'jive_speed' | 'jive_reasoning' | 'jigga_think' | 'jigga_fast' | 'reasoning';
+  layer?: 'speed' | 'complex' | 'free_text' | 'jive_speed' | 'jive_reasoning' | 'jigga_think' | 'jigga_fast' | 'jigga_multilingual' | 'reasoning';
   provider?: 'cerebras' | 'openrouter' | 'groq' | 'deepinfra' | 'cerebras+cepo' | 'openrouter_fallback' | string;
   
   // Performance
@@ -220,6 +220,10 @@ export interface ChatMessageMeta {
   
   // Tool calling
   tools_executed?: boolean;
+  
+  // Math tool execution (GoggaSolve)
+  math_tool_count?: number;
+  math_tools_executed?: string[];
   
   // Response timestamp (ISO string)
   timestamp?: string;

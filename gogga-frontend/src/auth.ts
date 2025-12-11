@@ -18,8 +18,8 @@ const customLogger = {
   error: (error: Error) => {
     // Suppress JWTSessionError - these happen normally when no session exists
     // or when a session token is stale (SECRET changed)
-    if (error.name === 'JWTSessionError' || 
-        error.message?.includes('no matching decryption secret')) {
+    if (error.name === 'JWTSessionError' ||
+      error.message?.includes('no matching decryption secret')) {
       return // Silently ignore - this is expected behavior
     }
     console.error('[auth] Error:', error)
@@ -43,6 +43,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       name: 'Email Token',
       credentials: {
         token: { label: 'Token', type: 'text' },
+        clientIp: { label: 'Client IP', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.token) {
@@ -50,6 +51,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const token = (credentials.token as string).trim();
+        const clientIp = (credentials.clientIp as string) || null;
 
         try {
           // Find the token
@@ -62,6 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             await prisma.authLog.create({
               data: {
                 action: 'login_failed',
+                ip: clientIp,
                 meta: JSON.stringify({ reason: 'invalid_token' }),
               },
             });
@@ -74,6 +77,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               data: {
                 email: tokenRecord.email,
                 action: 'login_failed',
+                ip: clientIp,
                 meta: JSON.stringify({ reason: 'token_already_used' }),
               },
             });
@@ -86,6 +90,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               data: {
                 email: tokenRecord.email,
                 action: 'login_failed',
+                ip: clientIp,
                 meta: JSON.stringify({ reason: 'token_expired' }),
               },
             });
@@ -140,6 +145,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             data: {
               email: user.email,
               action: 'login_success',
+              ip: clientIp,
               meta: JSON.stringify({
                 method: 'email_token',
                 tier: subscription?.tier || 'FREE',
@@ -200,6 +206,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             | 'JIVE'
             | 'JIGGA';
           session.user.isAdmin = user?.isAdmin || false;
+          session.user.isTester = user?.isTester || false;
         } catch (error) {
           console.error('Session tier lookup error:', error);
           session.user.tier = token.tier || 'FREE';

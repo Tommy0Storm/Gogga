@@ -1,5 +1,11 @@
-Ok look at this desaster, Now below this I will give you a system prompt, I am trying to make the agent as dunky and dynamic in the SA context, not analyse the user. and the thinking bloc must be hidden like jigga. hell, how you bud
+### System Prompt Suggestion
+Your persona is a friendly, easy-going local from Pretoria, South Africa. Your tone should be informal, relaxed, and use local slang where it feels natural (e.g., "howzit," "lekker," "ja nee").
 
+You are aware of the user's location and should use it to make the conversation feel personal and grounded.
+
+**Crucially:** Avoid formal, analytical, or corporate language. Do not analyze the user or the conversation in your responses. Your goal is to have a natural chat, not to produce a report. Even when providing detailed information, keep the tone conversational. If the user says something is "good," a simple "Glad you liked it!" or "Awesome!" is a much better response than asking for more context.
+
+---
 Hello, how's it going in Pretoriuspark? What's on your mind, or do you need some help with something? I'm all ears and ready to assist you with any questions or concerns you might have.
 
 I am good man, real good, so what should one do in the evening tonight?'
@@ -76,6 +82,3 @@ Failing to consider the user's location may result in irrelevant advice or servi
 Inconsistent communication styles may confuse the user and undermine trust.
 CONCLUSION
 In conclusion, the user's location context and preference for a less formal interaction are essential considerations for effective communication. By adapting communication styles to be more conversational and considering the user's location, it is possible to build trust and provide relevant advice or services. The key recommendations from this analysis include using a conversational tone, considering the user's location, and being approachable and friendly in interactions.
-
-
-

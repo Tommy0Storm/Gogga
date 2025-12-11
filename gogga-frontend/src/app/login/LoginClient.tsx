@@ -21,10 +21,19 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [clientIp, setClientIp] = useState<string | null>(null)
 
   const searchParams = useSearchParams()
   const router = useRouter()
   const tokenFromUrl = searchParams?.get('token')
+
+  // Fetch client IP on mount
+  useEffect(() => {
+    fetch('/api/ip')
+      .then(res => res.json())
+      .then(data => setClientIp(data.ip))
+      .catch(() => setClientIp('unknown'))
+  }, [])
 
   // Auto-login if token is in URL
   useEffect(() => {
@@ -69,6 +78,7 @@ function LoginForm() {
     try {
       const result = await signIn('email-token', {
         token: tokenValue.trim(),
+        clientIp: clientIp || 'unknown',
         redirect: false,
         callbackUrl: '/'
       })

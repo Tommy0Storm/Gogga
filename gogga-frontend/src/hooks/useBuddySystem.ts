@@ -6,13 +6,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  buddySystem, 
-  type BuddyProfile, 
-  type SALanguage, 
+import {
+  buddySystem,
+  type BuddyProfile,
+  type SALanguage,
   type RelationshipStatus,
+  type PersonalityMode,
   type LanguageDetectionResult,
-  SA_LANGUAGES 
+  SA_LANGUAGES,
 } from '@/lib/buddySystem';
 
 interface BuddyStats {
@@ -29,23 +30,26 @@ interface UseBuddySystemReturn {
   profile: BuddyProfile | null;
   stats: BuddyStats | null;
   isLoading: boolean;
-  
+
   // Greetings
   greeting: string;
   sarcasticIntro: string;
-  
+
   // Actions
   setUserName: (name: string) => Promise<void>;
   setLanguage: (lang: SALanguage) => Promise<void>;
+  setPersonalityMode: (mode: PersonalityMode) => Promise<void>;
   setHumorEnabled: (enabled: boolean) => Promise<void>;
   processMessage: (message: string) => Promise<void>;
-  recordInteraction: (quality?: 'positive' | 'neutral' | 'negative') => Promise<number>;
+  recordInteraction: (
+    quality?: 'positive' | 'neutral' | 'negative'
+  ) => Promise<number>;
   getAIContext: () => Promise<string>;
   refreshProfile: () => Promise<void>;
-  
+
   // Language detection
   detectLanguage: (message: string) => LanguageDetectionResult;
-  
+
   // Utilities
   languages: typeof SA_LANGUAGES;
 }
@@ -94,6 +98,14 @@ export function useBuddySystem(): UseBuddySystemReturn {
     await refreshProfile();
   }, [refreshProfile]);
 
+  const setPersonalityMode = useCallback(
+    async (mode: PersonalityMode) => {
+      await buddySystem.setPersonalityMode(mode);
+      await refreshProfile();
+    },
+    [refreshProfile]
+  );
+
   const setHumorEnabled = useCallback(async (enabled: boolean) => {
     await buddySystem.setHumorEnabled(enabled);
     await refreshProfile();
@@ -127,6 +139,7 @@ export function useBuddySystem(): UseBuddySystemReturn {
     sarcasticIntro,
     setUserName,
     setLanguage,
+    setPersonalityMode,
     setHumorEnabled,
     processMessage,
     recordInteraction,

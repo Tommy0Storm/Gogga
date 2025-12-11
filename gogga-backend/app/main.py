@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.v1.endpoints import chat, payments, images, prompts, tools
+from app.api.v1.endpoints import chat, payments, images, prompts, tools, gogga_talk
 from app.services.posthog_service import posthog_service
 from app.services.scheduler_service import scheduler_service
 from app.core.exceptions import (
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     logger.info("Environment: %s", settings.PAYFAST_ENV)
     logger.info("FREE Tier: OpenRouter Llama 3.3 70B")
     logger.info("JIVE Tier: Cerebras %s + CePO", settings.MODEL_CEPO)
-    logger.info("JIGGA Tier: Cerebras %s (thinking)", settings.MODEL_COMPLEX)
+    logger.info("JIGGA Tier: Cerebras %s (thinking) + %s (multilingual)", settings.MODEL_COMPLEX, settings.MODEL_COMPLEX_235B)
     logger.info("CePO Enabled: %s (URL: %s)", settings.CEPO_ENABLED, settings.CEPO_URL)
     
     # Start the scheduler for subscription management
@@ -111,6 +111,7 @@ app.include_router(payments.router, prefix=settings.API_V1_STR)
 app.include_router(images.router, prefix=settings.API_V1_STR)
 app.include_router(prompts.router, prefix=settings.API_V1_STR)
 app.include_router(tools.router, prefix=f"{settings.API_V1_STR}/tools")
+app.include_router(gogga_talk.router, prefix=f"{settings.API_V1_STR}/voice")
 
 
 # Root endpoint

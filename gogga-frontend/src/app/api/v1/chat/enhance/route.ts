@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:8000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 // Standard timeout for enhance (30 seconds)
 const ENHANCE_TIMEOUT_MS = 30_000;

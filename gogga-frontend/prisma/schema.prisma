@@ -13,13 +13,17 @@ generator client {
 
 // Core user account - minimal data, user controls their data
 model User {
-  id              String        @id @default(cuid())
-  email           String        @unique
-  isAdmin         Boolean       @default(false)
-  isServiceAdmin  Boolean       @default(false)  // Can start/stop/restart services via shell
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  subscription    Subscription?
+  id               String            @id @default(cuid())
+  email            String            @unique
+  isAdmin          Boolean           @default(false)
+  isServiceAdmin   Boolean           @default(false)  // Can start/stop/restart services via shell
+  isTester         Boolean           @default(false)  // Tester access for beta features
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  subscription     Subscription?
+  usage            Usage[]
+  usageSummary     UsageSummary[]
+  debugSubmissions DebugSubmission[]
 }
 
 // One-time magic link tokens (15 min expiry)
@@ -208,4 +212,107 @@ model SubscriptionEvent {
   @@index([subscriptionId])
   @@index([userId])
   @@index([event])
+}
+
+// ==================== TOKEN USAGE TRACKING ====================
+
+// Detailed usage log for every API request
+model Usage {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Token tracking
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  
+  // Cost tracking (in cents ZAR for precision)
+  costCents        Int      @default(0)
+  
+  // Context
+  model            String   // e.g., "llama-3.3-70b", "qwen-3-32b", "llama-3.1-8b"
+  provider         String   // "openrouter", "cerebras", "optillm"
+  endpoint         String   // "chat", "enhance", "images"
+  tier             String   // "FREE", "JIVE", "JIGGA"
+  
+  // Request metadata
+  conversationId   String?  // Link to Dexie conversation if available
+  requestId        String?  // Unique request ID for tracing
+  durationMs       Int?     // Request duration in milliseconds
+  
+  createdAt        DateTime @default(now())
+  
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([model])
+  @@index([endpoint])
+}
+
+// Monthly aggregated usage for fast billing/limits lookups
+model UsageSummary {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Period
+  year            Int
+  month           Int      // 1-12
+  
+  // Token aggregates
+  totalTokens     Int      @default(0)
+  promptTokens    Int      @default(0)
+  completionTokens Int     @default(0)
+  
+  // Cost aggregate (cents ZAR)
+  totalCostCents  Int      @default(0)
+  
+  // Request counts
+  chatRequests    Int      @default(0)
+  enhanceRequests Int      @default(0)
+  imageRequests   Int      @default(0)
+  
+  // Limit tracking (for tier enforcement)
+  imagesUsed      Int      @default(0)  // For tier limits (50/200/1000)
+  
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([userId, year, month])
+  @@index([userId])
+  @@index([year, month])
+}
+
+// ==================== DEBUG SUBMISSION SYSTEM ====================
+
+// Browser console/network log submissions from testers
+model DebugSubmission {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // User input
+  reason       String
+  
+  // Captured data
+  consoleLogs  String   // JSON array of log entries
+  networkLogs  String?  // JSON array of failed network requests
+  errorStack   String?  // Last error stack trace
+  
+  // Context
+  userAgent    String
+  url          String
+  screenSize   String?
+  
+  // Admin workflow
+  status       String   @default("pending") // pending, in_progress, resolved
+  adminNotes   String?
+  resolvedAt   DateTime?
+  resolvedBy   String?  // Admin email who resolved
+  
+  createdAt    DateTime @default(now())
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }

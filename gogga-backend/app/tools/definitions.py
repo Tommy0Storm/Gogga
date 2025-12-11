@@ -15,6 +15,18 @@ Tool Flow:
 from typing import TypedDict, Any
 from dataclasses import dataclass
 
+# Import math tool definitions
+from app.tools.math_definitions import (
+    MATH_STATISTICS_TOOL,
+    MATH_FINANCIAL_TOOL,
+    MATH_SA_TAX_TOOL,
+    MATH_FRAUD_TOOL,
+    MATH_TOOLS,
+    FREE_MATH_TOOLS,
+    JIVE_MATH_TOOLS,
+    JIGGA_MATH_TOOLS,
+)
+
 
 class ToolParameter(TypedDict, total=False):
     type: str
@@ -82,7 +94,8 @@ SAVE_MEMORY_TOOL: ToolDefinition = {
                     "description": "Priority 1-10, where 10 is most important. Use 8-10 for names/identity.",
                 }
             },
-            "required": ["title", "content", "category", "priority"]
+            "required": ["title", "content", "category", "priority"],
+            "additionalProperties": False
         }
     }
 }
@@ -109,7 +122,8 @@ DELETE_MEMORY_TOOL: ToolDefinition = {
                     "description": "Brief reason for deletion"
                 }
             },
-            "required": ["memory_title", "reason"]
+            "required": ["memory_title", "reason"],
+            "additionalProperties": False
         }
     }
 }
@@ -150,7 +164,8 @@ GENERATE_IMAGE_TOOL: ToolDefinition = {
                     "enum": ["photorealistic", "artistic", "cartoon", "sketch", "3d-render"]
                 }
             },
-            "required": ["prompt"]
+            "required": ["prompt"],
+            "additionalProperties": False
         }
     }
 }
@@ -169,37 +184,85 @@ CREATE_CHART_TOOL: ToolDefinition = {
             "Create an interactive chart or graph to visualize data. "
             "Use this when the user asks for a chart, graph, or visualization of data. "
             "Provide structured data that will be rendered as an interactive chart. "
+            "Supports 13+ chart types including stacked variants for multi-series data. "
             "Examples: 'Show my expenses as a pie chart', 'Graph my sales over time', "
-            "'Visualize the comparison between options'."
+            "'Compare Q1 vs Q2 with a stacked bar chart', 'Visualize trends as a multi-area chart'."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "chart_type": {
                     "type": "string",
-                    "description": "The type of chart to create",
-                    "enum": ["line", "bar", "pie", "area", "scatter"]
+                    "description": (
+                        "The type of chart to create. "
+                        "Basic: bar, line, area, pie, scatter. "
+                        "Stacked: stackedBar (multi-series stacked), stackedLine, stackedArea. "
+                        "Variants: horizontalBar, smoothLine, multiArea, donut. "
+                        "Special: radar, radialBar, composed (bar+line+area), funnel, treemap."
+                    ),
+                    "enum": [
+                        "bar", "stackedBar", "horizontalBar",
+                        "line", "stackedLine", "smoothLine",
+                        "area", "stackedArea", "multiArea",
+                        "pie", "donut",
+                        "scatter", "radar", "radialBar",
+                        "composed", "funnel", "treemap"
+                    ]
                 },
                 "title": {
                     "type": "string",
                     "description": "Title for the chart"
                 },
+                "subtitle": {
+                    "type": "string",
+                    "description": "Optional subtitle or description for the chart"
+                },
                 "data": {
                     "type": "array",
                     "description": (
-                        "Array of data points. For line/bar/area: [{name: 'Jan', value: 100}, ...]. "
-                        "For pie: [{name: 'Category', value: 50}, ...]. "
-                        "For scatter: [{x: 1, y: 2}, ...]."
+                        "Array of data points. "
+                        "Single series: [{name: 'Jan', value: 100}]. "
+                        "Multi-series: Use value, value2, value3, value4, value5 for up to 5 series. "
+                        "Example: [{name: 'Jan', value: 100, value2: 80}, {name: 'Feb', value: 150, value2: 90}]. "
+                        "For scatter: [{name: 'Point 1', x: 1, y: 2}]. "
+                        "For pie/donut: [{name: 'Category A', value: 50}]."
                     ),
                     "items": {
                         "type": "object",
                         "properties": {
-                            "name": {"type": "string", "description": "Label for this data point"},
-                            "value": {"type": "number", "description": "Numeric value for this data point"},
+                            "name": {"type": "string", "description": "Label for this data point (x-axis category)"},
+                            "value": {"type": "number", "description": "Primary numeric value for this data point"},
                             "x": {"type": "number", "description": "X coordinate for scatter plots"},
-                            "y": {"type": "number", "description": "Y coordinate for scatter plots"}
+                            "y": {"type": "number", "description": "Y coordinate for scatter plots"},
+                            "value2": {"type": "number", "description": "Secondary value (for multi-series charts - 2nd series)"},
+                            "value3": {"type": "number", "description": "Tertiary value (for multi-series charts - 3rd series)"},
+                            "value4": {"type": "number", "description": "Fourth value (for multi-series charts - 4th series)"},
+                            "value5": {"type": "number", "description": "Fifth value (for multi-series charts - 5th series)"}
                         },
+                        "additionalProperties": False,
                         "required": []
+                    }
+                },
+                "series": {
+                    "type": "array",
+                    "description": (
+                        "Optional. Configuration for multiple data series (for stacked/multi-series charts). "
+                        "Each series maps to a key in the data objects."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "dataKey": {"type": "string", "description": "Key in data: 'value' for first series, 'value2' for second, etc. up to 'value5'", "enum": ["value", "value2", "value3", "value4", "value5"]},
+                            "name": {"type": "string", "description": "Display name for the series"},
+                            "color": {"type": "string", "description": "Hex color for this series (e.g., #FF5733)"},
+                            "type": {
+                                "type": "string",
+                                "description": "Rendering type for composed charts",
+                                "enum": ["bar", "line", "area"]
+                            }
+                        },
+                        "required": ["dataKey", "name"],
+                        "additionalProperties": False
                     }
                 },
                 "x_label": {
@@ -212,11 +275,21 @@ CREATE_CHART_TOOL: ToolDefinition = {
                 },
                 "colors": {
                     "type": "array",
-                    "description": "Optional array of colors for the chart segments (hex codes like #FF5733)",
+                    "description": "Optional array of colors for the chart (hex codes like #FF5733). Auto-assigned if not provided.",
                     "items": {"type": "string"}
+                },
+                "legendPosition": {
+                    "type": "string",
+                    "description": "Position of the legend. Auto-positioned based on chart type if not specified.",
+                    "enum": ["top", "bottom", "left", "right", "none"]
+                },
+                "showGrid": {
+                    "type": "boolean",
+                    "description": "Whether to show grid lines. Default true."
                 }
             },
-            "required": ["chart_type", "title", "data"]
+            "required": ["chart_type", "title", "data"],
+            "additionalProperties": False
         }
     }
 }
@@ -238,12 +311,15 @@ UNIVERSAL_TOOLS: list[ToolDefinition] = [
     CREATE_CHART_TOOL,
 ]
 
-# All tools combined
+# All tools combined (non-math)
 GOGGA_TOOLS: list[ToolDefinition] = MEMORY_TOOLS + UNIVERSAL_TOOLS
 
-# Tool name to definition mapping
+# All tools including math
+ALL_TOOLS: list[ToolDefinition] = GOGGA_TOOLS + MATH_TOOLS
+
+# Tool name to definition mapping (includes all tools)
 TOOL_MAP: dict[str, ToolDefinition] = {
-    tool["function"]["name"]: tool for tool in GOGGA_TOOLS
+    tool["function"]["name"]: tool for tool in ALL_TOOLS
 }
 
 
@@ -256,16 +332,18 @@ def get_tools_for_tier(tier: str) -> list[ToolDefinition]:
     """
     Get tools available for a specific tier.
     
-    - FREE: Image generation + Charts (universal tools)
-    - JIVE: Image generation + Charts (universal tools)
-    - JIGGA: All tools (memory + image + charts)
+    - FREE: Universal tools (image, chart) + basic math (tax, conversion)
+    - JIVE: Universal + stats, financial, probability, tax, conversion
+    - JIGGA: All tools (memory + image + charts + all math including fraud)
     """
     tier_lower = tier.lower() if tier else ""
     
     if tier_lower == "jigga":
-        return GOGGA_TOOLS  # All tools including memory
-    elif tier_lower in ("jive", "free"):
-        return UNIVERSAL_TOOLS  # Image + Charts only
+        return GOGGA_TOOLS + JIGGA_MATH_TOOLS  # All tools including memory + all math
+    elif tier_lower == "jive":
+        return UNIVERSAL_TOOLS + JIVE_MATH_TOOLS  # Image + Charts + most math
+    elif tier_lower == "free":
+        return UNIVERSAL_TOOLS + FREE_MATH_TOOLS  # Image + Charts + basic math
     return []
 
 

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:8000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 // Extended timeout for AI Horde (can take 60+ seconds)
 const TOOL_TIMEOUT_MS = 120_000;

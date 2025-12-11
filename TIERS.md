@@ -539,6 +539,7 @@ PAYFAST_ENV=sandbox  # or production
 | **Monitoring / Performance Stats** | ❌ | ❌ | ✅ |
 | **AI Search** | Basic (3/day) | Quick + Deep (50/day) | Unlimited |
 | **Research Mode** | ❌ | ✅ (10/day) | ✅ (Unlimited) |
+| **Math Tools** | SA Tax, Conversion | + Statistics, Financial, Probability | + Fraud Analysis, Regression |
 | **Multi-Source Research** | ❌ | 3 sources | 10 sources |
 | **Research History** | ❌ | 7 days | Forever |
 
@@ -669,6 +670,49 @@ JIVE tier includes AI-powered search capabilities:
 SEARCH: Query → Intent Analysis → Multi-Source Retrieval → Ranked Results → Synthesized Answer
 ```
 
+### Math Tools (JIVE)
+
+JIVE tier includes access to backend-powered math calculations:
+
+| Tool | Description | Example |
+|------|-------------|---------|
+| **SA Tax Calculator** | 2024/25 income tax with brackets, rebates | "Calculate tax on R500,000 income" |
+| **Unit Conversion** | Currency, length, weight, temperature | "Convert 100km to miles" |
+| **Statistics** | Mean, median, std dev, quartiles, outliers | "Find the average of 12, 45, 67, 89" |
+| **Financial** | Compound interest, loan payments, NPV, IRR | "Calculate monthly payment on R1M loan at 12%" |
+| **Probability** | Binomial, normal, permutations, combinations | "Probability of 3 heads in 5 coin flips" |
+
+```text
+MATH: Query → Intent Classification → Tool Selection → Backend Calculation → Display Component
+```
+
+### GoggaToolShed (JIVE/JIGGA)
+
+The ToolShed is GOGGA's enterprise-grade tool forcing UI that allows users to manually select specific tools:
+
+**Accessing ToolShed:**
+- Click the 🔧 ToolShed button in the header (JIVE/JIGGA only)
+- Browse tools by category: Math, Charts, Images, Memory
+- Click a tool card to force it for the next message
+
+**Tool Categories:**
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **Math & Finance** | Statistics, Financial, SA Tax, Conversion, Probability | Backend-executed calculations |
+| **Charts** | create_chart | Frontend-rendered visualizations |
+| **Images** | generate_image | AI image generation (Pollinations + AI Horde) |
+| **Memory** | store_memory, recall_memory | Long-term memory operations |
+
+**Forced Tool Badge:**
+When a tool is forced, a badge appears above the input showing the active tool. The AI MUST use this tool for the next message.
+
+**Why Force Tools?**
+- Guarantee specific tool execution
+- Skip AI tool selection for known tasks
+- Direct access to calculations without explanation
+- Faster workflow for repeated operations
+
 ---
 
 ## JIGGA Tier (R299/month)
@@ -788,6 +832,26 @@ IMAGE (button):  User → Prompt Enhancement → FLUX 1.1 Pro → HD Image
 - **Document Manager**: Upload, view, delete individual docs or all at once
 - **Embedding Status**: Visual indicators for pending/complete embeddings
 - **Real Vector Heatmap**: 384-dim E5 vectors visualized as color-coded heatmap
+
+### Advanced Math Tools (JIGGA Exclusive)
+
+JIGGA tier includes all JIVE math tools plus advanced fraud detection and analysis:
+
+| Tool | Description | Use Case |
+|------|-------------|----------|
+| **Benford's Law Analysis** | First-digit distribution for fraud detection | Audit expense claims, invoices |
+| **Anomaly Detection** | Statistical outlier identification | Find unusual transactions |
+| **Duplicate Analysis** | Identify repeated values | Detect duplicate invoices |
+| **Round Number Analysis** | Flag suspicious round figures | Detect manual manipulation |
+| **Threshold Analysis** | Values clustering below limits | Find split transactions |
+| **Regression & Trends** | Correlation, forecasting | Sales projections, trend analysis |
+
+**Fraud Analysis Pipeline:**
+```text
+Data → Benford's Law → Chi-Square Test → P-Value → Conclusion + Chart
+                    ↓
+              Flag deviations > 5% from expected distribution
+```
 
 ### AI Research Pipeline (JIGGA)
 
@@ -1398,6 +1462,7 @@ FREE → JIVE: +R99/month
   ✓ AI Search (Quick + Deep, 50/day)
   ✓ Multi-source research (3 sources)
   ✓ 7-day research history
+  ✓ Math Tools (statistics, financial, probability)
 
 JIVE → JIGGA: +R200/month
   ✓ Qwen 3 32B (larger, smarter model)
@@ -1415,6 +1480,8 @@ JIVE → JIGGA: +R200/month
   ✓ Comprehensive research (10 sources)
   ✓ Forever research history
   ✓ Research export to PDF/Markdown
+  ✓ Fraud Analysis (Benford's Law, anomalies)
+  ✓ Regression & Trend Analysis
 ```
 
 ---

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>GoggaTalk - Voice Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { background-color: #000; color: #fff; font-family: 'Quicksand', sans-serif; }
+      @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;700&display=swap');
+    </style>
+</head>
+<body class="overflow-hidden">
+    <div id="root"></div>
+    <script type="module">
+      import React, { useState, useEffect, useRef } from 'https://esm.sh/react@18';
+      import ReactDOM from 'https://esm.sh/react-dom@18/client';
+      import { GoogleGenAI, Modality } from 'https://esm.sh/@google/genai@1.31.0';
+      
+      const GEMINI_API_KEY = 'AIzaSyAJrW_5AqsT54seB0w6dWDSlFLWJ7k0IWk'; // VCB Key
+      const MODEL_ID = 'gemini-2.0-flash-exp';
+      const VOICE_NAME = 'Aoede';
+      const PCM_SAMPLE_RATE = 16000;
+      const AUDIO_PLAYBACK_RATE = 24000;
+
+      const GOGGA_PROMPT = `You are Gogga, a proudly South African AI assistant.
+
+PERSONALITY:
+- Warm, friendly, with occasional SA slang (lekker, eish, howzit)
+- Helpful and genuinely caring
+- Understand SA context: load shedding, braais, SASSA, etc.
+- Speak any of the 11 official languages naturally
+
+VOICE STYLE:
+- Conversational like chatting with a friend
+- Keep responses concise (1-3 sentences for voice)
+- Be expressive and natural
+- No overly formal language
+
+Start by greeting the user warmly in your South African style!`;
+
+      function base64ToBytes(base64) {
+        const bin = atob(base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+      }
+
+      function bytesToBase64(bytes) {
+        let bin = '';
+        for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+      }
+
+      async function decodeAudio(data, ctx) {
+        const int16 = new Int16Array(data.buffer);
+        const buffer = ctx.createBuffer(1, int16.length, AUDIO_PLAYBACK_RATE);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < int16.length; i++) channelData[i] = int16[i] / 32768.0;
+        return buffer;
+      }
+
+      function createPcmBlob(data) {
+        const int16 = new Int16Array(data.length);
+        for (let i = 0; i < data.length; i++) {
+          const s = Math.max(-1, Math.min(1, data[i]));
+          int16[i] = s < 0 ? s * 32768 : s * 32767;
+        }
+        return {
+          data: bytesToBase64(new Uint8Array(int16.buffer)),
+          mimeType: `audio/pcm;rate=${PCM_SAMPLE_RATE}`
+        };
+      }
+
+      const GoggaTalk = () => {
+        const [isConnected, setIsConnected] = useState(false);
+        const [isConnecting, setIsConnecting] = useState(false);
+        const [isMicOn, setIsMicOn] = useState(true);
+        const [isSpeaking, setIsSpeaking] = useState(false);
+        const [error, setError] = useState(null);
+
+        const audioCtxRef = useRef(null);
+        const sessionRef = useRef(null);
+        const processorRef = useRef(null);
+        const sourceRef = useRef(null);
+        const nextStartRef = useRef(0);
+        const activeSources = useRef(new Set());
+
+        const connect = async () => {
+          try {
+            setIsConnecting(true);
+            setError(null);
+
+            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioCtx({ sampleRate: AUDIO_PLAYBACK_RATE });
+            audioCtxRef.current = ctx;
+
+            const gainNode = ctx.createGain();
+            gainNode.connect(ctx.destination);
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true, sampleRate: PCM_SAMPLE_RATE }
+            });
+
+            const source = ctx.createMediaStreamSource(stream);
+            sourceRef.current = source;
+            const processor = ctx.createScriptProcessor(4096, 1, 1);
+            processorRef.current = processor;
+
+            const sessionPromise = ai.live.connect({
+              model: MODEL_ID,
+              callbacks: {
+                onopen: () => {
+                  setIsConnected(true);
+                  setIsConnecting(false);
+                  console.log('🦗 GoggaTalk Connected!');
+                  sessionPromise.then(session => session.sendRealtimeInput({ text: '' }));
+                  source.connect(processor);
+                  processor.connect(ctx.destination);
+
+                  processor.onaudioprocess = (e) => {
+                    if (!isMicOn) return;
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    const pcm = createPcmBlob(inputData);
+                    sessionPromise.then(session => {
+                      try { session.sendRealtimeInput({ media: pcm }); } catch(err) {}
+                    });
+                  };
+                },
+                onmessage: async (msg) => {
+                  const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                  if (audio && ctx) {
+                    setIsSpeaking(true);
+                    nextStartRef.current = Math.max(nextStartRef.current, ctx.currentTime);
+                    const buffer = await decodeAudio(base64ToBytes(audio), ctx);
+                    const bufferSource = ctx.createBufferSource();
+                    bufferSource.buffer = buffer;
+                    bufferSource.connect(gainNode);
+                    bufferSource.addEventListener('ended', () => {
+                      activeSources.current.delete(bufferSource);
+                      if (activeSources.current.size === 0) setIsSpeaking(false);
+                    });
+                    bufferSource.start(nextStartRef.current);
+                    nextStartRef.current += buffer.duration;
+                    activeSources.current.add(bufferSource);
+                  }
+
+                  if (msg.serverContent?.interrupted) {
+                    console.log('Interrupted!');
+                    activeSources.current.forEach(src => { try { src.stop(); } catch(e) {} });
+                    activeSources.current.clear();
+                    nextStartRef.current = 0;
+                    setIsSpeaking(false);
+                  }
+                },
+                onclose: () => { setIsConnected(false); console.log('Disconnected'); },
+                onerror: (err) => { 
+                  console.error('Session error:', err);
+                  setError(err.message); 
+                  setIsConnected(false); 
+                }
+              },
+              config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } } },
+                systemInstruction: GOGGA_PROMPT
+              }
+            });
+
+            sessionRef.current = sessionPromise;
+          } catch (err) {
+            console.error(err);
+            setError(err.message);
+            setIsConnecting(false);
+          }
+        };
+
+        const disconnect = () => {
+          if (sessionRef.current) {
+            sessionRef.current.then(session => session.close());
+          }
+          if (processorRef.current) {
+            processorRef.current.disconnect();
+            processorRef.current.onaudioprocess = null;
+          }
+          if (sourceRef.current) sourceRef.current.disconnect();
+          if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+            audioCtxRef.current.close();
+          }
+          activeSources.current.forEach(src => { try { src.stop(); } catch(e) {} });
+          activeSources.current.clear();
+          setIsConnected(false);
+          setIsSpeaking(false);
+        };
+
+        return React.createElement('div', { className: 'w-full h-screen bg-black flex items-center justify-center p-4' },
+          React.createElement('div', { className: 'max-w-md w-full space-y-8 text-center' },
+            React.createElement('div', null,
+              React.createElement('h1', { className: 'text-4xl font-bold text-white mb-2' }, '🦗 GoggaTalk'),
+              React.createElement('p', { className: 'text-gray-400' }, 'Powered by Gemini Live API')
+            ),
+            error && React.createElement('div', { className: 'bg-red-900/50 border border-red-500 text-white p-4 rounded-lg' }, error),
+            !isConnected && React.createElement('button', {
+              onClick: connect,
+              disabled: isConnecting,
+              className: 'bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-200 disabled:opacity-50'
+            }, isConnecting ? 'Connecting...' : 'Start Voice Chat'),
+            isConnected && React.createElement('div', { className: 'space-y-4' },
+              React.createElement('div', { className: `w-32 h-32 mx-auto rounded-full flex items-center justify-center ${isSpeaking ? 'bg-green-500 animate-pulse' : 'bg-gray-800'}` },
+                React.createElement('span', { className: 'text-5xl' }, '🎙️')
+              ),
+              React.createElement('div', { className: 'flex gap-4 justify-center' },
+                React.createElement('button', {
+                  onClick: () => setIsMicOn(!isMicOn),
+                  className: `px-6 py-3 rounded-full font-bold ${isMicOn ? 'bg-white text-black' : 'bg-red-600 text-white'}`
+                }, isMicOn ? '🎤 Mute' : '🔇 Unmute'),
+                React.createElement('button', {
+                  onClick: disconnect,
+                  className: 'px-6 py-3 rounded-full font-bold bg-red-600 text-white'
+                }, '📞 End Call')
+              ),
+              React.createElement('p', { className: 'text-gray-400 text-sm' }, 
+                isSpeaking ? 'Gogga is speaking...' : 'Listening...'
+              )
+            )
+          )
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(GoggaTalk));
+    </script>
+</body>
+</html>

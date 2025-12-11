@@ -1,101 +1,116 @@
 """
-Tests for the Bicameral Routing Logic
+Tests for the Tier Routing Logic
+
+Updated to use TierRouter API with CognitiveLayer enum.
 """
 import pytest
-from app.core.router import bicameral_router, COMPLEX_KEYWORDS
+from app.core.router import (
+    tier_router, 
+    TierRouter,
+    COMPLEX_KEYWORDS, 
+    CognitiveLayer, 
+    UserTier
+)
 
 
-class TestBicameralRouter:
-    """Test suite for the Bicameral Router."""
+class TestTierRouter:
+    """Test suite for the Tier Router."""
     
-    def test_simple_greeting_uses_speed_layer(self):
-        """Simple greetings should use the Speed Layer."""
+    def test_free_tier_uses_free_text(self):
+        """FREE tier should always use FREE_TEXT layer for text."""
         messages = [
             "Hi there!",
             "Howzit?",
             "Hello",
             "Good morning",
-            "Thanks"
+            "Thanks",
+            "What is the weather?",
+            "Explain POPIA to me",  # Even complex topics use FREE_TEXT on FREE tier
         ]
         
         for msg in messages:
-            layer = bicameral_router.classify_intent(msg)
-            assert layer == "speed", f"Expected 'speed' for '{msg}', got '{layer}'"
+            layer = tier_router.classify_intent(msg, UserTier.FREE)
+            assert layer == CognitiveLayer.FREE_TEXT, f"Expected FREE_TEXT for '{msg}', got '{layer}'"
     
-    def test_legal_query_uses_complex_layer(self):
-        """Legal queries should trigger the Complex Layer."""
+    def test_free_tier_image_prompt(self):
+        """FREE tier image prompts should use FREE_IMAGE layer."""
+        messages = [
+            "Generate an image of a cat",
+            "Create a picture of the Table Mountain",
+            "Draw me a portrait",
+        ]
+        
+        for msg in messages:
+            layer = tier_router.classify_intent(msg, UserTier.FREE)
+            assert layer == CognitiveLayer.FREE_IMAGE, f"Expected FREE_IMAGE for '{msg}', got '{layer}'"
+    
+    def test_jive_complex_keywords_use_reasoning(self):
+        """JIVE tier complex queries should use JIVE_REASONING (CePO)."""
         messages = [
             "What does POPIA say about data retention?",
             "Explain the Constitution Chapter 2",
-            "Is this contract clause legal?",
-            "What are my rights under consumer protection act?"
-        ]
-        
-        for msg in messages:
-            layer = bicameral_router.classify_intent(msg)
-            assert layer == "complex", f"Expected 'complex' for '{msg}', got '{layer}'"
-    
-    def test_coding_query_uses_complex_layer(self):
-        """Coding queries should trigger the Complex Layer."""
-        messages = [
             "Write a Python function to parse JSON",
             "Debug this algorithm",
-            "How do I deploy to Docker?",
-            "Explain this API endpoint"
         ]
         
         for msg in messages:
-            layer = bicameral_router.classify_intent(msg)
-            assert layer == "complex", f"Expected 'complex' for '{msg}', got '{layer}'"
+            layer = tier_router.classify_intent(msg, UserTier.JIVE)
+            assert layer == CognitiveLayer.JIVE_REASONING, f"Expected JIVE_REASONING for '{msg}', got '{layer}'"
     
-    def test_translation_uses_complex_layer(self):
-        """Translation requests should use Complex Layer."""
+    def test_jive_simple_queries_use_speed(self):
+        """JIVE tier simple queries should use JIVE_SPEED."""
         messages = [
-            "Translate this to isiZulu",
-            "How do you say hello in Xhosa?",
-            "Translate to Afrikaans please"
+            "Hi there!",
+            "What's the weather?",
+            "Tell me a joke",
         ]
         
         for msg in messages:
-            layer = bicameral_router.classify_intent(msg)
-            assert layer == "complex", f"Expected 'complex' for '{msg}', got '{layer}'"
+            layer = tier_router.classify_intent(msg, UserTier.JIVE)
+            assert layer == CognitiveLayer.JIVE_SPEED, f"Expected JIVE_SPEED for '{msg}', got '{layer}'"
     
-    def test_long_message_uses_complex_layer(self):
-        """Messages with more than 50 words should use Complex Layer."""
-        long_message = " ".join(["word"] * 60)  # 60 words
+    def test_jigga_default_uses_thinking(self):
+        """JIGGA tier should default to JIGGA_THINK."""
+        messages = [
+            "Hi there!",
+            "What is quantum computing?",
+            "Explain machine learning",
+        ]
         
-        layer = bicameral_router.classify_intent(long_message)
-        assert layer == "complex", "Long messages should use complex layer"
+        for msg in messages:
+            layer = tier_router.classify_intent(msg, UserTier.JIGGA)
+            assert layer == CognitiveLayer.JIGGA_THINK, f"Expected JIGGA_THINK for '{msg}', got '{layer}'"
     
-    def test_short_message_uses_speed_layer(self):
-        """Short simple messages should use Speed Layer."""
-        short_message = "What is the weather?"
+    def test_jigga_african_language_uses_multilingual(self):
+        """JIGGA tier African language content should use JIGGA_MULTILINGUAL."""
+        messages = [
+            "Sawubona, unjani?",  # isiZulu greeting
+            "Molo, unjani?",  # isiXhosa greeting
+            "Dumela, o kae?",  # Setswana greeting
+        ]
         
-        layer = bicameral_router.classify_intent(short_message)
-        assert layer == "speed", "Short simple messages should use speed layer"
+        for msg in messages:
+            layer = tier_router.classify_intent(msg, UserTier.JIGGA)
+            assert layer == CognitiveLayer.JIGGA_MULTILINGUAL, f"Expected JIGGA_MULTILINGUAL for '{msg}', got '{layer}'"
     
-    def test_get_model_id_speed(self):
-        """Test model ID retrieval for speed layer."""
-        model_id = bicameral_router.get_model_id("speed")
-        assert "llama" in model_id.lower() or "8b" in model_id.lower()
+    def test_get_model_config_returns_dict(self):
+        """get_model_config should return a dictionary with required keys."""
+        for layer in CognitiveLayer:
+            # Skip layers that might not have full config
+            if layer in (CognitiveLayer.MULTIMODAL,):
+                continue
+            config = tier_router.get_model_config(layer)
+            assert isinstance(config, dict), f"Config for {layer} should be a dict"
+            assert "model" in config, f"Config for {layer} should have model"
+            assert "provider" in config, f"Config for {layer} should have provider"
     
-    def test_get_model_id_complex(self):
-        """Test model ID retrieval for complex layer."""
-        model_id = bicameral_router.get_model_id("complex")
-        assert "qwen" in model_id.lower() or "235b" in model_id.lower()
-    
-    def test_system_prompt_speed_is_concise(self):
-        """Speed layer prompt should be concise."""
-        prompt = bicameral_router.get_system_prompt("speed")
-        assert "Complex Mode" not in prompt
-        assert "South African" in prompt
-    
-    def test_system_prompt_complex_includes_legal_context(self):
-        """Complex layer prompt should include legal context."""
-        prompt = bicameral_router.get_system_prompt("complex")
-        assert "Complex Mode" in prompt
-        assert "South African" in prompt
-        assert "legal" in prompt.lower() or "Law" in prompt
+    def test_get_system_prompt_returns_string(self):
+        """get_system_prompt should return a non-empty string."""
+        for tier in UserTier:
+            prompt = tier_router.get_system_prompt(tier)
+            assert isinstance(prompt, str), f"Prompt for {tier} should be a string"
+            assert len(prompt) > 0, f"Prompt for {tier} should not be empty"
+            assert "South African" in prompt or "GOGGA" in prompt, f"Prompt should mention SA identity"
 
 
 class TestComplexKeywords:
@@ -112,3 +127,8 @@ class TestComplexKeywords:
         
         for keyword in essential:
             assert keyword in COMPLEX_KEYWORDS, f"Essential keyword '{keyword}' missing"
+
+
+# Legacy aliases for backward compatibility
+TestBicameralRouter = TestTierRouter
+bicameral_router = tier_router

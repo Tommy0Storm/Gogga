@@ -27,30 +27,32 @@ export type AggregateRecurringSchedule = {
 }
 
 export type RecurringScheduleAvgAggregateOutputType = {
-  amountCents: number | null
-  failureCount: number | null
+  amount: number | null
+  chargeCount: number | null
+  maxCharges: number | null
+  failedCount: number | null
 }
 
 export type RecurringScheduleSumAggregateOutputType = {
-  amountCents: number | null
-  failureCount: number | null
+  amount: number | null
+  chargeCount: number | null
+  maxCharges: number | null
+  failedCount: number | null
 }
 
 export type RecurringScheduleMinAggregateOutputType = {
   id: string | null
   userId: string | null
-  email: string | null
   tier: string | null
-  payfastToken: string | null
-  amountCents: number | null
-  currency: string | null
+  amount: number | null
+  token: string | null
   frequency: string | null
-  nextChargeDate: Date | null
+  nextChargeAt: Date | null
   lastChargedAt: Date | null
+  chargeCount: number | null
+  maxCharges: number | null
   status: string | null
-  failureCount: number | null
-  failureReason: string | null
-  metadata: string | null
+  failedCount: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -58,18 +60,16 @@ export type RecurringScheduleMinAggregateOutputType = {
 export type RecurringScheduleMaxAggregateOutputType = {
   id: string | null
   userId: string | null
-  email: string | null
   tier: string | null
-  payfastToken: string | null
-  amountCents: number | null
-  currency: string | null
+  amount: number | null
+  token: string | null
   frequency: string | null
-  nextChargeDate: Date | null
+  nextChargeAt: Date | null
   lastChargedAt: Date | null
+  chargeCount: number | null
+  maxCharges: number | null
   status: string | null
-  failureCount: number | null
-  failureReason: string | null
-  metadata: string | null
+  failedCount: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -77,18 +77,16 @@ export type RecurringScheduleMaxAggregateOutputType = {
 export type RecurringScheduleCountAggregateOutputType = {
   id: number
   userId: number
-  email: number
   tier: number
-  payfastToken: number
-  amountCents: number
-  currency: number
+  amount: number
+  token: number
   frequency: number
-  nextChargeDate: number
+  nextChargeAt: number
   lastChargedAt: number
+  chargeCount: number
+  maxCharges: number
   status: number
-  failureCount: number
-  failureReason: number
-  metadata: number
+  failedCount: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -96,30 +94,32 @@ export type RecurringScheduleCountAggregateOutputType = {
 
 
 export type RecurringScheduleAvgAggregateInputType = {
-  amountCents?: true
-  failureCount?: true
+  amount?: true
+  chargeCount?: true
+  maxCharges?: true
+  failedCount?: true
 }
 
 export type RecurringScheduleSumAggregateInputType = {
-  amountCents?: true
-  failureCount?: true
+  amount?: true
+  chargeCount?: true
+  maxCharges?: true
+  failedCount?: true
 }
 
 export type RecurringScheduleMinAggregateInputType = {
   id?: true
   userId?: true
-  email?: true
   tier?: true
-  payfastToken?: true
-  amountCents?: true
-  currency?: true
+  amount?: true
+  token?: true
   frequency?: true
-  nextChargeDate?: true
+  nextChargeAt?: true
   lastChargedAt?: true
+  chargeCount?: true
+  maxCharges?: true
   status?: true
-  failureCount?: true
-  failureReason?: true
-  metadata?: true
+  failedCount?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -127,18 +127,16 @@ export type RecurringScheduleMinAggregateInputType = {
 export type RecurringScheduleMaxAggregateInputType = {
   id?: true
   userId?: true
-  email?: true
   tier?: true
-  payfastToken?: true
-  amountCents?: true
-  currency?: true
+  amount?: true
+  token?: true
   frequency?: true
-  nextChargeDate?: true
+  nextChargeAt?: true
   lastChargedAt?: true
+  chargeCount?: true
+  maxCharges?: true
   status?: true
-  failureCount?: true
-  failureReason?: true
-  metadata?: true
+  failedCount?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -146,18 +144,16 @@ export type RecurringScheduleMaxAggregateInputType = {
 export type RecurringScheduleCountAggregateInputType = {
   id?: true
   userId?: true
-  email?: true
   tier?: true
-  payfastToken?: true
-  amountCents?: true
-  currency?: true
+  amount?: true
+  token?: true
   frequency?: true
-  nextChargeDate?: true
+  nextChargeAt?: true
   lastChargedAt?: true
+  chargeCount?: true
+  maxCharges?: true
   status?: true
-  failureCount?: true
-  failureReason?: true
-  metadata?: true
+  failedCount?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -252,18 +248,16 @@ export type RecurringScheduleGroupByArgs<ExtArgs extends runtime.Types.Extension
 export type RecurringScheduleGroupByOutputType = {
   id: string
   userId: string
-  email: string
   tier: string
-  payfastToken: string
-  amountCents: number
-  currency: string
+  amount: number
+  token: string
   frequency: string
-  nextChargeDate: Date
+  nextChargeAt: Date
   lastChargedAt: Date | null
+  chargeCount: number
+  maxCharges: number
   status: string
-  failureCount: number
-  failureReason: string | null
-  metadata: string | null
+  failedCount: number
   createdAt: Date
   updatedAt: Date
   _count: RecurringScheduleCountAggregateOutputType | null
@@ -294,18 +288,16 @@ export type RecurringScheduleWhereInput = {
   NOT?: Prisma.RecurringScheduleWhereInput | Prisma.RecurringScheduleWhereInput[]
   id?: Prisma.StringFilter<"RecurringSchedule"> | string
   userId?: Prisma.StringFilter<"RecurringSchedule"> | string
-  email?: Prisma.StringFilter<"RecurringSchedule"> | string
   tier?: Prisma.StringFilter<"RecurringSchedule"> | string
-  payfastToken?: Prisma.StringFilter<"RecurringSchedule"> | string
-  amountCents?: Prisma.IntFilter<"RecurringSchedule"> | number
-  currency?: Prisma.StringFilter<"RecurringSchedule"> | string
+  amount?: Prisma.IntFilter<"RecurringSchedule"> | number
+  token?: Prisma.StringFilter<"RecurringSchedule"> | string
   frequency?: Prisma.StringFilter<"RecurringSchedule"> | string
-  nextChargeDate?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
+  nextChargeAt?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
   lastChargedAt?: Prisma.DateTimeNullableFilter<"RecurringSchedule"> | Date | string | null
+  chargeCount?: Prisma.IntFilter<"RecurringSchedule"> | number
+  maxCharges?: Prisma.IntFilter<"RecurringSchedule"> | number
   status?: Prisma.StringFilter<"RecurringSchedule"> | string
-  failureCount?: Prisma.IntFilter<"RecurringSchedule"> | number
-  failureReason?: Prisma.StringNullableFilter<"RecurringSchedule"> | string | null
-  metadata?: Prisma.StringNullableFilter<"RecurringSchedule"> | string | null
+  failedCount?: Prisma.IntFilter<"RecurringSchedule"> | number
   createdAt?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
 }
@@ -313,59 +305,53 @@ export type RecurringScheduleWhereInput = {
 export type RecurringScheduleOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
-  email?: Prisma.SortOrder
   tier?: Prisma.SortOrder
-  payfastToken?: Prisma.SortOrder
-  amountCents?: Prisma.SortOrder
-  currency?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  token?: Prisma.SortOrder
   frequency?: Prisma.SortOrder
-  nextChargeDate?: Prisma.SortOrder
+  nextChargeAt?: Prisma.SortOrder
   lastChargedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
   status?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
-  failureReason?: Prisma.SortOrderInput | Prisma.SortOrder
-  metadata?: Prisma.SortOrderInput | Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
 export type RecurringScheduleWhereUniqueInput = Prisma.AtLeast<{
   id?: string
-  payfastToken?: string
   AND?: Prisma.RecurringScheduleWhereInput | Prisma.RecurringScheduleWhereInput[]
   OR?: Prisma.RecurringScheduleWhereInput[]
   NOT?: Prisma.RecurringScheduleWhereInput | Prisma.RecurringScheduleWhereInput[]
   userId?: Prisma.StringFilter<"RecurringSchedule"> | string
-  email?: Prisma.StringFilter<"RecurringSchedule"> | string
   tier?: Prisma.StringFilter<"RecurringSchedule"> | string
-  amountCents?: Prisma.IntFilter<"RecurringSchedule"> | number
-  currency?: Prisma.StringFilter<"RecurringSchedule"> | string
+  amount?: Prisma.IntFilter<"RecurringSchedule"> | number
+  token?: Prisma.StringFilter<"RecurringSchedule"> | string
   frequency?: Prisma.StringFilter<"RecurringSchedule"> | string
-  nextChargeDate?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
+  nextChargeAt?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
   lastChargedAt?: Prisma.DateTimeNullableFilter<"RecurringSchedule"> | Date | string | null
+  chargeCount?: Prisma.IntFilter<"RecurringSchedule"> | number
+  maxCharges?: Prisma.IntFilter<"RecurringSchedule"> | number
   status?: Prisma.StringFilter<"RecurringSchedule"> | string
-  failureCount?: Prisma.IntFilter<"RecurringSchedule"> | number
-  failureReason?: Prisma.StringNullableFilter<"RecurringSchedule"> | string | null
-  metadata?: Prisma.StringNullableFilter<"RecurringSchedule"> | string | null
+  failedCount?: Prisma.IntFilter<"RecurringSchedule"> | number
   createdAt?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"RecurringSchedule"> | Date | string
-}, "id" | "payfastToken">
+}, "id">
 
 export type RecurringScheduleOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
-  email?: Prisma.SortOrder
   tier?: Prisma.SortOrder
-  payfastToken?: Prisma.SortOrder
-  amountCents?: Prisma.SortOrder
-  currency?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  token?: Prisma.SortOrder
   frequency?: Prisma.SortOrder
-  nextChargeDate?: Prisma.SortOrder
+  nextChargeAt?: Prisma.SortOrder
   lastChargedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
   status?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
-  failureReason?: Prisma.SortOrderInput | Prisma.SortOrder
-  metadata?: Prisma.SortOrderInput | Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.RecurringScheduleCountOrderByAggregateInput
@@ -381,18 +367,16 @@ export type RecurringScheduleScalarWhereWithAggregatesInput = {
   NOT?: Prisma.RecurringScheduleScalarWhereWithAggregatesInput | Prisma.RecurringScheduleScalarWhereWithAggregatesInput[]
   id?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
   userId?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
-  email?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
   tier?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
-  payfastToken?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
-  amountCents?: Prisma.IntWithAggregatesFilter<"RecurringSchedule"> | number
-  currency?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
+  amount?: Prisma.IntWithAggregatesFilter<"RecurringSchedule"> | number
+  token?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
   frequency?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
-  nextChargeDate?: Prisma.DateTimeWithAggregatesFilter<"RecurringSchedule"> | Date | string
+  nextChargeAt?: Prisma.DateTimeWithAggregatesFilter<"RecurringSchedule"> | Date | string
   lastChargedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"RecurringSchedule"> | Date | string | null
+  chargeCount?: Prisma.IntWithAggregatesFilter<"RecurringSchedule"> | number
+  maxCharges?: Prisma.IntWithAggregatesFilter<"RecurringSchedule"> | number
   status?: Prisma.StringWithAggregatesFilter<"RecurringSchedule"> | string
-  failureCount?: Prisma.IntWithAggregatesFilter<"RecurringSchedule"> | number
-  failureReason?: Prisma.StringNullableWithAggregatesFilter<"RecurringSchedule"> | string | null
-  metadata?: Prisma.StringNullableWithAggregatesFilter<"RecurringSchedule"> | string | null
+  failedCount?: Prisma.IntWithAggregatesFilter<"RecurringSchedule"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"RecurringSchedule"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"RecurringSchedule"> | Date | string
 }
@@ -400,18 +384,16 @@ export type RecurringScheduleScalarWhereWithAggregatesInput = {
 export type RecurringScheduleCreateInput = {
   id?: string
   userId: string
-  email: string
   tier: string
-  payfastToken: string
-  amountCents: number
-  currency?: string
+  amount: number
+  token: string
   frequency?: string
-  nextChargeDate: Date | string
+  nextChargeAt: Date | string
   lastChargedAt?: Date | string | null
+  chargeCount?: number
+  maxCharges?: number
   status?: string
-  failureCount?: number
-  failureReason?: string | null
-  metadata?: string | null
+  failedCount?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -419,18 +401,16 @@ export type RecurringScheduleCreateInput = {
 export type RecurringScheduleUncheckedCreateInput = {
   id?: string
   userId: string
-  email: string
   tier: string
-  payfastToken: string
-  amountCents: number
-  currency?: string
+  amount: number
+  token: string
   frequency?: string
-  nextChargeDate: Date | string
+  nextChargeAt: Date | string
   lastChargedAt?: Date | string | null
+  chargeCount?: number
+  maxCharges?: number
   status?: string
-  failureCount?: number
-  failureReason?: string | null
-  metadata?: string | null
+  failedCount?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -438,18 +418,16 @@ export type RecurringScheduleUncheckedCreateInput = {
 export type RecurringScheduleUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
-  email?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
-  payfastToken?: Prisma.StringFieldUpdateOperationsInput | string
-  amountCents?: Prisma.IntFieldUpdateOperationsInput | number
-  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.IntFieldUpdateOperationsInput | number
+  token?: Prisma.StringFieldUpdateOperationsInput | string
   frequency?: Prisma.StringFieldUpdateOperationsInput | string
-  nextChargeDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  nextChargeAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastChargedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  chargeCount?: Prisma.IntFieldUpdateOperationsInput | number
+  maxCharges?: Prisma.IntFieldUpdateOperationsInput | number
   status?: Prisma.StringFieldUpdateOperationsInput | string
-  failureCount?: Prisma.IntFieldUpdateOperationsInput | number
-  failureReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  metadata?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  failedCount?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -457,18 +435,16 @@ export type RecurringScheduleUpdateInput = {
 export type RecurringScheduleUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
-  email?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
-  payfastToken?: Prisma.StringFieldUpdateOperationsInput | string
-  amountCents?: Prisma.IntFieldUpdateOperationsInput | number
-  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.IntFieldUpdateOperationsInput | number
+  token?: Prisma.StringFieldUpdateOperationsInput | string
   frequency?: Prisma.StringFieldUpdateOperationsInput | string
-  nextChargeDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  nextChargeAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastChargedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  chargeCount?: Prisma.IntFieldUpdateOperationsInput | number
+  maxCharges?: Prisma.IntFieldUpdateOperationsInput | number
   status?: Prisma.StringFieldUpdateOperationsInput | string
-  failureCount?: Prisma.IntFieldUpdateOperationsInput | number
-  failureReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  metadata?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  failedCount?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -476,18 +452,16 @@ export type RecurringScheduleUncheckedUpdateInput = {
 export type RecurringScheduleCreateManyInput = {
   id?: string
   userId: string
-  email: string
   tier: string
-  payfastToken: string
-  amountCents: number
-  currency?: string
+  amount: number
+  token: string
   frequency?: string
-  nextChargeDate: Date | string
+  nextChargeAt: Date | string
   lastChargedAt?: Date | string | null
+  chargeCount?: number
+  maxCharges?: number
   status?: string
-  failureCount?: number
-  failureReason?: string | null
-  metadata?: string | null
+  failedCount?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -495,18 +469,16 @@ export type RecurringScheduleCreateManyInput = {
 export type RecurringScheduleUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
-  email?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
-  payfastToken?: Prisma.StringFieldUpdateOperationsInput | string
-  amountCents?: Prisma.IntFieldUpdateOperationsInput | number
-  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.IntFieldUpdateOperationsInput | number
+  token?: Prisma.StringFieldUpdateOperationsInput | string
   frequency?: Prisma.StringFieldUpdateOperationsInput | string
-  nextChargeDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  nextChargeAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastChargedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  chargeCount?: Prisma.IntFieldUpdateOperationsInput | number
+  maxCharges?: Prisma.IntFieldUpdateOperationsInput | number
   status?: Prisma.StringFieldUpdateOperationsInput | string
-  failureCount?: Prisma.IntFieldUpdateOperationsInput | number
-  failureReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  metadata?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  failedCount?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -514,18 +486,16 @@ export type RecurringScheduleUpdateManyMutationInput = {
 export type RecurringScheduleUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
-  email?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
-  payfastToken?: Prisma.StringFieldUpdateOperationsInput | string
-  amountCents?: Prisma.IntFieldUpdateOperationsInput | number
-  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.IntFieldUpdateOperationsInput | number
+  token?: Prisma.StringFieldUpdateOperationsInput | string
   frequency?: Prisma.StringFieldUpdateOperationsInput | string
-  nextChargeDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  nextChargeAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastChargedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  chargeCount?: Prisma.IntFieldUpdateOperationsInput | number
+  maxCharges?: Prisma.IntFieldUpdateOperationsInput | number
   status?: Prisma.StringFieldUpdateOperationsInput | string
-  failureCount?: Prisma.IntFieldUpdateOperationsInput | number
-  failureReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  metadata?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  failedCount?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -533,42 +503,40 @@ export type RecurringScheduleUncheckedUpdateManyInput = {
 export type RecurringScheduleCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
-  email?: Prisma.SortOrder
   tier?: Prisma.SortOrder
-  payfastToken?: Prisma.SortOrder
-  amountCents?: Prisma.SortOrder
-  currency?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  token?: Prisma.SortOrder
   frequency?: Prisma.SortOrder
-  nextChargeDate?: Prisma.SortOrder
+  nextChargeAt?: Prisma.SortOrder
   lastChargedAt?: Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
   status?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
-  failureReason?: Prisma.SortOrder
-  metadata?: Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
 export type RecurringScheduleAvgOrderByAggregateInput = {
-  amountCents?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
 }
 
 export type RecurringScheduleMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
-  email?: Prisma.SortOrder
   tier?: Prisma.SortOrder
-  payfastToken?: Prisma.SortOrder
-  amountCents?: Prisma.SortOrder
-  currency?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  token?: Prisma.SortOrder
   frequency?: Prisma.SortOrder
-  nextChargeDate?: Prisma.SortOrder
+  nextChargeAt?: Prisma.SortOrder
   lastChargedAt?: Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
   status?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
-  failureReason?: Prisma.SortOrder
-  metadata?: Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -576,25 +544,25 @@ export type RecurringScheduleMaxOrderByAggregateInput = {
 export type RecurringScheduleMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
-  email?: Prisma.SortOrder
   tier?: Prisma.SortOrder
-  payfastToken?: Prisma.SortOrder
-  amountCents?: Prisma.SortOrder
-  currency?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  token?: Prisma.SortOrder
   frequency?: Prisma.SortOrder
-  nextChargeDate?: Prisma.SortOrder
+  nextChargeAt?: Prisma.SortOrder
   lastChargedAt?: Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
   status?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
-  failureReason?: Prisma.SortOrder
-  metadata?: Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
 export type RecurringScheduleSumOrderByAggregateInput = {
-  amountCents?: Prisma.SortOrder
-  failureCount?: Prisma.SortOrder
+  amount?: Prisma.SortOrder
+  chargeCount?: Prisma.SortOrder
+  maxCharges?: Prisma.SortOrder
+  failedCount?: Prisma.SortOrder
 }
 
 
@@ -602,18 +570,16 @@ export type RecurringScheduleSumOrderByAggregateInput = {
 export type RecurringScheduleSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   userId?: boolean
-  email?: boolean
   tier?: boolean
-  payfastToken?: boolean
-  amountCents?: boolean
-  currency?: boolean
+  amount?: boolean
+  token?: boolean
   frequency?: boolean
-  nextChargeDate?: boolean
+  nextChargeAt?: boolean
   lastChargedAt?: boolean
+  chargeCount?: boolean
+  maxCharges?: boolean
   status?: boolean
-  failureCount?: boolean
-  failureReason?: boolean
-  metadata?: boolean
+  failedCount?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["recurringSchedule"]>
@@ -621,18 +587,16 @@ export type RecurringScheduleSelect<ExtArgs extends runtime.Types.Extensions.Int
 export type RecurringScheduleSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   userId?: boolean
-  email?: boolean
   tier?: boolean
-  payfastToken?: boolean
-  amountCents?: boolean
-  currency?: boolean
+  amount?: boolean
+  token?: boolean
   frequency?: boolean
-  nextChargeDate?: boolean
+  nextChargeAt?: boolean
   lastChargedAt?: boolean
+  chargeCount?: boolean
+  maxCharges?: boolean
   status?: boolean
-  failureCount?: boolean
-  failureReason?: boolean
-  metadata?: boolean
+  failedCount?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["recurringSchedule"]>
@@ -640,18 +604,16 @@ export type RecurringScheduleSelectCreateManyAndReturn<ExtArgs extends runtime.T
 export type RecurringScheduleSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   userId?: boolean
-  email?: boolean
   tier?: boolean
-  payfastToken?: boolean
-  amountCents?: boolean
-  currency?: boolean
+  amount?: boolean
+  token?: boolean
   frequency?: boolean
-  nextChargeDate?: boolean
+  nextChargeAt?: boolean
   lastChargedAt?: boolean
+  chargeCount?: boolean
+  maxCharges?: boolean
   status?: boolean
-  failureCount?: boolean
-  failureReason?: boolean
-  metadata?: boolean
+  failedCount?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["recurringSchedule"]>
@@ -659,23 +621,21 @@ export type RecurringScheduleSelectUpdateManyAndReturn<ExtArgs extends runtime.T
 export type RecurringScheduleSelectScalar = {
   id?: boolean
   userId?: boolean
-  email?: boolean
   tier?: boolean
-  payfastToken?: boolean
-  amountCents?: boolean
-  currency?: boolean
+  amount?: boolean
+  token?: boolean
   frequency?: boolean
-  nextChargeDate?: boolean
+  nextChargeAt?: boolean
   lastChargedAt?: boolean
+  chargeCount?: boolean
+  maxCharges?: boolean
   status?: boolean
-  failureCount?: boolean
-  failureReason?: boolean
-  metadata?: boolean
+  failedCount?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type RecurringScheduleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "email" | "tier" | "payfastToken" | "amountCents" | "currency" | "frequency" | "nextChargeDate" | "lastChargedAt" | "status" | "failureCount" | "failureReason" | "metadata" | "createdAt" | "updatedAt", ExtArgs["result"]["recurringSchedule"]>
+export type RecurringScheduleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "tier" | "amount" | "token" | "frequency" | "nextChargeAt" | "lastChargedAt" | "chargeCount" | "maxCharges" | "status" | "failedCount" | "createdAt" | "updatedAt", ExtArgs["result"]["recurringSchedule"]>
 
 export type $RecurringSchedulePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "RecurringSchedule"
@@ -683,18 +643,16 @@ export type $RecurringSchedulePayload<ExtArgs extends runtime.Types.Extensions.I
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     userId: string
-    email: string
     tier: string
-    payfastToken: string
-    amountCents: number
-    currency: string
+    amount: number
+    token: string
     frequency: string
-    nextChargeDate: Date
+    nextChargeAt: Date
     lastChargedAt: Date | null
+    chargeCount: number
+    maxCharges: number
     status: string
-    failureCount: number
-    failureReason: string | null
-    metadata: string | null
+    failedCount: number
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["recurringSchedule"]>
@@ -1122,18 +1080,16 @@ export interface Prisma__RecurringScheduleClient<T, Null = never, ExtArgs extend
 export interface RecurringScheduleFieldRefs {
   readonly id: Prisma.FieldRef<"RecurringSchedule", 'String'>
   readonly userId: Prisma.FieldRef<"RecurringSchedule", 'String'>
-  readonly email: Prisma.FieldRef<"RecurringSchedule", 'String'>
   readonly tier: Prisma.FieldRef<"RecurringSchedule", 'String'>
-  readonly payfastToken: Prisma.FieldRef<"RecurringSchedule", 'String'>
-  readonly amountCents: Prisma.FieldRef<"RecurringSchedule", 'Int'>
-  readonly currency: Prisma.FieldRef<"RecurringSchedule", 'String'>
+  readonly amount: Prisma.FieldRef<"RecurringSchedule", 'Int'>
+  readonly token: Prisma.FieldRef<"RecurringSchedule", 'String'>
   readonly frequency: Prisma.FieldRef<"RecurringSchedule", 'String'>
-  readonly nextChargeDate: Prisma.FieldRef<"RecurringSchedule", 'DateTime'>
+  readonly nextChargeAt: Prisma.FieldRef<"RecurringSchedule", 'DateTime'>
   readonly lastChargedAt: Prisma.FieldRef<"RecurringSchedule", 'DateTime'>
+  readonly chargeCount: Prisma.FieldRef<"RecurringSchedule", 'Int'>
+  readonly maxCharges: Prisma.FieldRef<"RecurringSchedule", 'Int'>
   readonly status: Prisma.FieldRef<"RecurringSchedule", 'String'>
-  readonly failureCount: Prisma.FieldRef<"RecurringSchedule", 'Int'>
-  readonly failureReason: Prisma.FieldRef<"RecurringSchedule", 'String'>
-  readonly metadata: Prisma.FieldRef<"RecurringSchedule", 'String'>
+  readonly failedCount: Prisma.FieldRef<"RecurringSchedule", 'Int'>
   readonly createdAt: Prisma.FieldRef<"RecurringSchedule", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"RecurringSchedule", 'DateTime'>
 }

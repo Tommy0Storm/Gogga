@@ -2,9 +2,12 @@
 GOGGA Cost Tracker
 Calculates precise token costs based on model pricing tiers.
 Essential for unit economics analysis and subscription viability.
+
+Now persists usage to SQLite via frontend API for billing/analytics.
 """
 import logging
 from typing import TypedDict, Final
+import httpx
 
 from app.config import settings
 
@@ -13,6 +16,22 @@ logger = logging.getLogger(__name__)
 
 # Constants
 MILLION: Final[int] = 1_000_000
+FRONTEND_URL: Final[str] = settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else "http://localhost:3000"
+
+
+def _get_provider(model: str, layer: str) -> str:
+    """Determine the provider based on model and layer."""
+    model_lower = model.lower()
+    layer_lower = layer.lower()
+    
+    if "openrouter" in layer_lower or "free" in layer_lower:
+        return "openrouter"
+    elif "cepo" in layer_lower or "optillm" in layer_lower:
+        return "optillm"
+    elif "cerebras" in model_lower or "llama" in model_lower or "qwen" in model_lower:
+        return "cerebras"
+    else:
+        return "unknown"
 
 
 class CostBreakdown(TypedDict):
@@ -69,9 +88,15 @@ async def track_usage(
     tier_lower = tier.lower()
     
     if tier_lower == "jigga":
-        # JIGGA: Qwen 3 32B pricing
-        input_cost_per_m = settings.COST_JIGGA_INPUT   # $0.40
-        output_cost_per_m = settings.COST_JIGGA_OUTPUT  # $0.80
+        # Check if using 235B model (multilingual) or 32B (default)
+        if "235b" in model.lower() or layer == "jigga_multilingual":
+            # JIGGA 235B: Qwen 3 235B Instruct pricing
+            input_cost_per_m = settings.COST_JIGGA_235B_INPUT   # $0.60
+            output_cost_per_m = settings.COST_JIGGA_235B_OUTPUT  # $1.20
+        else:
+            # JIGGA 32B: Qwen 3 32B pricing
+            input_cost_per_m = settings.COST_JIGGA_INPUT   # $0.40
+            output_cost_per_m = settings.COST_JIGGA_OUTPUT  # $0.80
     elif tier_lower == "jive":
         # JIVE: Llama 3.3 70B pricing
         input_cost_per_m = settings.COST_JIVE_INPUT   # $0.10
@@ -97,11 +122,25 @@ async def track_usage(
         total_cost_usd, total_cost_zar
     )
     
-    # TODO: In production, write to a 'ledger' table with email as primary key
-    # await db.execute(
-    #     "INSERT INTO token_ledger (user_email, tier, model, layer, input_tokens, "
-    #     "output_tokens, cost_usd, cost_zar, exchange_rate, timestamp) VALUES (...)"
-    # )
+    # Persist to SQLite via frontend API
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{FRONTEND_URL}/api/usage/log",
+                json={
+                    "userId": user_id,
+                    "promptTokens": input_tokens,
+                    "completionTokens": output_tokens,
+                    "totalTokens": input_tokens + output_tokens,
+                    "model": model,
+                    "provider": _get_provider(model, layer),
+                    "endpoint": "chat",
+                    "tier": tier.upper(),
+                }
+            )
+    except Exception as e:
+        # Don't fail the request if usage logging fails
+        logger.warning("Failed to persist usage to database: %s", e)
     
     return {
         "usd": round(total_cost_usd, 8),
@@ -157,11 +196,29 @@ async def track_image_usage(
         user_id, tier, generator, image_count, total_cost_usd, total_cost_zar
     )
     
-    # TODO: In production, write to a 'image_ledger' table
-    # await db.execute(
-    #     "INSERT INTO image_ledger (user_email, tier, generator, count, "
-    #     "cost_usd, cost_zar, timestamp) VALUES (...)"
-    # )
+    # Persist to SQLite via frontend API
+    try:
+        # Convert USD cost to ZAR cents for storage
+        cost_zar_cents = int(total_cost_zar * 100)
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{FRONTEND_URL}/api/usage/log",
+                json={
+                    "userId": user_id,
+                    "promptTokens": 0,
+                    "completionTokens": 0,
+                    "totalTokens": 0,
+                    "costCents": cost_zar_cents,
+                    "model": generator,
+                    "provider": generator,
+                    "endpoint": "images",
+                    "tier": tier.upper(),
+                }
+            )
+    except Exception as e:
+        # Don't fail the request if usage logging fails
+        logger.warning("Failed to persist image usage to database: %s", e)
     
     return {
         "usd": round(total_cost_usd, 6),

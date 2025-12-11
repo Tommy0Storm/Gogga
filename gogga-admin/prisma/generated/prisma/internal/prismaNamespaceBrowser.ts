@@ -57,11 +57,14 @@ export const ModelName = {
   Subscription: 'Subscription',
   CreditPurchase: 'CreditPurchase',
   ProcessedPayment: 'ProcessedPayment',
+  RecurringSchedule: 'RecurringSchedule',
   Voucher: 'Voucher',
   VoucherLog: 'VoucherLog',
   AdminLog: 'AdminLog',
   SubscriptionEvent: 'SubscriptionEvent',
-  RecurringSchedule: 'RecurringSchedule'
+  Usage: 'Usage',
+  UsageSummary: 'UsageSummary',
+  DebugSubmission: 'DebugSubmission'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -82,6 +85,7 @@ export const UserScalarFieldEnum = {
   email: 'email',
   isAdmin: 'isAdmin',
   isServiceAdmin: 'isServiceAdmin',
+  isTester: 'isTester',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -162,6 +166,26 @@ export const ProcessedPaymentScalarFieldEnum = {
 export type ProcessedPaymentScalarFieldEnum = (typeof ProcessedPaymentScalarFieldEnum)[keyof typeof ProcessedPaymentScalarFieldEnum]
 
 
+export const RecurringScheduleScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  tier: 'tier',
+  amount: 'amount',
+  token: 'token',
+  frequency: 'frequency',
+  nextChargeAt: 'nextChargeAt',
+  lastChargedAt: 'lastChargedAt',
+  chargeCount: 'chargeCount',
+  maxCharges: 'maxCharges',
+  status: 'status',
+  failedCount: 'failedCount',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type RecurringScheduleScalarFieldEnum = (typeof RecurringScheduleScalarFieldEnum)[keyof typeof RecurringScheduleScalarFieldEnum]
+
+
 export const VoucherScalarFieldEnum = {
   id: 'id',
   code: 'code',
@@ -227,26 +251,63 @@ export const SubscriptionEventScalarFieldEnum = {
 export type SubscriptionEventScalarFieldEnum = (typeof SubscriptionEventScalarFieldEnum)[keyof typeof SubscriptionEventScalarFieldEnum]
 
 
-export const RecurringScheduleScalarFieldEnum = {
+export const UsageScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
-  email: 'email',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalTokens: 'totalTokens',
+  costCents: 'costCents',
+  model: 'model',
+  provider: 'provider',
+  endpoint: 'endpoint',
   tier: 'tier',
-  payfastToken: 'payfastToken',
-  amountCents: 'amountCents',
-  currency: 'currency',
-  frequency: 'frequency',
-  nextChargeDate: 'nextChargeDate',
-  lastChargedAt: 'lastChargedAt',
-  status: 'status',
-  failureCount: 'failureCount',
-  failureReason: 'failureReason',
-  metadata: 'metadata',
-  createdAt: 'createdAt',
+  conversationId: 'conversationId',
+  requestId: 'requestId',
+  durationMs: 'durationMs',
+  createdAt: 'createdAt'
+} as const
+
+export type UsageScalarFieldEnum = (typeof UsageScalarFieldEnum)[keyof typeof UsageScalarFieldEnum]
+
+
+export const UsageSummaryScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  year: 'year',
+  month: 'month',
+  totalTokens: 'totalTokens',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalCostCents: 'totalCostCents',
+  chatRequests: 'chatRequests',
+  enhanceRequests: 'enhanceRequests',
+  imageRequests: 'imageRequests',
+  imagesUsed: 'imagesUsed',
   updatedAt: 'updatedAt'
 } as const
 
-export type RecurringScheduleScalarFieldEnum = (typeof RecurringScheduleScalarFieldEnum)[keyof typeof RecurringScheduleScalarFieldEnum]
+export type UsageSummaryScalarFieldEnum = (typeof UsageSummaryScalarFieldEnum)[keyof typeof UsageSummaryScalarFieldEnum]
+
+
+export const DebugSubmissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  reason: 'reason',
+  consoleLogs: 'consoleLogs',
+  networkLogs: 'networkLogs',
+  errorStack: 'errorStack',
+  userAgent: 'userAgent',
+  url: 'url',
+  screenSize: 'screenSize',
+  status: 'status',
+  adminNotes: 'adminNotes',
+  resolvedAt: 'resolvedAt',
+  resolvedBy: 'resolvedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type DebugSubmissionScalarFieldEnum = (typeof DebugSubmissionScalarFieldEnum)[keyof typeof DebugSubmissionScalarFieldEnum]
 
 
 export const SortOrder = {

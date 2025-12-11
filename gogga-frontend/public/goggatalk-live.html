@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>GoggaTalk - Voice Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-black text-white">
+    <div id="root"></div>
+    <script type="module">
+      import React, { useState, useRef } from 'https://aistudiocdn.com/react@^19.2.1';
+      import ReactDOM from 'https://aistudiocdn.com/react-dom@^19.2.1/client';
+      import { GoogleGenAI, Modality } from 'https://aistudiocdn.com/@google/genai@^1.31.0';
+
+      const API_KEY = 'AIzaSyAJrW_5AqsT54seB0w6dWDSlFLWJ7k0IWk';
+      const MODEL = 'gemini-2.0-flash-exp';
+      const VOICE = 'Aoede';
+      const PCM_RATE = 16000;
+      const PLAY_RATE = 24000;
+
+      function base64ToBytes(b64) {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+      }
+
+      function bytesToBase64(bytes) {
+        let bin = '';
+        for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+      }
+
+      async function decodeAudio(data, ctx) {
+        const int16 = new Int16Array(data.buffer);
+        const buffer = ctx.createBuffer(1, int16.length, PLAY_RATE);
+        const ch = buffer.getChannelData(0);
+        for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 32768.0;
+        return buffer;
+      }
+
+      function createPcm(data) {
+        const int16 = new Int16Array(data.length);
+        for (let i = 0; i < data.length; i++) {
+          const s = Math.max(-1, Math.min(1, data[i]));
+          int16[i] = s < 0 ? s * 32768 : s * 32767;
+        }
+        return {
+          data: bytesToBase64(new Uint8Array(int16.buffer)),
+          mimeType: `audio/pcm;rate=${PCM_RATE}`
+        };
+      }
+
+      const App = () => {
+        const [connected, setConnected] = useState(false);
+        const [speaking, setSpeaking] = useState(false);
+        const [muted, setMuted] = useState(false);
+        const ctxRef = useRef(null);
+        const sessionRef = useRef(null);
+        const nextRef = useRef(0);
+        const sourcesRef = useRef(new Set());
+
+        const connect = async () => {
+          const ai = new GoogleGenAI({ apiKey: API_KEY });
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          const ctx = new Ctx({ sampleRate: PLAY_RATE });
+          ctxRef.current = ctx;
+          const gain = ctx.createGain();
+          gain.connect(ctx.destination);
+
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: PCM_RATE }
+          });
+          const src = ctx.createMediaStreamSource(stream);
+          const proc = ctx.createScriptProcessor(4096, 1, 1);
+
+          const sess = ai.live.connect({
+            model: MODEL,
+            callbacks: {
+              onopen: () => {
+                setConnected(true);
+                console.log('Connected');
+                sessionRef.current.then(s => s.sendRealtimeInput({ text: '' }));
+                src.connect(proc);
+                proc.connect(ctx.destination);
+                proc.onaudioprocess = (e) => {
+                  if (muted) return;
+                  const data = e.inputBuffer.getChannelData(0);
+                  const pcm = createPcm(data);
+                  sessionRef.current.then(s => {
+                    try { s.sendRealtimeInput({ media: pcm }); } catch(e) {}
+                  });
+                };
+              },
+              onmessage: async (msg) => {
+                const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                if (audio) {
+                  setSpeaking(true);
+                  nextRef.current = Math.max(nextRef.current, ctx.currentTime);
+                  const buf = await decodeAudio(base64ToBytes(audio), ctx);
+                  const bs = ctx.createBufferSource();
+                  bs.buffer = buf;
+                  bs.connect(gain);
+                  bs.addEventListener('ended', () => {
+                    sourcesRef.current.delete(bs);
+                    if (sourcesRef.current.size === 0) setSpeaking(false);
+                  });
+                  bs.start(nextRef.current);
+                  nextRef.current += buf.duration;
+                  sourcesRef.current.add(bs);
+                }
+              },
+              onclose: () => setConnected(false),
+              onerror: (e) => console.error(e)
+            },
+            config: {
+              responseModalities: [Modality.AUDIO],
+              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } },
+              systemInstruction: 'You are Gogga, a friendly South African AI. Keep responses short for voice chat. Greet the user warmly!'
+            }
+          });
+          sessionRef.current = sess;
+        };
+
+        const disconnect = () => {
+          if (sessionRef.current) sessionRef.current.then(s => s.close());
+          setConnected(false);
+        };
+
+        return React.createElement('div', { className: 'min-h-screen flex items-center justify-center p-8' },
+          React.createElement('div', { className: 'text-center space-y-8' },
+            React.createElement('h1', { className: 'text-5xl font-bold' }, '🦗 GoggaTalk'),
+            !connected ? (
+              React.createElement('button', {
+                onClick: connect,
+                className: 'bg-white text-black px-8 py-4 rounded-full text-xl font-bold hover:bg-gray-200'
+              }, 'Start Voice Chat')
+            ) : (
+              React.createElement('div', { className: 'space-y-6' },
+                React.createElement('div', { 
+                  className: `w-40 h-40 mx-auto rounded-full flex items-center justify-center text-6xl ${speaking ? 'bg-green-500 animate-pulse' : 'bg-gray-800'}`
+                }, '🎙️'),
+                React.createElement('div', { className: 'flex gap-4 justify-center' },
+                  React.createElement('button', {
+                    onClick: () => setMuted(!muted),
+                    className: `px-6 py-3 rounded-full font-bold ${muted ? 'bg-red-600' : 'bg-white text-black'}`
+                  }, muted ? 'Unmute' : 'Mute'),
+                  React.createElement('button', {
+                    onClick: disconnect,
+                    className: 'px-6 py-3 rounded-full font-bold bg-red-600'
+                  }, 'End')
+                )
+              )
+            )
+          )
+        );
+      };
+
+      ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+</body>
+</html>

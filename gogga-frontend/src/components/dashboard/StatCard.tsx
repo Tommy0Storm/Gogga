@@ -7,7 +7,83 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Info } from 'lucide-react';
+
+// ============================================================================
+// Animation Helpers
+// ============================================================================
+
+/**
+ * Animated Number Counter - Smoothly transitions between values
+ */
+function useAnimatedValue(targetValue: number, duration: number = 500): number {
+  const [displayValue, setDisplayValue] = useState(targetValue);
+  const previousValue = useRef(targetValue);
+  const animationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const startValue = previousValue.current;
+    const startTime = performance.now();
+    
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function: easeOutQuart
+      const eased = 1 - Math.pow(1 - progress, 4);
+      const current = startValue + (targetValue - startValue) * eased;
+      
+      setDisplayValue(current);
+      
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        previousValue.current = targetValue;
+      }
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [targetValue, duration]);
+
+  return displayValue;
+}
+
+/**
+ * Tooltip Component - Educational info on hover
+ */
+interface TooltipProps {
+  content: string;
+  children: React.ReactNode;
+}
+
+const Tooltip: React.FC<TooltipProps> = ({ content, children }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  return (
+    <div 
+      className="relative inline-flex"
+      onMouseEnter={() => setIsVisible(true)}
+      onMouseLeave={() => setIsVisible(false)}
+    >
+      {children}
+      {isVisible && (
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-primary-900 rounded-lg shadow-elevated whitespace-nowrap animate-fadeIn">
+          {content}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-primary-900" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export { Tooltip };
 
 interface StatCardProps {
   title: string;
@@ -21,6 +97,12 @@ interface StatCardProps {
   loading?: boolean;
   variant?: 'default' | 'success' | 'warning' | 'danger';
   compact?: boolean;
+  /** Educational tooltip explaining the metric */
+  info?: string;
+  /** Show animated pulse when value changes */
+  pulseOnChange?: boolean;
+  /** Animate numeric values with counter effect */
+  animateValue?: boolean;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -32,13 +114,41 @@ export const StatCard: React.FC<StatCardProps> = ({
   loading = false,
   variant = 'default',
   compact = false,
+  info,
+  pulseOnChange = false,
+  animateValue = false,
 }) => {
+  const [isPulsing, setIsPulsing] = useState(false);
+  const previousValue = useRef(value);
+  
+  // Parse numeric value for animation
+  const numericValue = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.-]/g, ''));
+  const isNumeric = !isNaN(numericValue) && animateValue;
+  const animatedNum = useAnimatedValue(isNumeric ? numericValue : 0);
+  
+  // Detect value changes for pulse effect
+  useEffect(() => {
+    if (pulseOnChange && previousValue.current !== value) {
+      setIsPulsing(true);
+      const timer = setTimeout(() => setIsPulsing(false), 600);
+      previousValue.current = value;
+      return () => clearTimeout(timer);
+    }
+  }, [value, pulseOnChange]);
+  
   const variantStyles = {
     default: 'border-primary-300',
     success: 'border-sa-green',
     warning: 'border-sa-gold',
     danger: 'border-sa-red',
   };
+
+  // Format animated value back to original format
+  const displayValue = isNumeric 
+    ? (typeof value === 'number' 
+        ? Math.round(animatedNum) 
+        : String(value).replace(/[\d.]+/, Math.round(animatedNum).toString()))
+    : value;
 
   if (loading) {
     return (
@@ -51,24 +161,40 @@ export const StatCard: React.FC<StatCardProps> = ({
   }
 
   return (
-    <div className={`bg-white border-l-4 ${variantStyles[variant]} rounded-xl ${compact ? 'p-3' : 'p-5'} shadow-soft hover:shadow-medium transition-shadow duration-200`}>
+    <div 
+      className={`
+        bg-white border-l-4 ${variantStyles[variant]} rounded-xl ${compact ? 'p-3' : 'p-5'} 
+        shadow-soft hover:shadow-medium transition-all duration-200
+        hover:scale-[1.02] hover:-translate-y-0.5
+        ${isPulsing ? 'animate-pulse ring-2 ring-sa-green/30' : ''}
+      `}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className={`font-normal text-primary-500 mb-1 ${compact ? 'text-xs' : 'text-sm'}`}>{title}</p>
-          <p className={`font-bold text-primary-900 ${compact ? 'text-lg' : 'text-2xl'}`}>{value}</p>
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className={`font-normal text-primary-500 ${compact ? 'text-xs' : 'text-sm'}`}>{title}</p>
+            {info && (
+              <Tooltip content={info}>
+                <Info className="w-3.5 h-3.5 text-primary-400 hover:text-primary-600 cursor-help transition-colors" />
+              </Tooltip>
+            )}
+          </div>
+          <p className={`font-bold text-primary-900 ${compact ? 'text-lg' : 'text-2xl'} transition-all duration-300`}>
+            {displayValue}
+          </p>
           {subtitle && (
             <p className="text-xs text-primary-400 mt-1">{subtitle}</p>
           )}
           {trend && (
-            <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${trend.isPositive ? 'text-sa-green' : 'text-sa-red'}`}>
-              <span>{trend.isPositive ? '↑' : '↓'}</span>
+            <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${trend.isPositive ? 'text-sa-green' : 'text-sa-red'} transition-colors duration-300`}>
+              <span className={trend.isPositive ? 'animate-bounce-subtle' : ''}>{trend.isPositive ? '↑' : '↓'}</span>
               <span>{Math.abs(trend.value)}%</span>
               <span className="text-primary-400 font-normal">vs last hour</span>
             </div>
           )}
         </div>
         {icon && (
-          <div className={`bg-primary-100 rounded-lg ${compact ? 'p-1.5' : 'p-2'}`}>
+          <div className={`bg-primary-100 rounded-lg ${compact ? 'p-1.5' : 'p-2'} transition-transform duration-200 hover:scale-110`}>
             {icon}
           </div>
         )}
@@ -293,6 +419,85 @@ export const InfoRow: React.FC<InfoRowProps> = ({
       <span className={`text-sm font-semibold ${highlight ? 'text-sa-green' : 'text-primary-800'}`}>
         {value}
       </span>
+    </div>
+  );
+};
+
+/**
+ * Privacy Badge - Shows that data is stored locally in the browser
+ * Educational component to build user trust
+ */
+interface PrivacyBadgeProps {
+  variant?: 'compact' | 'default' | 'detailed';
+  className?: string;
+}
+
+export const PrivacyBadge: React.FC<PrivacyBadgeProps> = ({
+  variant = 'default',
+  className = '',
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (variant === 'compact') {
+    return (
+      <Tooltip content="All data stored locally in your browser - never sent to servers">
+        <div className={`inline-flex items-center gap-1 px-2 py-1 bg-primary-50 border border-primary-200 rounded-full text-xs text-primary-600 hover:bg-primary-100 transition-colors cursor-help ${className}`}>
+          <span>🔒</span>
+          <span>Local Storage</span>
+        </div>
+      </Tooltip>
+    );
+  }
+
+  if (variant === 'detailed') {
+    return (
+      <div 
+        className={`bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 rounded-xl p-4 ${className}`}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-start gap-3 cursor-pointer">
+          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
+            <span className="text-xl">🔒</span>
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-semibold text-primary-800">Your Data Stays Private</h4>
+            <p className="text-xs text-primary-500 mt-0.5">
+              All metrics stored locally in your browser (IndexedDB)
+            </p>
+          </div>
+          <div className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+            <svg className="w-4 h-4 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+        {isExpanded && (
+          <div className="mt-3 pt-3 border-t border-primary-200 animate-fadeIn">
+            <ul className="text-xs text-primary-600 space-y-1.5">
+              <li className="flex items-center gap-2">
+                <span className="text-sa-green">✓</span>
+                No data sent to external servers
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-sa-green">✓</span>
+                Automatic cleanup after 7 days
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-sa-green">✓</span>
+                Clear anytime from Maintenance tab
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Default variant
+  return (
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 bg-primary-50 border border-primary-200 rounded-lg ${className}`}>
+      <span className="text-base">🔒</span>
+      <span className="text-xs text-primary-600 font-medium">All data stored locally in your browser</span>
     </div>
   );
 };

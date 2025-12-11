@@ -27,10 +27,10 @@ def test_token_constants():
     assert JIVE_DEFAULT_TOKENS == 4096, f"JIVE_DEFAULT_TOKENS should be 4096, got {JIVE_DEFAULT_TOKENS}"
     print(f"✓ JIVE: {JIVE_DEFAULT_TOKENS} default, {JIVE_MAX_TOKENS} extended (max: 40,000 when ready)")
     
-    # JIGGA (Qwen 3 32B)
+    # JIGGA (Qwen 3 32B) - Always uses max tokens for premium tier
     assert JIGGA_MAX_TOKENS == 8000, f"JIGGA_MAX_TOKENS should be 8000, got {JIGGA_MAX_TOKENS}"
-    assert JIGGA_DEFAULT_TOKENS == 4096, f"JIGGA_DEFAULT_TOKENS should be 4096, got {JIGGA_DEFAULT_TOKENS}"
-    print(f"✓ JIGGA: {JIGGA_DEFAULT_TOKENS} default, {JIGGA_MAX_TOKENS} extended (max: 8,000)")
+    assert JIGGA_DEFAULT_TOKENS == 8000, f"JIGGA_DEFAULT_TOKENS should be 8000 (always max for premium), got {JIGGA_DEFAULT_TOKENS}"
+    print(f"✓ JIGGA: {JIGGA_DEFAULT_TOKENS} default (always max for premium tier)")
 
 
 def test_extended_output_keywords():

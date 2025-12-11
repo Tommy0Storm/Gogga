@@ -162,8 +162,29 @@ signature = hashlib.md5(query_string.encode("utf-8")).hexdigest()
 
 ### 🔜 Pending
 - Email templates for payment events
-- Admin subscription overrides
 - Credit expiry enforcement
+
+## Single Source of Truth
+
+The frontend tier display uses SQLite (Prisma) as the authoritative source:
+
+```typescript
+// AccountMenu.tsx - Fetches fresh tier on mount
+useEffect(() => {
+  fetch('/api/subscription')
+    .then(res => res.json())
+    .then(data => setSubscription(data))
+}, [])
+
+// Uses DB tier, falls back to session prop
+const tier = (subscription?.tier || currentTier) as keyof typeof TIER_STYLES
+```
+
+- **Admin changes**: Update SQLite via `/api/subscriptions/action` endpoint
+- **Frontend reads**: Fetches from `/api/subscription` which queries Prisma
+- **Session callback**: Also reads fresh tier from DB (auth.ts lines 190-200)
+
+This ensures tier changes in admin panel are immediately reflected in the header.
 
 ## Files
 

@@ -89,18 +89,32 @@ export function AccountMenu({
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true) // Start loading immediately
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const tier = currentTier as keyof typeof TIER_STYLES
+  // Fetch subscription data on mount for single source of truth
+  useEffect(() => {
+    setIsLoading(true)
+    fetch('/api/subscription')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          setSubscription(data)
+        }
+      })
+      .catch(console.error)
+      .finally(() => setIsLoading(false))
+  }, [])
+
+  // Use subscription tier from DB if available, otherwise fall back to props
+  const tier = (subscription?.tier || currentTier) as keyof typeof TIER_STYLES
   const tierStyle = TIER_STYLES[tier] || TIER_STYLES.FREE
   const TierIcon = tierStyle.icon
   const isPaidTier = tier !== 'FREE'
 
-  // Fetch subscription data when menu opens
+  // Refresh subscription data when menu opens (in case it changed)
   useEffect(() => {
-    if (isOpen && !subscription && !isLoading) {
-      setIsLoading(true)
+    if (isOpen) {
       fetch('/api/subscription')
         .then(res => res.json())
         .then(data => {
@@ -109,9 +123,8 @@ export function AccountMenu({
           }
         })
         .catch(console.error)
-        .finally(() => setIsLoading(false))
     }
-  }, [isOpen, subscription, isLoading])
+  }, [isOpen])
 
   // Close on click outside
   useEffect(() => {

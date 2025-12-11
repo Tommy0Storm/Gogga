@@ -51,7 +51,7 @@ useRagDashboard (hook)
 RAG metrics are now persisted to Dexie to survive page navigation:
 
 - **Table**: `ragMetrics` (schema version 6)
-- **Retention**: 3 days (automatic cleanup on startup)
+- **Retention**: 7 days (automatic cleanup on startup, auto-aging)
 - **Dashboard**: Uses `getRecentMetricsAsync()` for persistent data
 - **Real-time**: Still uses `subscribeToMetrics()` for live updates
 
@@ -78,6 +78,26 @@ RAG metrics are now persisted to Dexie to survive page navigation:
 | Vector Heatmap | ❌ | ❌ | ✅ |
 | Long-term Memory | ❌ | ❌ | ✅ |
 | Performance Charts | ❌ | ✅ | ✅ |
+
+---
+
+## Dashboard Enhancements (December 2024)
+
+### Animations & UX
+- **StatCard**: Hover animations (scale, translate), pulse on value change, animated number counter
+- **PrivacyBadge**: New component showing "All data stored locally in your browser" with expandable details
+- **Tooltips**: Educational info icons on StatCards explaining each metric
+- **CSS**: New `animate-bounce-subtle`, `animate-value-update` keyframes in globals.css
+
+### Privacy & Education
+- **PrivacyBadge variants**: `compact` (icon only), `default` (inline), `detailed` (expandable card)
+- **Added to**: Overview tab (detailed), Storage tab (default)
+- **Info tooltips**: System Health, Documents, Queries, Tokens, Storage metrics
+
+### Data Retention
+- **METRICS_DAYS**: Changed from 3 to 7 days (db.ts RETENTION_POLICY)
+- **LOGS_DAYS**: Already 7 days
+- **Auto-aging**: Cleanup runs on app startup via `runRetentionCleanup()`
 
 ---
 

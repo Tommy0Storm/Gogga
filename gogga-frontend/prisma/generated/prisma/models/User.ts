@@ -29,6 +29,7 @@ export type UserMinAggregateOutputType = {
   email: string | null
   isAdmin: boolean | null
   isServiceAdmin: boolean | null
+  isTester: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -38,6 +39,7 @@ export type UserMaxAggregateOutputType = {
   email: string | null
   isAdmin: boolean | null
   isServiceAdmin: boolean | null
+  isTester: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -47,6 +49,7 @@ export type UserCountAggregateOutputType = {
   email: number
   isAdmin: number
   isServiceAdmin: number
+  isTester: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -58,6 +61,7 @@ export type UserMinAggregateInputType = {
   email?: true
   isAdmin?: true
   isServiceAdmin?: true
+  isTester?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -67,6 +71,7 @@ export type UserMaxAggregateInputType = {
   email?: true
   isAdmin?: true
   isServiceAdmin?: true
+  isTester?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -76,6 +81,7 @@ export type UserCountAggregateInputType = {
   email?: true
   isAdmin?: true
   isServiceAdmin?: true
+  isTester?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -158,6 +164,7 @@ export type UserGroupByOutputType = {
   email: string
   isAdmin: boolean
   isServiceAdmin: boolean
+  isTester: boolean
   createdAt: Date
   updatedAt: Date
   _count: UserCountAggregateOutputType | null
@@ -188,9 +195,13 @@ export type UserWhereInput = {
   email?: Prisma.StringFilter<"User"> | string
   isAdmin?: Prisma.BoolFilter<"User"> | boolean
   isServiceAdmin?: Prisma.BoolFilter<"User"> | boolean
+  isTester?: Prisma.BoolFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
   subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
+  usage?: Prisma.UsageListRelationFilter
+  usageSummary?: Prisma.UsageSummaryListRelationFilter
+  debugSubmissions?: Prisma.DebugSubmissionListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -198,9 +209,13 @@ export type UserOrderByWithRelationInput = {
   email?: Prisma.SortOrder
   isAdmin?: Prisma.SortOrder
   isServiceAdmin?: Prisma.SortOrder
+  isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   subscription?: Prisma.SubscriptionOrderByWithRelationInput
+  usage?: Prisma.UsageOrderByRelationAggregateInput
+  usageSummary?: Prisma.UsageSummaryOrderByRelationAggregateInput
+  debugSubmissions?: Prisma.DebugSubmissionOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -211,9 +226,13 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
   isAdmin?: Prisma.BoolFilter<"User"> | boolean
   isServiceAdmin?: Prisma.BoolFilter<"User"> | boolean
+  isTester?: Prisma.BoolFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
   subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
+  usage?: Prisma.UsageListRelationFilter
+  usageSummary?: Prisma.UsageSummaryListRelationFilter
+  debugSubmissions?: Prisma.DebugSubmissionListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -221,6 +240,7 @@ export type UserOrderByWithAggregationInput = {
   email?: Prisma.SortOrder
   isAdmin?: Prisma.SortOrder
   isServiceAdmin?: Prisma.SortOrder
+  isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.UserCountOrderByAggregateInput
@@ -236,6 +256,7 @@ export type UserScalarWhereWithAggregatesInput = {
   email?: Prisma.StringWithAggregatesFilter<"User"> | string
   isAdmin?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   isServiceAdmin?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
+  isTester?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
 }
@@ -245,9 +266,13 @@ export type UserCreateInput = {
   email: string
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -255,9 +280,13 @@ export type UserUncheckedCreateInput = {
   email: string
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -265,9 +294,13 @@ export type UserUpdateInput = {
   email?: Prisma.StringFieldUpdateOperationsInput | string
   isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -275,9 +308,13 @@ export type UserUncheckedUpdateInput = {
   email?: Prisma.StringFieldUpdateOperationsInput | string
   isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -285,6 +322,7 @@ export type UserCreateManyInput = {
   email: string
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -294,6 +332,7 @@ export type UserUpdateManyMutationInput = {
   email?: Prisma.StringFieldUpdateOperationsInput | string
   isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -303,6 +342,7 @@ export type UserUncheckedUpdateManyInput = {
   email?: Prisma.StringFieldUpdateOperationsInput | string
   isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -312,6 +352,7 @@ export type UserCountOrderByAggregateInput = {
   email?: Prisma.SortOrder
   isAdmin?: Prisma.SortOrder
   isServiceAdmin?: Prisma.SortOrder
+  isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -321,6 +362,7 @@ export type UserMaxOrderByAggregateInput = {
   email?: Prisma.SortOrder
   isAdmin?: Prisma.SortOrder
   isServiceAdmin?: Prisma.SortOrder
+  isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -330,6 +372,7 @@ export type UserMinOrderByAggregateInput = {
   email?: Prisma.SortOrder
   isAdmin?: Prisma.SortOrder
   isServiceAdmin?: Prisma.SortOrder
+  isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -337,6 +380,11 @@ export type UserMinOrderByAggregateInput = {
 export type UserScalarRelationFilter = {
   is?: Prisma.UserWhereInput
   isNot?: Prisma.UserWhereInput
+}
+
+export type UserNullableScalarRelationFilter = {
+  is?: Prisma.UserWhereInput | null
+  isNot?: Prisma.UserWhereInput | null
 }
 
 export type StringFieldUpdateOperationsInput = {
@@ -365,13 +413,61 @@ export type UserUpdateOneRequiredWithoutSubscriptionNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutSubscriptionInput, Prisma.UserUpdateWithoutSubscriptionInput>, Prisma.UserUncheckedUpdateWithoutSubscriptionInput>
 }
 
+export type UserCreateNestedOneWithoutUsageInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUsageInput, Prisma.UserUncheckedCreateWithoutUsageInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUsageInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutUsageNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUsageInput, Prisma.UserUncheckedCreateWithoutUsageInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUsageInput
+  upsert?: Prisma.UserUpsertWithoutUsageInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUsageInput, Prisma.UserUpdateWithoutUsageInput>, Prisma.UserUncheckedUpdateWithoutUsageInput>
+}
+
+export type UserCreateNestedOneWithoutUsageSummaryInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUsageSummaryInput, Prisma.UserUncheckedCreateWithoutUsageSummaryInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUsageSummaryInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutUsageSummaryNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUsageSummaryInput, Prisma.UserUncheckedCreateWithoutUsageSummaryInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUsageSummaryInput
+  upsert?: Prisma.UserUpsertWithoutUsageSummaryInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUsageSummaryInput, Prisma.UserUpdateWithoutUsageSummaryInput>, Prisma.UserUncheckedUpdateWithoutUsageSummaryInput>
+}
+
+export type UserCreateNestedOneWithoutDebugSubmissionsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutDebugSubmissionsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneWithoutDebugSubmissionsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutDebugSubmissionsInput
+  upsert?: Prisma.UserUpsertWithoutDebugSubmissionsInput
+  disconnect?: Prisma.UserWhereInput | boolean
+  delete?: Prisma.UserWhereInput | boolean
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutDebugSubmissionsInput, Prisma.UserUpdateWithoutDebugSubmissionsInput>, Prisma.UserUncheckedUpdateWithoutDebugSubmissionsInput>
+}
+
 export type UserCreateWithoutSubscriptionInput = {
   id?: string
   email: string
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSubscriptionInput = {
@@ -379,8 +475,12 @@ export type UserUncheckedCreateWithoutSubscriptionInput = {
   email: string
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSubscriptionInput = {
@@ -404,8 +504,12 @@ export type UserUpdateWithoutSubscriptionInput = {
   email?: Prisma.StringFieldUpdateOperationsInput | string
   isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSubscriptionInput = {
@@ -413,10 +517,265 @@ export type UserUncheckedUpdateWithoutSubscriptionInput = {
   email?: Prisma.StringFieldUpdateOperationsInput | string
   isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
 }
 
+export type UserCreateWithoutUsageInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutUsageInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutUsageInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutUsageInput, Prisma.UserUncheckedCreateWithoutUsageInput>
+}
+
+export type UserUpsertWithoutUsageInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutUsageInput, Prisma.UserUncheckedUpdateWithoutUsageInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutUsageInput, Prisma.UserUncheckedCreateWithoutUsageInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutUsageInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutUsageInput, Prisma.UserUncheckedUpdateWithoutUsageInput>
+}
+
+export type UserUpdateWithoutUsageInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutUsageInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutUsageSummaryInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutUsageSummaryInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutUsageSummaryInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutUsageSummaryInput, Prisma.UserUncheckedCreateWithoutUsageSummaryInput>
+}
+
+export type UserUpsertWithoutUsageSummaryInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutUsageSummaryInput, Prisma.UserUncheckedUpdateWithoutUsageSummaryInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutUsageSummaryInput, Prisma.UserUncheckedCreateWithoutUsageSummaryInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutUsageSummaryInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutUsageSummaryInput, Prisma.UserUncheckedUpdateWithoutUsageSummaryInput>
+}
+
+export type UserUpdateWithoutUsageSummaryInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutUsageSummaryInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutDebugSubmissionsInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutDebugSubmissionsInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutDebugSubmissionsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
+}
+
+export type UserUpsertWithoutDebugSubmissionsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutDebugSubmissionsInput, Prisma.UserUncheckedUpdateWithoutDebugSubmissionsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutDebugSubmissionsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutDebugSubmissionsInput, Prisma.UserUncheckedUpdateWithoutDebugSubmissionsInput>
+}
+
+export type UserUpdateWithoutDebugSubmissionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutDebugSubmissionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+}
+
+
+/**
+ * Count Type UserCountOutputType
+ */
+
+export type UserCountOutputType = {
+  usage: number
+  usageSummary: number
+  debugSubmissions: number
+}
+
+export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  usage?: boolean | UserCountOutputTypeCountUsageArgs
+  usageSummary?: boolean | UserCountOutputTypeCountUsageSummaryArgs
+  debugSubmissions?: boolean | UserCountOutputTypeCountDebugSubmissionsArgs
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the UserCountOutputType
+   */
+  select?: Prisma.UserCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountUsageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UsageWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountUsageSummaryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UsageSummaryWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountDebugSubmissionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.DebugSubmissionWhereInput
+}
 
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -424,9 +783,14 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   email?: boolean
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   subscription?: boolean | Prisma.User$subscriptionArgs<ExtArgs>
+  usage?: boolean | Prisma.User$usageArgs<ExtArgs>
+  usageSummary?: boolean | Prisma.User$usageSummaryArgs<ExtArgs>
+  debugSubmissions?: boolean | Prisma.User$debugSubmissionsArgs<ExtArgs>
+  _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
 export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -434,6 +798,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   email?: boolean
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["user"]>
@@ -443,6 +808,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   email?: boolean
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["user"]>
@@ -452,13 +818,18 @@ export type UserSelectScalar = {
   email?: boolean
   isAdmin?: boolean
   isServiceAdmin?: boolean
+  isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "isAdmin" | "isServiceAdmin" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "isAdmin" | "isServiceAdmin" | "isTester" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   subscription?: boolean | Prisma.User$subscriptionArgs<ExtArgs>
+  usage?: boolean | Prisma.User$usageArgs<ExtArgs>
+  usageSummary?: boolean | Prisma.User$usageSummaryArgs<ExtArgs>
+  debugSubmissions?: boolean | Prisma.User$debugSubmissionsArgs<ExtArgs>
+  _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 export type UserIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -467,12 +838,16 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name: "User"
   objects: {
     subscription: Prisma.$SubscriptionPayload<ExtArgs> | null
+    usage: Prisma.$UsagePayload<ExtArgs>[]
+    usageSummary: Prisma.$UsageSummaryPayload<ExtArgs>[]
+    debugSubmissions: Prisma.$DebugSubmissionPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     email: string
     isAdmin: boolean
     isServiceAdmin: boolean
+    isTester: boolean
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["user"]>
@@ -870,6 +1245,9 @@ readonly fields: UserFieldRefs;
 export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   subscription<T extends Prisma.User$subscriptionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$subscriptionArgs<ExtArgs>>): Prisma.Prisma__SubscriptionClient<runtime.Types.Result.GetResult<Prisma.$SubscriptionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  usage<T extends Prisma.User$usageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$usageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  usageSummary<T extends Prisma.User$usageSummaryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$usageSummaryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsageSummaryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  debugSubmissions<T extends Prisma.User$debugSubmissionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$debugSubmissionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DebugSubmissionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -903,6 +1281,7 @@ export interface UserFieldRefs {
   readonly email: Prisma.FieldRef<"User", 'String'>
   readonly isAdmin: Prisma.FieldRef<"User", 'Boolean'>
   readonly isServiceAdmin: Prisma.FieldRef<"User", 'Boolean'>
+  readonly isTester: Prisma.FieldRef<"User", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"User", 'DateTime'>
 }
@@ -1307,6 +1686,78 @@ export type User$subscriptionArgs<ExtArgs extends runtime.Types.Extensions.Inter
    */
   include?: Prisma.SubscriptionInclude<ExtArgs> | null
   where?: Prisma.SubscriptionWhereInput
+}
+
+/**
+ * User.usage
+ */
+export type User$usageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Usage
+   */
+  select?: Prisma.UsageSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Usage
+   */
+  omit?: Prisma.UsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UsageInclude<ExtArgs> | null
+  where?: Prisma.UsageWhereInput
+  orderBy?: Prisma.UsageOrderByWithRelationInput | Prisma.UsageOrderByWithRelationInput[]
+  cursor?: Prisma.UsageWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.UsageScalarFieldEnum | Prisma.UsageScalarFieldEnum[]
+}
+
+/**
+ * User.usageSummary
+ */
+export type User$usageSummaryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the UsageSummary
+   */
+  select?: Prisma.UsageSummarySelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the UsageSummary
+   */
+  omit?: Prisma.UsageSummaryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UsageSummaryInclude<ExtArgs> | null
+  where?: Prisma.UsageSummaryWhereInput
+  orderBy?: Prisma.UsageSummaryOrderByWithRelationInput | Prisma.UsageSummaryOrderByWithRelationInput[]
+  cursor?: Prisma.UsageSummaryWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.UsageSummaryScalarFieldEnum | Prisma.UsageSummaryScalarFieldEnum[]
+}
+
+/**
+ * User.debugSubmissions
+ */
+export type User$debugSubmissionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DebugSubmission
+   */
+  select?: Prisma.DebugSubmissionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the DebugSubmission
+   */
+  omit?: Prisma.DebugSubmissionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DebugSubmissionInclude<ExtArgs> | null
+  where?: Prisma.DebugSubmissionWhereInput
+  orderBy?: Prisma.DebugSubmissionOrderByWithRelationInput | Prisma.DebugSubmissionOrderByWithRelationInput[]
+  cursor?: Prisma.DebugSubmissionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.DebugSubmissionScalarFieldEnum | Prisma.DebugSubmissionScalarFieldEnum[]
 }
 
 /**

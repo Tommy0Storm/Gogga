@@ -35,6 +35,7 @@ import {
   StatusBadge,
   TierBadge,
   InfoRow,
+  PrivacyBadge,
 } from './StatCard';
 import {
   LatencyChart,
@@ -44,7 +45,6 @@ import {
   GaugeChart,
   ScoreHistogram,
   Sparkline,
-  BrowserLoadChart,
 } from './Charts';
 import {
   VectorHeatmap,
@@ -58,7 +58,7 @@ import { BuddyPanel } from './BuddyPanel';
 import { DexieMaintenance } from './DexieMaintenance';
 import { LLMMonitor } from './LLMMonitor';
 import { EmbeddingMonitor } from './EmbeddingMonitor';
-import { useBrowserPerformance } from './useRagDashboard';
+// useBrowserPerformance removed - no longer monitoring OS metrics
 import type { VectorData } from './useRagDashboard';
 import type {
   DexieStorageStats,
@@ -84,11 +84,15 @@ const DataFreshnessIndicator: React.FC<DataFreshnessIndicatorProps> = ({
   isAutoRefresh,
 }) => {
   const [secondsAgo, setSecondsAgo] = React.useState(0);
+  const mountedRef = React.useRef(true);
 
   React.useEffect(() => {
+    mountedRef.current = true;
+    
     if (!lastUpdated) return;
 
     const updateSeconds = () => {
+      if (!mountedRef.current) return;
       const now = new Date();
       const diff = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
       setSecondsAgo(diff);
@@ -97,7 +101,10 @@ const DataFreshnessIndicator: React.FC<DataFreshnessIndicatorProps> = ({
     updateSeconds();
     const interval = setInterval(updateSeconds, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, [lastUpdated]);
 
   if (!lastUpdated) {
@@ -503,6 +510,9 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Privacy Notice - Educational */}
+      <PrivacyBadge variant="detailed" className="animate-fadeIn" />
+      
       {/* Health & Quick Stats */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard
@@ -517,12 +527,16 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
               ? 'warning'
               : 'danger'
           }
+          info="Overall health based on storage, embedding, and query performance"
+          pulseOnChange
         />
         <StatCard
           title="Documents"
           value={storageStats?.documents ?? 0}
           subtitle={`${storageStats?.chunks ?? 0} chunks total`}
           icon={<FileText className="w-5 h-5 text-primary-600" />}
+          info="Documents uploaded for RAG - stored locally in IndexedDB"
+          animateValue
         />
         <StatCard
           title="Queries Today"
@@ -534,12 +548,16 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
               ? { value: 12, isPositive: true }
               : undefined
           }
+          info="RAG queries this session - semantic uses AI embeddings"
+          animateValue
+          pulseOnChange
         />
         <StatCard
           title="Tokens Used"
           value={tokenUsage.totalTokens.toLocaleString()}
           subtitle={`R${tokenUsage.costZar.toFixed(2)} today`}
           icon={<Zap className="w-5 h-5 text-primary-600" />}
+          info="LLM tokens consumed - costs tracked in South African Rand"
         />
       </div>
 
@@ -648,6 +666,9 @@ const StorageTab: React.FC<StorageTabProps> = ({ storageStats, documents }) => {
 
   return (
     <div className="space-y-6">
+      {/* Privacy Notice */}
+      <PrivacyBadge variant="default" className="animate-fadeIn" />
+      
       {/* Storage Stats Grid */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard
@@ -655,24 +676,32 @@ const StorageTab: React.FC<StorageTabProps> = ({ storageStats, documents }) => {
           value={`${storageStats?.totalSizeMB?.toFixed(2) ?? 0} MB`}
           subtitle="of 100 MB limit"
           icon={<HardDrive className="w-5 h-5 text-primary-600" />}
+          info="IndexedDB storage in your browser - 100MB limit per site"
+          animateValue
         />
         <StatCard
           title="Documents"
           value={storageStats?.documents ?? 0}
           subtitle="Stored in Dexie"
           icon={<FileText className="w-5 h-5 text-primary-600" />}
+          info="Files uploaded for context - PDF, TXT, MD supported"
+          animateValue
         />
         <StatCard
           title="Chunks"
           value={storageStats?.chunks ?? 0}
           subtitle="Indexed for RAG"
           icon={<Layers className="w-5 h-5 text-primary-600" />}
+          info="Document segments for semantic search - ~500 chars each"
+          animateValue
         />
         <StatCard
           title="Messages"
           value={storageStats?.messages ?? 0}
           subtitle="Chat history"
           icon={<FileText className="w-5 h-5 text-primary-600" />}
+          info="Conversation history - auto-cleans after 7 days"
+          animateValue
         />
       </div>
 
@@ -1289,10 +1318,6 @@ const PerformanceTab: React.FC<PerformanceTabProps> = ({
     score: avgScore > 0 ? avgScore : 0, // Use actual avg score
   }));
 
-  // Browser performance monitoring
-  const { performance: browserPerf, history: perfHistory } =
-    useBrowserPerformance(1000);
-
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
@@ -1331,81 +1356,43 @@ const PerformanceTab: React.FC<PerformanceTabProps> = ({
         />
       </div>
 
-      {/* Browser Performance Chart */}
-      <BrowserLoadChart
-        fpsHistory={perfHistory.fps}
-        heapHistory={perfHistory.heapUsedPercent}
-        height={180}
-      />
-
       {/* Charts */}
       <div className="grid grid-cols-2 gap-6">
         <PerformanceChart data={performanceData} height={300} />
         <ScoreHistogram data={scoreDistribution} height={300} />
       </div>
 
-      {/* Browser Stats Card */}
-      {browserPerf && (
-        <div className="bg-white rounded-xl border border-primary-200 p-5">
-          <h3 className="font-semibold text-primary-800 mb-4">
-            Browser System Info
-          </h3>
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-primary-500">JS Heap</p>
-              <p className="text-lg font-bold text-primary-800">
-                {browserPerf.jsHeapSizeMB.toFixed(1)} MB
-              </p>
-              <p className="text-xs text-primary-400">
-                of {browserPerf.jsHeapLimitMB.toFixed(0)} MB limit
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-primary-500">Frame Rate</p>
-              <p
-                className={`text-lg font-bold ${
-                  browserPerf.fps >= 55
-                    ? 'text-sa-green'
-                    : browserPerf.fps >= 30
-                    ? 'text-sa-gold'
-                    : 'text-sa-red'
-                }`}
-              >
-                {browserPerf.fps} FPS
-              </p>
-              <p className="text-xs text-primary-400">Target: 60 FPS</p>
-            </div>
-            <div>
-              <p className="text-xs text-primary-500">Long Tasks</p>
-              <p
-                className={`text-lg font-bold ${
-                  browserPerf.longTaskCount === 0
-                    ? 'text-sa-green'
-                    : 'text-sa-gold'
-                }`}
-              >
-                {browserPerf.longTaskCount}
-              </p>
-              <p className="text-xs text-primary-400">
-                {browserPerf.avgLongTaskMs > 0
-                  ? `Avg: ${browserPerf.avgLongTaskMs.toFixed(0)}ms`
-                  : 'None detected'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-primary-500">Device</p>
-              <p className="text-lg font-bold text-primary-800">
-                {browserPerf.hardwareConcurrency} cores
-              </p>
-              <p className="text-xs text-primary-400">
-                {browserPerf.deviceMemoryGB
-                  ? `${browserPerf.deviceMemoryGB} GB RAM`
-                  : 'RAM unknown'}
-              </p>
+      {/* Privacy & Local Processing Info */}
+      <div className="bg-primary-50 rounded-xl border border-primary-200 p-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-sa-green/10 rounded-lg">
+            <CheckCircle2 className="w-5 h-5 text-sa-green" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-primary-800 mb-1">
+              🔒 Local-First Processing
+            </h3>
+            <p className="text-sm text-primary-600 mb-2">
+              All your data is processed and stored locally in your browser. Unlike cloud-based AI services, 
+              your documents and conversations never leave your device.
+            </p>
+            <div className="grid grid-cols-3 gap-4 mt-3">
+              <div className="text-center p-2 bg-white rounded-lg border border-primary-200">
+                <p className="text-lg font-bold text-primary-800">100%</p>
+                <p className="text-xs text-primary-500">Local Storage</p>
+              </div>
+              <div className="text-center p-2 bg-white rounded-lg border border-primary-200">
+                <p className="text-lg font-bold text-sa-green">0</p>
+                <p className="text-xs text-primary-500">Cloud Uploads</p>
+              </div>
+              <div className="text-center p-2 bg-white rounded-lg border border-primary-200">
+                <p className="text-lg font-bold text-primary-800">7 days</p>
+                <p className="text-xs text-primary-500">Auto-Cleanup</p>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Detailed Metrics */}
       <div className="grid grid-cols-3 gap-4">

@@ -15,6 +15,7 @@ import {
   MdMenu,
   MdClose,
   MdTerminal,
+  MdBugReport,
 } from 'react-icons/md';
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/users', label: 'Users', icon: MdPeople },
   { href: '/subscriptions', label: 'Subscriptions', icon: MdReceipt },
   { href: '/vouchers', label: 'Vouchers', icon: MdCardGiftcard },
+  { href: '/debug-submissions', label: 'Debug Reports', icon: MdBugReport },
   { href: '/logs', label: 'Logs & Audit', icon: MdHistory },
   { href: '/settings', label: 'Settings', icon: MdSettings },
 ];
@@ -37,9 +39,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[var(--admin-bg)]">
       {/* Sidebar - fixed position */}
       <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-[var(--admin-surface)] border-r border-[var(--admin-border)] transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-[var(--admin-surface)] border-r border-[var(--admin-border)] transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--admin-border)]">
@@ -61,11 +62,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                  isActive
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive
                     ? 'bg-[var(--admin-surface-2)] text-[var(--admin-text)]'
                     : 'text-[var(--admin-text-secondary)] hover:bg-[var(--admin-surface-2)] hover:text-[var(--admin-text)]'
-                }`}
+                  }`}
               >
                 <Icon size={20} />
                 <span className="font-medium">{item.label}</span>
@@ -84,7 +84,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content wrapper - uses inline style for reliable margin */}
-      <div 
+      <div
         className="min-h-screen transition-all duration-300"
         style={{ marginLeft: sidebarOpen ? '256px' : '0' }}
       >

@@ -12,12 +12,28 @@ const uiHost = isEU ? 'https://eu.posthog.com' : 'https://us.posthog.com';
 
 // Accept phc_ (project) API keys only
 if (posthogEnabled && posthogKey && posthogKey.startsWith('phc_')) {
-  posthog.init(posthogKey, {
-    api_host: posthogHost,
-    ui_host: uiHost,
-    person_profiles: 'identified_only',
-    capture_pageview: false,
-    capture_pageleave: true,
-    debug: process.env.NODE_ENV === 'development',
-  });
+  try {
+    posthog.init(posthogKey, {
+      api_host: posthogHost,
+      ui_host: uiHost,
+      person_profiles: 'identified_only',
+      capture_pageview: false,
+      capture_pageleave: true,
+      debug: process.env.NODE_ENV === 'development',
+      // Disable automatic network requests during initialization
+      autocapture: false,
+      disable_session_recording: true,
+      // Add timeout and retry logic
+      loaded: function (ph) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('PostHog initialized successfully');
+        }
+      },
+    });
+  } catch (error) {
+    // Silently fail PostHog initialization - analytics are non-critical
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('PostHog initialization failed (non-critical):', error);
+    }
+  }
 }

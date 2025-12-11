@@ -394,7 +394,10 @@ export const ModelName = {
   Voucher: 'Voucher',
   VoucherLog: 'VoucherLog',
   AdminLog: 'AdminLog',
-  SubscriptionEvent: 'SubscriptionEvent'
+  SubscriptionEvent: 'SubscriptionEvent',
+  Usage: 'Usage',
+  UsageSummary: 'UsageSummary',
+  DebugSubmission: 'DebugSubmission'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -410,7 +413,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "loginToken" | "authLog" | "subscription" | "creditPurchase" | "processedPayment" | "recurringSchedule" | "voucher" | "voucherLog" | "adminLog" | "subscriptionEvent"
+    modelProps: "user" | "loginToken" | "authLog" | "subscription" | "creditPurchase" | "processedPayment" | "recurringSchedule" | "voucher" | "voucherLog" | "adminLog" | "subscriptionEvent" | "usage" | "usageSummary" | "debugSubmission"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1228,6 +1231,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    Usage: {
+      payload: Prisma.$UsagePayload<ExtArgs>
+      fields: Prisma.UsageFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UsageFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UsageFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>
+        }
+        findFirst: {
+          args: Prisma.UsageFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UsageFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>
+        }
+        findMany: {
+          args: Prisma.UsageFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>[]
+        }
+        create: {
+          args: Prisma.UsageCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>
+        }
+        createMany: {
+          args: Prisma.UsageCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UsageCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>[]
+        }
+        delete: {
+          args: Prisma.UsageDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>
+        }
+        update: {
+          args: Prisma.UsageUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>
+        }
+        deleteMany: {
+          args: Prisma.UsageDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UsageUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UsageUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>[]
+        }
+        upsert: {
+          args: Prisma.UsageUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsagePayload>
+        }
+        aggregate: {
+          args: Prisma.UsageAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUsage>
+        }
+        groupBy: {
+          args: Prisma.UsageGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UsageGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UsageCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UsageCountAggregateOutputType> | number
+        }
+      }
+    }
+    UsageSummary: {
+      payload: Prisma.$UsageSummaryPayload<ExtArgs>
+      fields: Prisma.UsageSummaryFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UsageSummaryFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UsageSummaryFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>
+        }
+        findFirst: {
+          args: Prisma.UsageSummaryFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UsageSummaryFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>
+        }
+        findMany: {
+          args: Prisma.UsageSummaryFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>[]
+        }
+        create: {
+          args: Prisma.UsageSummaryCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>
+        }
+        createMany: {
+          args: Prisma.UsageSummaryCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UsageSummaryCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>[]
+        }
+        delete: {
+          args: Prisma.UsageSummaryDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>
+        }
+        update: {
+          args: Prisma.UsageSummaryUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>
+        }
+        deleteMany: {
+          args: Prisma.UsageSummaryDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UsageSummaryUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UsageSummaryUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>[]
+        }
+        upsert: {
+          args: Prisma.UsageSummaryUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UsageSummaryPayload>
+        }
+        aggregate: {
+          args: Prisma.UsageSummaryAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUsageSummary>
+        }
+        groupBy: {
+          args: Prisma.UsageSummaryGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UsageSummaryGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UsageSummaryCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UsageSummaryCountAggregateOutputType> | number
+        }
+      }
+    }
+    DebugSubmission: {
+      payload: Prisma.$DebugSubmissionPayload<ExtArgs>
+      fields: Prisma.DebugSubmissionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.DebugSubmissionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.DebugSubmissionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>
+        }
+        findFirst: {
+          args: Prisma.DebugSubmissionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.DebugSubmissionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>
+        }
+        findMany: {
+          args: Prisma.DebugSubmissionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>[]
+        }
+        create: {
+          args: Prisma.DebugSubmissionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>
+        }
+        createMany: {
+          args: Prisma.DebugSubmissionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.DebugSubmissionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>[]
+        }
+        delete: {
+          args: Prisma.DebugSubmissionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>
+        }
+        update: {
+          args: Prisma.DebugSubmissionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>
+        }
+        deleteMany: {
+          args: Prisma.DebugSubmissionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.DebugSubmissionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.DebugSubmissionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>[]
+        }
+        upsert: {
+          args: Prisma.DebugSubmissionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DebugSubmissionPayload>
+        }
+        aggregate: {
+          args: Prisma.DebugSubmissionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateDebugSubmission>
+        }
+        groupBy: {
+          args: Prisma.DebugSubmissionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DebugSubmissionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.DebugSubmissionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DebugSubmissionCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1269,6 +1494,7 @@ export const UserScalarFieldEnum = {
   email: 'email',
   isAdmin: 'isAdmin',
   isServiceAdmin: 'isServiceAdmin',
+  isTester: 'isTester',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1434,6 +1660,65 @@ export const SubscriptionEventScalarFieldEnum = {
 export type SubscriptionEventScalarFieldEnum = (typeof SubscriptionEventScalarFieldEnum)[keyof typeof SubscriptionEventScalarFieldEnum]
 
 
+export const UsageScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalTokens: 'totalTokens',
+  costCents: 'costCents',
+  model: 'model',
+  provider: 'provider',
+  endpoint: 'endpoint',
+  tier: 'tier',
+  conversationId: 'conversationId',
+  requestId: 'requestId',
+  durationMs: 'durationMs',
+  createdAt: 'createdAt'
+} as const
+
+export type UsageScalarFieldEnum = (typeof UsageScalarFieldEnum)[keyof typeof UsageScalarFieldEnum]
+
+
+export const UsageSummaryScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  year: 'year',
+  month: 'month',
+  totalTokens: 'totalTokens',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalCostCents: 'totalCostCents',
+  chatRequests: 'chatRequests',
+  enhanceRequests: 'enhanceRequests',
+  imageRequests: 'imageRequests',
+  imagesUsed: 'imagesUsed',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UsageSummaryScalarFieldEnum = (typeof UsageSummaryScalarFieldEnum)[keyof typeof UsageSummaryScalarFieldEnum]
+
+
+export const DebugSubmissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  reason: 'reason',
+  consoleLogs: 'consoleLogs',
+  networkLogs: 'networkLogs',
+  errorStack: 'errorStack',
+  userAgent: 'userAgent',
+  url: 'url',
+  screenSize: 'screenSize',
+  status: 'status',
+  adminNotes: 'adminNotes',
+  resolvedAt: 'resolvedAt',
+  resolvedBy: 'resolvedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type DebugSubmissionScalarFieldEnum = (typeof DebugSubmissionScalarFieldEnum)[keyof typeof DebugSubmissionScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1596,6 +1881,9 @@ export type GlobalOmitConfig = {
   voucherLog?: Prisma.VoucherLogOmit
   adminLog?: Prisma.AdminLogOmit
   subscriptionEvent?: Prisma.SubscriptionEventOmit
+  usage?: Prisma.UsageOmit
+  usageSummary?: Prisma.UsageSummaryOmit
+  debugSubmission?: Prisma.DebugSubmissionOmit
 }
 
 /* Types for Logging */

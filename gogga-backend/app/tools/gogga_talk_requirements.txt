@@ -1,0 +1,11 @@
+# GoggaTalk Requirements
+# Terminal voice chat for Gogga
+
+# Google Gemini Live API
+google-genai>=0.3.0
+
+# Audio handling
+pyaudio>=0.2.14
+
+# Rich terminal UI
+rich>=13.0.0

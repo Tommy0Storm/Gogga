@@ -77,19 +77,39 @@ IMAGE:          User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
 
 ### JIGGA Tier Pipeline
 ```
-TEXT (thinking): User → Qwen 3 32B (temp=0.6, top_p=0.95, top_k=20, min_p=0) → Deep reasoning
-TEXT (fast):     User → Qwen 3 32B + /no_think (temp=0.7, top_p=0.8, top_k=20, min_p=0) → Fast response
-IMAGE:           User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
+TEXT (default): User → Qwen 3 32B (temp=0.6, top_p=0.95, top_k=20) → Deep reasoning
+TEXT (African): User → Qwen 3 235B Instruct (auto-detected) → Multilingual output
+TEXT (manual):  User → 32B/235B (frontend toggle) → User's choice
+IMAGE:          User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
 ```
+
+### Frontend Model Toggle (JIGGA Only)
+- **Location**: Input area, left side (near RAG mode toggle)
+- **State**: `forceModel: 'auto' | '32b' | '235b'`
+- **API field**: `force_layer` in request payload
+- **Values**: `'32b'` → `JIGGA_THINK`, `'235b'` → `JIGGA_MULTILINGUAL`
+- **Layer badges**: "32B Think", "32B Fast", "235B" shown in message metadata
+
+### Model Comparison (JIGGA)
+| Model | Speed | Max Output | Mode | Cost (per M tokens) |
+|-------|-------|------------|------|---------------------|
+| Qwen 3 32B | ~2600 t/s | 8k tokens | Thinking | $0.40 / $0.80 |
+| Qwen 3 235B | ~1400 t/s | 40k tokens | Non-thinking | $0.60 / $1.20 |
+
+### African Language Detection
+- **Function**: `contains_african_language(text)` in router.py
+- **Languages**: isiZulu, isiXhosa, Sesotho, Setswana, Sepedi, isiNdebele, siSwati, Tshivenda, Xitsonga
+- **Pattern**: Detects SA Bantu language patterns (e.g., "umuntu", "abantu", "ke", "ba")
+- **Behavior**: Auto-routes to 235B when detected (unless `force_layer` overrides)
 
 ### Qwen Thinking Mode (JIGGA)
 - **Thinking ON** (default): temp=0.6, top_p=0.95, top_k=20, min_p=0, max_tokens=8000
-- **Fast mode** (/no_think): temp=0.7, top_p=0.8, top_k=20, min_p=0, max_tokens=8000
+- **Long context (100k+ tokens)**: Auto-appends `/no_think` for accuracy per Cerebras recommendation
 - **Thinking block**: Output wrapped in `<think>...</think>` tags, parsed and returned separately
 - **UI display**: Thinking block shown collapsed, main response shown expanded
 - **NEVER use greedy decoding (temp=0)** - causes performance degradation and endless repetitions
 - **Language rule**: Model MUST respond in same language as user prompt
-- Long context (131k+): Auto-disable thinking for accuracy
+- **NOTE**: Fast mode (`/no_think`) was removed for normal requests (caused poor quality for analysis/docs)
 
 ### Token Tracking
 - ALL tiers track token usage (tied to user email)

@@ -15,3 +15,8 @@ pytz>=2024.1
 # optillm runs in its own container (cepo service), not needed here
 posthog>=7.0.0
 apscheduler>=3.10.0
+# Math tools dependencies
+scipy>=1.14.0
+numpy>=2.0.0
+# GoggaTalk - Google AI Live API for voice chat (not Vertex AI - Live API not available in Vertex SDK)
+google-genai>=1.0.0

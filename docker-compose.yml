@@ -1,6 +1,61 @@
 # GOGGA Docker Compose Configuration
 # Local development orchestration
+# 
+# Resource Policy: All containers have memory/CPU limits by default.
+# See .docker/resource-policy.yml for anchor definitions.
+# Override in docker-compose.override.yml for local adjustments.
 
+# ============================================================
+# DEFAULT RESOURCE ANCHORS (reusable across services)
+# ============================================================
+x-default-resources: &default-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 256M
+      reservations:
+        cpus: '0.1'
+        memory: 128M
+
+x-node-resources: &node-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 512M
+      reservations:
+        cpus: '0.1'
+        memory: 256M
+
+x-ai-resources: &ai-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 1G
+      reservations:
+        cpus: '0.25'
+        memory: 512M
+
+x-minimal-resources: &minimal-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.1'
+        memory: 64M
+      reservations:
+        cpus: '0.05'
+        memory: 32M
+
+# Default environment for Node.js containers
+x-node-env: &node-env
+  NODE_OPTIONS: --max-old-space-size=256
+  NEXT_TELEMETRY_DISABLED: "1"
+
+# ============================================================
+# SERVICES
+# ============================================================
 services:
   backend:
     build:
@@ -27,6 +82,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    <<: *default-resources
 
   frontend:
     build:
@@ -36,7 +92,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=
+      <<: *node-env
+      NEXT_PUBLIC_API_URL: ""
     volumes:
       - ./gogga-frontend:/app
       - ./gogga-frontend/certs:/app/certs
@@ -46,6 +103,7 @@ services:
     networks:
       - gogga_network
     restart: unless-stopped
+    <<: *node-resources
 
   # CePO: Cerebras Planning Optimization via OptiLLM
   # Advanced reasoning layer using chain-of-thought planning
@@ -67,6 +125,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 180s
+    <<: *ai-resources
 
   # Network Proxy - Workaround for Next.js 16 network access bug
   # Forwards external connections on port 3001 to frontend:3000
@@ -88,6 +147,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    <<: *minimal-resources
 
   # GOGGA Admin Panel - Separate container for administration
   admin:
@@ -98,13 +158,15 @@ services:
     ports:
       - "3100:3100"
     environment:
-      - DATABASE_URL=file:/app/prisma/dev.db
-      - BACKEND_URL=http://backend:8000
-      - CEPO_URL=http://cepo:8080
-      - FRONTEND_URL=http://frontend:3000
-      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-admin-internal-key-dev}
-      - ADMIN_EMAILS=admin@vcb-ai.online
-      - PAYFAST_ENV=sandbox
+      <<: *node-env
+      NODE_OPTIONS: --max-old-space-size=192
+      DATABASE_URL: file:/app/prisma/dev.db
+      BACKEND_URL: http://backend:8000
+      CEPO_URL: http://cepo:8080
+      FRONTEND_URL: http://frontend:3000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-admin-internal-key-dev}
+      ADMIN_EMAILS: admin@vcb-ai.online
+      PAYFAST_ENV: sandbox
     volumes:
       - ./gogga-admin:/app
       - ./gogga-frontend/prisma:/app/prisma
@@ -116,6 +178,7 @@ services:
     networks:
       - gogga_network
     restart: unless-stopped
+    <<: *default-resources
 
 networks:
   gogga_network:

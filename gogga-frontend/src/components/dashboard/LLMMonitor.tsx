@@ -88,8 +88,8 @@ interface TierStats {
 // ============================================================================
 
 interface ClientResponsiveContainerProps {
-  width?: string | number;
-  height?: string | number;
+  width?: number | `${number}%`;
+  height?: number | `${number}%`;
   children: React.ReactElement;
 }
 
@@ -115,9 +115,9 @@ const ClientResponsiveContainer: React.FC<ClientResponsiveContainerProps> = ({
   }
   
   return (
-    <ClientResponsiveContainer width={width} height={height}>
+    <ResponsiveContainer width={width} height={height}>
       {children}
-    </ClientResponsiveContainer>
+    </ResponsiveContainer>
   );
 };
 

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import AudioRecorder from '@/components/AudioRecorder';
+import { GoggaTalkButton } from '@/components/GoggaTalkButton';
+import { GoggaTalkTerminal } from '@/components/GoggaTalkTerminal';
 import AdminPanel from '@/components/AdminPanel';
 import PromptManager from '@/components/PromptManager';
 import FileUpload from '@/components/FileUpload';
@@ -9,6 +10,7 @@ import DocumentList from '@/components/DocumentList';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { GoggaLogo, GoggaIcon, GoggaCricket } from '@/components/GoggaLogo';
+import { GoggaSpinner } from '@/components/GoggaSpinner';
 import {
   FileStoreIcon,
   SendArrowIcon,
@@ -55,13 +57,22 @@ import {
   ChevronDown,
   ChevronUp,
   Hash,
+  Terminal,
+  Bug,
 } from 'lucide-react';
 import axios from 'axios';
 import { useBuddySystem } from '@/hooks/useBuddySystem';
 import { LanguageBadge } from '@/components/LanguageBadge';
 import { WeatherSlidePanel } from '@/components/ChatComponents';
 import { AccountMenu } from '@/components/AccountMenu';
+import { ReportIssueModal } from '@/components/ReportIssueModal';
+import { useConsoleCapture } from '@/hooks/useConsoleCapture';
+import { ChatTerminal, type TerminalLog } from '@/components/ChatTerminal';
 import type { SALanguage } from '@/lib/buddySystem';
+import { ForcedToolBadge } from '@/components/toolshed';
+import { useToolShed } from '@/lib/toolshedStore';
+import { useDocumentStore } from '@/lib/documentStore';
+import { RightSidePanel } from '@/components/RightSidePanel';
 
 // Extended message with image and thinking support
 interface ChatMessage extends Message {
@@ -80,9 +91,10 @@ const TIER_DISPLAY = {
 interface ChatClientProps {
   userEmail: string | null;
   userTier: string;
+  isTester?: boolean;
 }
 
-export function ChatClient({ userEmail, userTier }: ChatClientProps) {
+export function ChatClient({ userEmail, userTier, isTester = false }: ChatClientProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tier, setTier] = useState<Tier>('free');
@@ -98,11 +110,32 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     new Set()
   ); // Track expanded thinking blocks
   const [isAdmin, setIsAdmin] = useState(false); // Admin mode for PromptManager visibility
+  const [forceModel, setForceModel] = useState<'auto' | '32b' | '235b'>('auto'); // JIGGA model override
   const [historySelectMode, setHistorySelectMode] = useState(false); // Multi-select mode for history
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(
     new Set()
   ); // Selected sessions for bulk delete
+  // Live terminal state for math tool execution
+  const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>([]);
+  const [terminalActive, setTerminalActive] = useState(false);
+  // GoggaTalk voice chat state
+  const [goggaTalkVisible, setGoggaTalkVisible] = useState(false);
+  const [toolsRunning, setToolsRunning] = useState<string[]>([]);
+  const [toolCount, setToolCount] = useState(0);
+  const [streamingThinking, setStreamingThinking] = useState('');
+  const [isStreamingThinking, setIsStreamingThinking] = useState(false);
+  // Store last GoggaSolve session to show in completed message
+  const [lastGoggaSolveLogs, setLastGoggaSolveLogs] = useState<TerminalLog[]>(
+    []
+  );
+  const [lastGoggaSolveThinking, setLastGoggaSolveThinking] = useState('');
+  // Report issue modal state (testers only)
+  const [showReportIssue, setShowReportIssue] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Console capture hook for debug reports (testers only)
+  const { getCapture } = useConsoleCapture();
 
   // Local RAG hook (per-session, JIVE/JIGGA)
   const {
@@ -186,6 +219,51 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     getAIContext: getBuddyContext,
   } = useBuddySystem();
 
+  // ToolShed hook (tool forcing for JIVE/JIGGA)
+  const { forcedTool, fetchTools, clearForcedTool } = useToolShed();
+
+  // Document store sync (for RightSidePanel)
+  const documentStore = useDocumentStore();
+
+  // Fetch tools when tier changes or on mount for paid tiers
+  useEffect(() => {
+    if (tier === 'jive' || tier === 'jigga') {
+      fetchTools(tier);
+    }
+  }, [tier, fetchTools]);
+
+  // Sync RAG state with document store for RightSidePanel
+  useEffect(() => {
+    documentStore.syncState({
+      documents,
+      selectedDocIds,
+      allDocuments,
+      isLoading: ragLoading,
+      isEmbedding,
+      storageUsage,
+      tier,
+      isRAGEnabled,
+      canUpload,
+      maxDocsPerSession: getMaxDocsPerSession(),
+    });
+  }, [documents, selectedDocIds, allDocuments, ragLoading, isEmbedding, storageUsage, tier, isRAGEnabled, canUpload, getMaxDocsPerSession]);
+
+  // Set up action handlers for document store
+  useEffect(() => {
+    documentStore.setUploadHandler(uploadDocument);
+    documentStore.setRemoveHandler(removeDocument);
+    documentStore.setSelectHandler(selectDocuments);
+    documentStore.setLoadAllHandler(loadAllDocuments);
+
+    return () => {
+      // Cleanup handlers on unmount
+      documentStore.setUploadHandler(null);
+      documentStore.setRemoveHandler(null);
+      documentStore.setSelectHandler(null);
+      documentStore.setLoadAllHandler(null);
+    };
+  }, [uploadDocument, removeDocument, selectDocuments, loadAllDocuments]);
+
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
 
@@ -213,6 +291,17 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
 
   // Use appropriate messages based on tier
   const displayMessages = isPersistenceEnabled ? messages : freeMessages;
+
+  // DEBUG: Log whenever displayMessages changes
+  useEffect(() => {
+    console.log('[GOGGA] displayMessages updated:', {
+      count: displayMessages.length,
+      isPersistenceEnabled,
+      lastMessage: displayMessages[
+        displayMessages.length - 1
+      ]?.content?.substring(0, 50),
+    });
+  }, [displayMessages, isPersistenceEnabled]);
 
   // Load saved tier from localStorage (and fix any corrupted values)
   useEffect(() => {
@@ -335,6 +424,10 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     }
 
     setInput('');
+    // Reset textarea height after sending
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '48px';
+    }
     setIsLoading(true);
 
     try {
@@ -401,16 +494,243 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
 
       const requestPayload = {
         message: messageToSend,
-        user_id: 'demo_user_123',
+        user_id: userEmail || 'anonymous',
         user_tier: tier.trim().toLowerCase(),
         history: historyForAPI.length > 0 ? historyForAPI : undefined,
+        force_layer:
+          tier === 'jigga' && forceModel !== 'auto' ? forceModel : undefined,
+        force_tool: forcedTool?.tool.name || undefined, // ToolShed: Force specific tool
       };
       console.log('[GOGGA] Request payload:', JSON.stringify(requestPayload));
       console.log('[GOGGA] History messages:', historyForAPI.length);
+      if (forcedTool) {
+        console.log('[GOGGA] Forced tool:', forcedTool.tool.name);
+      }
 
-      const response = await axios.post('/api/v1/chat', requestPayload);
+      let data: {
+        response: string;
+        thinking?: string;
+        tool_calls?: ToolCall[];
+        meta?: Record<string, unknown>;
+        weather_panel?: { lat: number; lon: number; name: string };
+      };
 
-      const { data } = response;
+      // Use SSE streaming for JIVE/JIGGA tiers (live tool execution logs)
+      if (tier === 'jive' || tier === 'jigga') {
+        // Clear terminal state - only activate when tools actually start
+        setTerminalLogs([]);
+        setTerminalActive(false);
+        setToolsRunning([]);
+        setToolCount(0);
+        setStreamingThinking('');
+        setIsStreamingThinking(false);
+
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+        const sseResponse = await fetch(
+          `${backendUrl}/api/v1/chat/stream-with-tools`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestPayload),
+          }
+        );
+
+        if (!sseResponse.ok) {
+          throw new Error(
+            `HTTP ${sseResponse.status}: ${sseResponse.statusText}`
+          );
+        }
+
+        const reader = sseResponse.body?.getReader();
+        if (!reader) throw new Error('No response body');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let accumulatedContent = '';
+        let accumulatedThinking = '';
+        let responseMeta: Record<string, unknown> = {};
+        let collectedLogs: TerminalLog[] = [];
+        let collectedToolCalls: ToolCall[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+
+            try {
+              const eventData = JSON.parse(line.slice(6));
+
+              switch (eventData.type) {
+                case 'meta':
+                  responseMeta = {
+                    ...responseMeta,
+                    tier: eventData.tier,
+                    layer: eventData.layer,
+                    model: eventData.model,
+                  };
+                  break;
+
+                case 'tool_start':
+                  // Only activate terminal when tools actually start
+                  setTerminalActive(true);
+                  setToolsRunning(eventData.tools || []);
+                  const startLog = {
+                    level: 'info' as const,
+                    message: `[>] Starting: ${(eventData.tools || []).join(
+                      ', '
+                    )}`,
+                  };
+                  collectedLogs.push(startLog);
+                  setTerminalLogs((prev) => [...prev, startLog]);
+                  break;
+
+                case 'tool_log':
+                  const toolLog = {
+                    level: (eventData.level || 'info') as TerminalLog['level'],
+                    message: eventData.message,
+                    icon: eventData.icon,
+                  };
+                  collectedLogs.push(toolLog);
+                  setTerminalLogs((prev) => [...prev, toolLog]);
+                  break;
+
+                case 'tool_complete':
+                  setToolsRunning([]);
+                  setToolCount(eventData.count || 0);
+                  const completeLog = {
+                    level: 'success' as const,
+                    message: `[+] ${eventData.count || 1
+                      } calculation(s) completed`,
+                  };
+                  collectedLogs.push(completeLog);
+                  setTerminalLogs((prev) => [...prev, completeLog]);
+                  break;
+
+                case 'thinking_start':
+                  setIsStreamingThinking(true);
+                  break;
+
+                case 'thinking':
+                  accumulatedThinking += eventData.content || '';
+                  setStreamingThinking(accumulatedThinking);
+                  break;
+
+                case 'thinking_end':
+                  setIsStreamingThinking(false);
+                  break;
+
+                case 'content':
+                  accumulatedContent += eventData.content || '';
+                  // Check for <think> tags in content and extract
+                  if (accumulatedContent.includes('<think>')) {
+                    setIsStreamingThinking(true);
+                  }
+                  if (accumulatedContent.includes('</think>')) {
+                    setIsStreamingThinking(false);
+                    // Extract thinking from content
+                    const thinkMatch = accumulatedContent.match(
+                      /<think>([\s\S]*?)<\/think>/
+                    );
+                    if (thinkMatch) {
+                      accumulatedThinking = thinkMatch[1];
+                      setStreamingThinking(accumulatedThinking);
+                    }
+                  }
+                  break;
+
+                case 'done':
+                  responseMeta = {
+                    ...responseMeta,
+                    latency_seconds: eventData.latency,
+                    math_tools_executed: eventData.math_tools_executed,
+                    math_tool_count: eventData.math_tool_count,
+                    cost_zar: eventData.cost,
+                    tokens: eventData.tokens,
+                  };
+                  // Capture any tool calls (charts, images) for frontend execution
+                  if (
+                    eventData.tool_calls &&
+                    Array.isArray(eventData.tool_calls)
+                  ) {
+                    console.log(
+                      '[GOGGA] SSE received tool_calls:',
+                      eventData.tool_calls
+                    );
+                    collectedToolCalls = eventData.tool_calls;
+                  }
+                  // Add final log
+                  const doneLog = {
+                    level: 'success' as const,
+                    message: `[+] Response complete (${eventData.latency?.toFixed(2) || '?'
+                      }s)`,
+                  };
+                  collectedLogs.push(doneLog);
+                  setTerminalLogs((prev) => [...prev, doneLog]);
+                  break;
+
+                case 'error':
+                  throw new Error(eventData.message || 'Stream error');
+              }
+            } catch (parseError) {
+              // Ignore parse errors for incomplete JSON
+              if ((parseError as Error).message !== 'Stream error') {
+                continue;
+              }
+              throw parseError;
+            }
+          }
+        }
+
+        // Deactivate terminal but preserve logs for display
+        setTerminalActive(false);
+        setIsStreamingThinking(false);
+        // Save logs and thinking for the message
+        setLastGoggaSolveLogs(collectedLogs);
+        setLastGoggaSolveThinking(accumulatedThinking);
+
+        // Clean thinking tags from content - handle all variations
+        let cleanContent = accumulatedContent
+          .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '') // Complete blocks
+          .replace(/<think(?:ing)?>([\s\S]*)$/gi, '') // Unclosed tags at end
+          .replace(/<\/think(?:ing)?>/gi, '') // Orphaned closing tags
+          .replace(/<think(?:ing)?>/gi, '') // Orphaned opening tags
+          .trim();
+
+        // DEBUG: Log what we accumulated vs what we cleaned
+        console.log('[GOGGA] SSE accumulated content:', {
+          rawLength: accumulatedContent.length,
+          cleanedLength: cleanContent.length,
+          rawPreview: accumulatedContent.substring(0, 200),
+          cleanedPreview: cleanContent.substring(0, 200),
+          hasThinkTags: accumulatedContent.includes('<think'),
+        });
+
+        data = {
+          response: cleanContent,
+          thinking: accumulatedThinking || undefined,
+          meta: responseMeta,
+          tool_calls:
+            collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+        };
+
+        console.log('[GOGGA] SSE stream complete:', {
+          responseLength: cleanContent.length,
+          hasThinking: !!accumulatedThinking,
+          logsCount: collectedLogs.length,
+          toolCallsCount: collectedToolCalls.length,
+          meta: responseMeta,
+        });
+      } else {
+        // FREE tier: use standard axios POST
+        const response = await axios.post('/api/v1/chat', requestPayload);
+        data = response.data;
+      }
 
       // Debug: Log the full response structure to see if tool_calls are there
       console.log('[GOGGA] Full API response:', {
@@ -423,10 +743,11 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       });
 
       // Track token usage if available
-      if (data.meta?.tokens) {
-        const inputTokens = data.meta.tokens.input || 0;
-        const outputTokens = data.meta.tokens.output || 0;
-        const costZar = data.meta.cost_zar || 0;
+      if (data.meta?.tokens && typeof data.meta.tokens === 'object') {
+        const tokens = data.meta.tokens as { input?: number; output?: number };
+        const inputTokens = tokens.input || 0;
+        const outputTokens = tokens.output || 0;
+        const costZar = (data.meta.cost_zar as number) || 0;
         await trackTokens(tier, inputTokens, outputTokens, costZar);
       }
 
@@ -435,18 +756,42 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         content: data.response,
         thinking: data.thinking || undefined, // JIGGA thinking block
         meta: {
-          cost_zar: data.meta?.cost_zar,
-          model: data.meta?.model_used || data.meta?.model,
-          layer: data.meta?.layer,
-          latency_seconds: data.meta?.latency_seconds,
-          tier: data.meta?.tier,
-          provider: data.meta?.provider,
+          cost_zar: data.meta?.cost_zar as number | undefined,
+          model: (data.meta?.model_used || data.meta?.model) as
+            | string
+            | undefined,
+          layer: data.meta?.layer as
+            | 'speed'
+            | 'complex'
+            | 'free_text'
+            | 'jive_speed'
+            | 'jive_reasoning'
+            | 'jigga_think'
+            | 'jigga_fast'
+            | 'jigga_multilingual'
+            | 'reasoning'
+            | undefined,
+          latency_seconds: data.meta?.latency_seconds as number | undefined,
+          tier: data.meta?.tier as
+            | 'FREE'
+            | 'JIVE'
+            | 'JIGGA'
+            | 'free'
+            | 'jive'
+            | 'jigga'
+            | undefined,
+          provider: data.meta?.provider as string | undefined,
           rag_context: !!ragContext,
           memory_context: !!memoryContext, // Long-term memory was used
           buddy_context: !!buddyContext, // BuddySystem profile was used
           location_context: !!locationContext, // Location was included
-          has_thinking: data.meta?.has_thinking || !!data.thinking,
+          has_thinking: (data.meta?.has_thinking as boolean) || !!data.thinking,
           timestamp: new Date().toISOString(), // Response timestamp
+          // Math tools executed on backend
+          math_tools_executed: data.meta?.math_tools_executed as
+            | string[]
+            | undefined,
+          math_tool_count: data.meta?.math_tool_count as number | undefined,
         },
       };
 
@@ -456,28 +801,46 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         Array.isArray(data.tool_calls) &&
         data.tool_calls.length > 0
       ) {
-        console.log('[GOGGA] Tool calls received:', data.tool_calls);
+        console.log('[GOGGA] Tool calls received (raw):', data.tool_calls);
 
         try {
-          // Check if this is an image generation tool call
-          const hasImageTool = data.tool_calls.some(
-            (tc: { function?: { name?: string } }) => tc.function?.name === 'generate_image'
+          // Normalize tool calls - backend may send {function: {name, arguments}, id}
+          // but toolHandler expects {name, arguments, id}
+          const normalizedToolCalls: ToolCall[] = data.tool_calls.map(
+            (tc: {
+              function?: { name?: string; arguments?: Record<string, unknown> };
+              name?: string;
+              arguments?: Record<string, unknown>;
+              id: string;
+            }) => ({
+              id: tc.id,
+              name: tc.function?.name || tc.name || 'unknown',
+              arguments: tc.function?.arguments || tc.arguments || {},
+            })
           );
-          
+          console.log('[GOGGA] Tool calls normalized:', normalizedToolCalls);
+
+          // Check if this is an image generation tool call
+          const hasImageTool = normalizedToolCalls.some(
+            (tc) => tc.name === 'generate_image'
+          );
+
           // Add temporary "painting" message for image generation
           if (hasImageTool && botMsg.content) {
-            const tempContent = botMsg.content + '\n\n*🎨 GOGGA is painting your image...*';
+            const tempContent =
+              botMsg.content + '\n\n*🎨 GOGGA is painting your image...*';
             if (isPersistenceEnabled) {
               await addMessage({ ...botMsg, content: tempContent });
             } else {
-              setFreeMessages((prev) => [...prev, { ...botMsg, content: tempContent }]);
+              setFreeMessages((prev) => [
+                ...prev,
+                { ...botMsg, content: tempContent },
+              ]);
             }
           }
-          
+
           // Execute the tool calls on the frontend
-          const toolResults = await executeToolCalls(
-            data.tool_calls as ToolCall[]
-          );
+          const toolResults = await executeToolCalls(normalizedToolCalls);
           console.log('[GOGGA] Tool results:', toolResults);
 
           // Add tool execution info to the message (no label for images)
@@ -486,7 +849,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
             // Check if result contains images (no prefix) or memory operations (add prefix)
             const hasImages = toolSummary.includes('![Generated Image');
             const prefix = ''; // No prefix - results speak for themselves
-            
+
             // Append tool results to the response
             botMsg.content = botMsg.content
               ? `${botMsg.content}\n\n---\n${prefix}${toolSummary}`
@@ -505,21 +868,35 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       // Auto-inject contextual images for long CePO/Qwen responses
       // Only for informal educational content, every 2nd-3rd response
       if (data.meta?.layer && (tier === 'jive' || tier === 'jigga')) {
-        const { processResponseForImages } = await import('@/lib/autoImageInjector');
-        const responseCount = displayMessages.filter(m => m.role === 'assistant').length + 1;
+        const { processResponseForImages } = await import(
+          '@/lib/autoImageInjector'
+        );
+        const responseCount =
+          displayMessages.filter((m) => m.role === 'assistant').length + 1;
         botMsg.content = processResponseForImages(
           botMsg.content,
           text,
           tier,
-          data.meta.layer,
+          data.meta.layer as string,
           responseCount
         );
       }
 
+      // DEBUG: Log the bot message before saving
+      console.log('[GOGGA] About to save botMsg:', {
+        role: botMsg.role,
+        contentLength: botMsg.content?.length,
+        contentPreview: botMsg.content?.substring(0, 100),
+        hasContent: !!botMsg.content,
+        isPersistenceEnabled,
+      });
+
       if (isPersistenceEnabled) {
         await addMessage(botMsg);
+        console.log('[GOGGA] Message saved to persistence');
       } else {
         setFreeMessages((prev) => [...prev, botMsg]);
+        console.log('[GOGGA] Message added to freeMessages');
       }
 
       // Check for weather panel trigger from AI tool call
@@ -541,9 +918,8 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       const { response, message } = error;
       const errorMsg: ChatMessage = {
         role: 'assistant',
-        content: `Eish! Something went wrong: ${
-          response?.data?.detail || message
-        }`,
+        content: `Eish! Something went wrong: ${response?.data?.detail || message
+          }`,
       };
 
       if (isPersistenceEnabled) {
@@ -582,7 +958,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     try {
       const response = await axios.post('/api/v1/chat/enhance', {
         prompt: input,
-        user_id: 'demo_user_123',
+        user_id: userEmail || 'anonymous',
       });
 
       if (response.data.success && response.data.enhanced_prompt) {
@@ -612,7 +988,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     try {
       const response = await axios.post('/api/v1/images/generate', {
         prompt: originalPrompt,
-        user_id: 'demo_user_123',
+        user_id: userEmail || 'anonymous',
         user_tier: tier.toLowerCase(),
         enhance_prompt: true,
       });
@@ -676,9 +1052,8 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       const { response, message } = error;
       const errorMsg: ChatMessage = {
         role: 'assistant',
-        content: `Eish! Image generation failed: ${
-          response?.data?.detail || message
-        }`,
+        content: `Eish! Image generation failed: ${response?.data?.detail || message
+          }`,
       };
 
       if (isPersistenceEnabled) {
@@ -700,6 +1075,11 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
     // Also reset RAG session for JIGGA
     if (tier === 'jigga') {
       newRAGSession();
+    }
+    // Reset input and textarea height
+    setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '48px';
     }
   };
 
@@ -756,11 +1136,16 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
       );
       if (thinkMatch) {
         thinkingContent = thinkMatch[1].trim();
-        mainContent = msg.content
-          .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '')
-          .trim();
       }
     }
+
+    // Always strip think tags from main content (handles all variations)
+    mainContent = msg.content
+      .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '')
+      .replace(/<think(?:ing)?>([\s\S]*)$/gi, '') // Unclosed tags
+      .replace(/<\/think(?:ing)?>/gi, '') // Orphaned closing tags
+      .replace(/<think(?:ing)?>/gi, '') // Orphaned opening tags
+      .trim();
 
     const hasThinking = !!thinkingContent;
     const isThinkingExpanded = expandedThinking.has(messageIndex);
@@ -790,10 +1175,11 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
 
     // Check for tool-generated images (Pollinations + AI Horde)
     if (msg.content.includes('__TOOL_IMAGES__:')) {
-      const ToolImageThumbnail = require('@/components/ToolImageThumbnail').default;
+      const ToolImageThumbnail =
+        require('@/components/ToolImageThumbnail').default;
       const parts = msg.content.split('__TOOL_IMAGES__:');
       const elements: React.ReactNode[] = [];
-      
+
       parts.forEach((part, idx) => {
         if (idx === 0 && part.trim()) {
           // Text before first image marker
@@ -808,8 +1194,9 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
           // Parse image JSON and remaining text
           const newlineIdx = part.indexOf('\n');
           const jsonStr = newlineIdx > 0 ? part.slice(0, newlineIdx) : part;
-          const textAfter = newlineIdx > 0 ? part.slice(newlineIdx + 1).trim() : '';
-          
+          const textAfter =
+            newlineIdx > 0 ? part.slice(newlineIdx + 1).trim() : '';
+
           try {
             const imageData = JSON.parse(jsonStr);
             elements.push(
@@ -834,7 +1221,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
               />
             );
           }
-          
+
           if (textAfter) {
             elements.push(
               <MarkdownRenderer
@@ -846,7 +1233,128 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
           }
         }
       });
-      
+
+      return <div>{elements}</div>;
+    }
+
+    // Check for tool-generated charts (both __TOOL_CHART__: and TOOL_CHART: formats)
+    if (
+      msg.content.includes('__TOOL_CHART__:') ||
+      msg.content.includes('TOOL_CHART:')
+    ) {
+      const ChartRenderer = require('@/components/ChartRenderer').default;
+      // Normalize both formats to split properly
+      const normalizedContent = msg.content.replace(
+        /TOOL_CHART:/g,
+        '__TOOL_CHART__:'
+      );
+      const parts = normalizedContent.split('__TOOL_CHART__:');
+      const elements: React.ReactNode[] = [];
+
+      parts.forEach((part, idx) => {
+        if (idx === 0 && part.trim()) {
+          // Text before first chart marker
+          elements.push(
+            <MarkdownRenderer
+              key={`text-${idx}`}
+              content={part.trim()}
+              variant={isUser ? 'user' : 'assistant'}
+            />
+          );
+        } else if (idx > 0) {
+          // Parse chart JSON and remaining text
+          const newlineIdx = part.indexOf('\n');
+          const jsonStr = newlineIdx > 0 ? part.slice(0, newlineIdx) : part;
+          const textAfter =
+            newlineIdx > 0 ? part.slice(newlineIdx + 1).trim() : '';
+
+          try {
+            const chartData = JSON.parse(jsonStr);
+            elements.push(
+              <div key={`chart-${idx}`} className="my-3">
+                <ChartRenderer chartData={chartData} />
+              </div>
+            );
+          } catch {
+            // Fallback: show as markdown
+            elements.push(
+              <MarkdownRenderer
+                key={`fallback-${idx}`}
+                content={part}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+
+          if (textAfter) {
+            elements.push(
+              <MarkdownRenderer
+                key={`textafter-${idx}`}
+                content={textAfter}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+        }
+      });
+
+      return <div>{elements}</div>;
+    }
+
+    // Check for tool-generated math results
+    if (msg.content.includes('__TOOL_MATH__:')) {
+      const MathResultDisplay =
+        require('@/components/display/MathResultDisplay').default;
+      const parts = msg.content.split('__TOOL_MATH__:');
+      const elements: React.ReactNode[] = [];
+
+      parts.forEach((part, idx) => {
+        if (idx === 0 && part.trim()) {
+          // Text before first math marker
+          elements.push(
+            <MarkdownRenderer
+              key={`text-${idx}`}
+              content={part.trim()}
+              variant={isUser ? 'user' : 'assistant'}
+            />
+          );
+        } else if (idx > 0) {
+          // Parse math JSON and remaining text
+          const newlineIdx = part.indexOf('\n');
+          const jsonStr = newlineIdx > 0 ? part.slice(0, newlineIdx) : part;
+          const textAfter =
+            newlineIdx > 0 ? part.slice(newlineIdx + 1).trim() : '';
+
+          try {
+            const mathData = JSON.parse(jsonStr);
+            elements.push(
+              <div key={`math-${idx}`} className="my-3">
+                <MathResultDisplay result={mathData} />
+              </div>
+            );
+          } catch {
+            // Fallback: show as markdown
+            elements.push(
+              <MarkdownRenderer
+                key={`fallback-${idx}`}
+                content={part}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+
+          if (textAfter) {
+            elements.push(
+              <MarkdownRenderer
+                key={`textafter-${idx}`}
+                content={textAfter}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+        }
+      });
+
       return <div>{elements}</div>;
     }
 
@@ -1009,6 +1517,17 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
               <span>{TIER_DISPLAY[tier].name}</span>
             </div>
           )}
+          {/* Report Issue button (testers only) */}
+          {isTester && (
+            <button
+              onClick={() => setShowReportIssue(true)}
+              className="header-btn bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
+              title="Report an issue (Tester)"
+            >
+              <Bug size={14} />
+              <span className="text-xs">Report</span>
+            </button>
+          )}
           <span className="header-btn bg-primary-600/50 text-[10px]">
             Beta v1.0
           </span>
@@ -1032,11 +1551,10 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                     setHistorySelectMode(!historySelectMode);
                     setSelectedSessions(new Set());
                   }}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    historySelectMode
+                  className={`p-1.5 rounded-lg transition-colors ${historySelectMode
                       ? 'bg-primary-200 text-primary-700'
                       : 'hover:bg-primary-100 text-primary-500'
-                  }`}
+                    }`}
                   title={
                     historySelectMode
                       ? 'Cancel selection'
@@ -1111,9 +1629,8 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className={`group relative flex items-stretch hover:bg-primary-50 transition-colors ${
-                    session.id === chatSessionId ? 'bg-primary-100' : ''
-                  }`}
+                  className={`group relative flex items-stretch hover:bg-primary-50 transition-colors ${session.id === chatSessionId ? 'bg-primary-100' : ''
+                    }`}
                 >
                   {/* Checkbox (select mode) */}
                   {historySelectMode && (
@@ -1249,22 +1766,19 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
             {displayMessages.map((m, i) => (
               <div
                 key={i}
-                className={`flex ${
-                  m.role === 'user' ? 'justify-end' : 'justify-start'
-                } chat-bubble`}
+                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'
+                  } chat-bubble`}
               >
                 <div
-                  className={`flex gap-3 max-w-[85%] ${
-                    m.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                  }`}
+                  className={`flex gap-3 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                    }`}
                 >
                   {/* Avatar - clean with no background for bot */}
                   <div
-                    className={`flex-shrink-0 flex items-center justify-center ${
-                      m.role === 'user'
+                    className={`flex-shrink-0 flex items-center justify-center ${m.role === 'user'
                         ? 'w-8 h-8 rounded-full bg-primary-800'
                         : 'w-10 h-10'
-                    }`}
+                      }`}
                   >
                     {m.role === 'user' ? (
                       <User size={16} className="text-white" />
@@ -1274,11 +1788,10 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                   </div>
 
                   <div
-                    className={`message-bubble ${
-                      m.role === 'user'
+                    className={`message-bubble ${m.role === 'user'
                         ? 'message-bubble-user'
                         : 'message-bubble-assistant'
-                    }`}
+                      }`}
                   >
                     {renderMessageContent(m as ChatMessage, i)}
 
@@ -1321,12 +1834,17 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                             ) : m.meta.layer === 'jigga_think' ? (
                               <>
                                 <Brain size={12} />
-                                <span>Thinking</span>
+                                <span>32B Think</span>
                               </>
                             ) : m.meta.layer === 'jigga_fast' ? (
                               <>
                                 <Zap size={12} />
-                                <span>Fast</span>
+                                <span>32B Fast</span>
+                              </>
+                            ) : m.meta.layer === 'jigga_multilingual' ? (
+                              <>
+                                <Sparkles size={12} />
+                                <span>235B</span>
                               </>
                             ) : (
                               <>
@@ -1372,28 +1890,88 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                             <span>RAG</span>
                           </button>
                         )}
+                        {m.meta.math_tool_count &&
+                          m.meta.math_tool_count > 0 && (
+                            <button
+                              type="button"
+                              className="meta-badge bg-primary-100 text-primary-700"
+                              title={`GoggaSolve: ${m.meta.math_tools_executed?.join(', ') ||
+                                'calculations'
+                                }`}
+                            >
+                              <Terminal size={12} />
+                              <span>GoggaSolve×{m.meta.math_tool_count}</span>
+                            </button>
+                          )}
                       </div>
                     )}
+                    {/* GoggaSolve Terminal for completed messages with math tools */}
+                    {m.role === 'assistant' &&
+                      m.meta?.math_tool_count &&
+                      m.meta.math_tool_count > 0 &&
+                      lastGoggaSolveLogs.length > 0 &&
+                      i === displayMessages.length - 1 && (
+                        <div className="mt-3">
+                          <ChatTerminal
+                            logs={lastGoggaSolveLogs}
+                            isActive={false}
+                            toolCount={m.meta.math_tool_count}
+                            thinkingContent={lastGoggaSolveThinking}
+                            isThinking={false}
+                          />
+                        </div>
+                      )}
                   </div>
                 </div>
               </div>
             ))}
 
             {isLoading && (
+              <>
+                <div className="flex justify-start chat-bubble">
+                  <div className="flex gap-3 w-full max-w-2xl">
+                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
+                      <GoggaCricket size="md" />
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <div className="message-bubble message-bubble-assistant">
+                        <div className="flex items-center justify-center py-2">
+                          <span className="text-sm text-primary-400">Processing...</span>
+                        </div>
+                      </div>
+                      {/* GoggaSolve Terminal (JIVE/JIGGA only) - always visible once triggered */}
+                      {(tier === 'jive' || tier === 'jigga') &&
+                        (terminalActive || terminalLogs.length > 0) && (
+                          <ChatTerminal
+                            logs={terminalLogs}
+                            isActive={terminalActive}
+                            toolsRunning={toolsRunning}
+                            toolCount={toolCount}
+                            thinkingContent={streamingThinking}
+                            isThinking={isStreamingThinking}
+                          />
+                        )}
+                    </div>
+                  </div>
+                </div>
+                {/* Pinned center overlay spinner */}
+                <GoggaSpinner overlay size="md" />
+              </>
+            )}
+
+            {/* GoggaTalk Voice Terminal - dedicated voice chat interface */}
+            {goggaTalkVisible && (
               <div className="flex justify-start chat-bubble">
-                <div className="flex gap-3">
+                <div className="flex gap-3 w-full max-w-2xl">
                   <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
                     <GoggaCricket size="md" />
                   </div>
-                  <div className="message-bubble message-bubble-assistant">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-primary-500">Thinking</span>
-                      <div className="flex gap-1">
-                        <span className="thinking-dot w-1.5 h-1.5 bg-primary-400 rounded-full"></span>
-                        <span className="thinking-dot w-1.5 h-1.5 bg-primary-400 rounded-full"></span>
-                        <span className="thinking-dot w-1.5 h-1.5 bg-primary-400 rounded-full"></span>
-                      </div>
-                    </div>
+                  <div className="flex-1">
+                    <GoggaTalkTerminal
+                      isVisible={goggaTalkVisible}
+                      onClose={() => setGoggaTalkVisible(false)}
+                      userTier={userTier}
+                    />
                   </div>
                 </div>
               </div>
@@ -1406,6 +1984,45 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
             {/* RAG Mode Toggle - JIVE/JIGGA tiers */}
             {canUpload && (
               <div className="max-w-4xl mx-auto mb-2 flex items-center gap-2 flex-wrap">
+                {/* JIGGA Model Toggle - 32B/235B */}
+                {tier === 'jigga' && (
+                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setForceModel('auto')}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === 'auto'
+                          ? 'bg-white text-primary-700 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      title="Auto: Routes based on language/complexity"
+                    >
+                      <Zap size={12} />
+                      <span>Auto</span>
+                    </button>
+                    <button
+                      onClick={() => setForceModel('32b')}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '32b'
+                          ? 'bg-white text-primary-700 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      title="Qwen 32B: Fast thinking mode (8k output)"
+                    >
+                      <Brain size={12} />
+                      <span>32B</span>
+                    </button>
+                    <button
+                      onClick={() => setForceModel('235b')}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '235b'
+                          ? 'bg-white text-primary-700 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      title="Qwen 235B: Multilingual mode (40k output)"
+                    >
+                      <Sparkles size={12} />
+                      <span>235B</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* RAG Mode Button */}
                 {tier === 'jigga' && (
                   <button
@@ -1414,11 +2031,10 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                         ragMode === 'analysis' ? 'authoritative' : 'analysis'
                       )
                     }
-                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
-                      totalDocsActive > 0
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${totalDocsActive > 0
                         ? 'bg-blue-100 text-blue-700'
                         : 'bg-gray-100 text-gray-500'
-                    }`}
+                      }`}
                   >
                     {ragMode === 'analysis' ? (
                       <FileSearch size={12} />
@@ -1467,10 +2083,28 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
               </div>
             )}
 
+            {/* Forced Tool Badge (shows when a tool is forced via ToolShed) */}
+            {forcedTool && (
+              <div className="max-w-4xl mx-auto mb-2">
+                <ForcedToolBadge
+                  toolName={forcedTool.tool.name}
+                  onClear={clearForcedTool}
+                />
+              </div>
+            )}
+
             <div className="max-w-4xl mx-auto flex items-center gap-2">
               {/* Left buttons - aligned center with 48px height */}
               <div className="flex items-center gap-2 h-12">
-                <AudioRecorder onAudioReady={handleAudio} />
+                {/* GoggaTalk - SA Flag Speech Button for voice chat */}
+                <GoggaTalkButton
+                  onClick={() => {
+                    console.log('🦗 GoggaTalk button clicked!');
+                    // Toggle GoggaTalk terminal visibility
+                    setGoggaTalkVisible(prev => !prev);
+                  }}
+                  disabled={isLoading}
+                />
 
                 {/* File Upload (JIVE/JIGGA) */}
                 {tier !== 'free' && (
@@ -1486,6 +2120,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
               {/* Input Container with Wand inside */}
               <div className="flex-1 relative">
                 <textarea
+                  ref={textareaRef}
                   value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
@@ -1494,6 +2129,10 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                     const maxHeight = window.innerHeight * 0.5;
                     e.target.style.height =
                       Math.min(e.target.scrollHeight, maxHeight) + 'px';
+                    // Reset to min height if empty
+                    if (!e.target.value.trim()) {
+                      e.target.style.height = '48px';
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
@@ -1515,16 +2154,16 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                 <button
                   onClick={enhancePrompt}
                   disabled={!input.trim() || isEnhancing || isLoading}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-primary-400 hover:text-primary-700 disabled:text-primary-200 disabled:cursor-not-allowed transition-all group"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-primary-700 hover:text-primary-900 disabled:text-primary-400 disabled:cursor-not-allowed transition-all group"
                   aria-label="Enhance prompt with AI"
                   title="✨ Enhance your prompt with AI magic"
                 >
                   {isEnhancing ? (
-                    <div className="animate-spin h-5 w-5 border-2 border-primary-500 border-t-transparent rounded-full" />
+                    <div className="animate-spin h-6 w-6 border-2 border-primary-600 border-t-transparent rounded-full" />
                   ) : (
                     <div className="relative wand-animate">
                       <MagicWandIcon
-                        size={20}
+                        size={24}
                         className="group-hover:scale-110 transition-transform"
                       />
                     </div>
@@ -1540,9 +2179,8 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                   disabled={!input.trim() || isGeneratingImage || isLoading}
                   className="action-btn h-12 w-12 bg-primary-200 text-primary-800 hover:bg-primary-300"
                   aria-label="Generate image"
-                  title={`Generate image (${
-                    tier === 'free' ? 'LongCat FREE' : 'FLUX 1.1 Pro'
-                  })`}
+                  title={`Generate image (${tier === 'free' ? 'LongCat FREE' : 'FLUX 1.1 Pro'
+                    })`}
                 >
                   {isGeneratingImage ? (
                     <div className="animate-spin h-5 w-5 border-2 border-primary-800 border-t-transparent rounded-full" />
@@ -1565,79 +2203,7 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
           </div>
         </div>
 
-        {/* Sidebar for JIVE/JIGGA RAG */}
-        {canUpload && (
-          <div className="w-72 border-l border-primary-200 bg-white p-3 overflow-y-auto hidden lg:block">
-            {/* Header with FileStore Icon */}
-            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-primary-100">
-              <FileStoreIcon size={20} className="text-primary-600" />
-              <span className="font-semibold text-primary-800 text-sm">
-                Document Store
-              </span>
-            </div>
-
-            {/* JIGGA: Browse All Documents Button */}
-            {canSelectFromAllSessions && (
-              <button
-                onClick={handleOpenDocSelector}
-                className="w-full flex items-center justify-center gap-2 text-sm px-3 py-2 mb-3 rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors border border-primary-200"
-                title="Select documents from all sessions"
-              >
-                <FolderOpen size={16} />
-                <span>Browse All Docs</span>
-                {selectedDocIds.length > 0 && (
-                  <span className="bg-primary-500 text-white px-1.5 py-0.5 rounded text-xs font-medium">
-                    {selectedDocIds.length}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {/* Current Session Documents */}
-            {documents.length > 0 ? (
-              <DocumentList
-                documents={documents}
-                onRemove={removeDocument}
-                onClearAll={clearAllDocuments}
-                stats={stats}
-                isLoading={ragLoading}
-              />
-            ) : (
-              <div className="text-center text-primary-400 py-4 text-sm">
-                <Database size={24} className="mx-auto mb-2 opacity-50" />
-                <p>No documents in this session</p>
-                <p className="text-xs mt-1">Upload files to enable RAG</p>
-              </div>
-            )}
-
-            {/* Selected docs from other sessions (JIGGA) */}
-            {selectedDocIds.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-primary-200">
-                <div className="text-xs font-bold text-primary-600 mb-2">
-                  Selected from other sessions ({selectedDocIds.length})
-                </div>
-                <div className="space-y-1">
-                  {allDocuments
-                    .filter((d) => selectedDocIds.includes(d.id!))
-                    .map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between text-xs p-2 bg-blue-50 rounded"
-                      >
-                        <span className="truncate flex-1">{doc.filename}</span>
-                        <button
-                          onClick={() => handleSelectDoc(doc.id!)}
-                          className="text-red-400 hover:text-red-600 ml-2"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Document Store moved to RightSidePanel */}
       </div>
 
       {/* Admin Panel */}
@@ -1653,6 +2219,9 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
 
       {/* Prompt Manager (Admin only) */}
       {isAdmin && <PromptManager />}
+
+      {/* Right Side Panel (Tools/Docs/Weather) - Self-contained with vertical tabs */}
+      <RightSidePanel />
 
       {/* Document Selector Modal (JIGGA only) */}
       {showDocSelector && canSelectFromAllSessions && (
@@ -1691,26 +2260,25 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
                       const canSelect =
                         isSelected ||
                         documents.length + selectedDocIds.length <
-                          RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION;
+                        RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION;
 
                       return (
                         <button
                           key={doc.id}
                           onClick={() => canSelect && handleSelectDoc(doc.id!)}
                           disabled={!canSelect && !isSelected}
-                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                            isSelected
+                          className={`w-full text-left p-3 rounded-lg border transition-colors ${isSelected
                               ? 'bg-blue-50 border-blue-300'
                               : canSelect
-                              ? 'bg-white border-primary-200 hover:border-primary-400'
-                              : 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
-                          }`}
+                                ? 'bg-white border-primary-200 hover:border-primary-400'
+                                : 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
+                            }`}
                         >
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => {}}
+                              onChange={() => { }}
                               disabled={!canSelect && !isSelected}
                               className="accent-primary-600"
                             />
@@ -1790,15 +2358,15 @@ export function ChatClient({ userEmail, userTier }: ChatClientProps) {
         }}
       />
 
-      {/* Gogga Weather - Slides out from right edge */}
-      <WeatherSlidePanel
-        latitude={userLocation?.lat}
-        longitude={userLocation?.lon}
-        locationName={userLocation?.city || userLocation?.displayName}
-        locationJustDetermined={locationJustDetermined}
-        autoHideDelay={5000}
-        externalLocation={externalWeatherLocation}
-      />
+      {/* Report Issue Modal (testers only) */}
+      {isTester && (
+        <ReportIssueModal
+          isOpen={showReportIssue}
+          onClose={() => setShowReportIssue(false)}
+          userEmail={userEmail}
+          getCapture={getCapture}
+        />
+      )}
     </div>
   );
 }

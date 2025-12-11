@@ -132,7 +132,7 @@ RAG metrics and system logs are now persisted to Dexie (IndexedDB) for dashboard
 
 | Table | Retention | Purpose |
 |-------|-----------|---------|
-| `ragMetrics` | 3 days | Embedding stats, retrieval, queries, cache hits/misses |
+| `ragMetrics` | 7 days | Embedding stats, retrieval, queries, cache hits/misses |
 | `systemLogs` | 7 days | Debug/info/warn/error logs by category |
 
 ### Key Functions

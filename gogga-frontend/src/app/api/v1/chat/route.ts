@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:8000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 // Extended timeout for AI responses (2 minutes)
 const AI_TIMEOUT_MS = 120_000;
