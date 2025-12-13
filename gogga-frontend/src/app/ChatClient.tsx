@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { GoggaTalkButton } from '@/components/GoggaTalkButton';
 import { GoggaTalkTerminal } from '@/components/GoggaTalkTerminal';
 import AdminPanel from '@/components/AdminPanel';
@@ -27,6 +27,8 @@ import { useChatHistory, type Message } from '@/hooks/useChatHistory';
 import { useImageStorage } from '@/hooks/useImageStorage';
 import { useTokenTracking, formatTokenCount } from '@/hooks/useTokenTracking';
 import { useLocation } from '@/hooks/useLocation';
+import { useOptimisticMessages, type OptimisticMessage } from '@/hooks/useOptimisticMessages';
+import { StreamingRAGPanel, RAGLoadingSkeleton } from '@/components/StreamingRAGPanel';
 import {
   softDeleteImage,
   RAG_LIMITS,
@@ -73,6 +75,7 @@ import { ForcedToolBadge } from '@/components/toolshed';
 import { useToolShed } from '@/lib/toolshedStore';
 import { useDocumentStore } from '@/lib/documentStore';
 import { RightSidePanel } from '@/components/RightSidePanel';
+import { ExportModal, ExportButton } from '@/components/ExportModal';
 
 // Extended message with image and thinking support
 interface ChatMessage extends Message {
@@ -131,8 +134,13 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const [lastGoggaSolveThinking, setLastGoggaSolveThinking] = useState('');
   // Report issue modal state (testers only)
   const [showReportIssue, setShowReportIssue] = useState(false);
+  // PDF export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // AbortController for streaming - cancels API calls on navigation/unmount
+  // Synergy: Saves Cerebras API costs when user navigates away
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Console capture hook for debug reports (testers only)
   const { getCapture } = useConsoleCapture();
@@ -261,6 +269,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       documentStore.setRemoveHandler(null);
       documentStore.setSelectHandler(null);
       documentStore.setLoadAllHandler(null);
+      // Synergy: Abort any in-flight streaming request to save API costs
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, [uploadDocument, removeDocument, selectDocuments, loadAllDocuments]);
 
@@ -290,7 +303,15 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   }, [userLocation]);
 
   // Use appropriate messages based on tier
-  const displayMessages = isPersistenceEnabled ? messages : freeMessages;
+  const baseMessages = isPersistenceEnabled ? messages : freeMessages;
+  const currentSessionTitle = sessions.find((s) => s.id === chatSessionId)?.title;
+  
+  // Wrap with optimistic updates for instant UI feedback
+  const {
+    messages: displayMessages,
+    addOptimisticMessage,
+    markAsError,
+  } = useOptimisticMessages(baseMessages as ChatMessage[]);
 
   // DEBUG: Log whenever displayMessages changes
   useEffect(() => {
@@ -416,11 +437,19 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     // Process message for BuddySystem (updates profile, relationship, etc.)
     await processBuddyMessage(text);
 
-    // Add to appropriate message store
-    if (isPersistenceEnabled) {
-      await addMessage(userMsg);
-    } else {
-      setFreeMessages((prev) => [...prev, userMsg]);
+    // Add optimistically to UI first for instant feedback
+    const optimisticId = addOptimisticMessage(userMsg);
+    
+    // Then persist to appropriate message store
+    try {
+      if (isPersistenceEnabled) {
+        await addMessage(userMsg);
+      } else {
+        setFreeMessages((prev) => [...prev, userMsg]);
+      }
+    } catch (error) {
+      console.error('[GOGGA] Failed to persist user message:', error);
+      markAsError(optimisticId, 'Failed to save message');
     }
 
     setInput('');
@@ -429,6 +458,14 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       textareaRef.current.style.height = '48px';
     }
     setIsLoading(true);
+
+    // Add optimistic bot message placeholder
+    const botPlaceholder: OptimisticMessage = {
+      role: 'assistant',
+      content: '', // Will be filled as response streams in
+      isPending: true,
+    };
+    const optimisticBotId = addOptimisticMessage(botPlaceholder);
 
     try {
       // Build the full message with all context
@@ -526,12 +563,17 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         setIsStreamingThinking(false);
 
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+        // Create AbortController for this request - enables cancellation on navigation
+        abortControllerRef.current = new AbortController();
+        const { signal } = abortControllerRef.current;
+        
         const sseResponse = await fetch(
           `${backendUrl}/api/v1/chat/stream-with-tools`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestPayload),
+            signal, // Synergy: cacheSignal-like abort propagation
           }
         );
 
@@ -638,7 +680,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                       /<think>([\s\S]*?)<\/think>/
                     );
                     if (thinkMatch) {
-                      accumulatedThinking = thinkMatch[1];
+                      accumulatedThinking = thinkMatch[1] ?? '';
                       setStreamingThinking(accumulatedThinking);
                     }
                   }
@@ -713,10 +755,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
 
         data = {
           response: cleanContent,
-          thinking: accumulatedThinking || undefined,
+          ...(accumulatedThinking ? { thinking: accumulatedThinking } : {}),
           meta: responseMeta,
-          tool_calls:
-            collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+          ...(collectedToolCalls.length > 0
+            ? { tool_calls: collectedToolCalls }
+            : {}),
         };
 
         console.log('[GOGGA] SSE stream complete:', {
@@ -754,45 +797,74 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       const botMsg: ChatMessage = {
         role: 'assistant',
         content: data.response,
-        thinking: data.thinking || undefined, // JIGGA thinking block
+        ...(data.thinking ? { thinking: data.thinking } : {}), // JIGGA thinking block
         meta: {
-          cost_zar: data.meta?.cost_zar as number | undefined,
-          model: (data.meta?.model_used || data.meta?.model) as
-            | string
-            | undefined,
-          layer: data.meta?.layer as
-            | 'speed'
-            | 'complex'
-            | 'free_text'
-            | 'jive_speed'
-            | 'jive_reasoning'
-            | 'jigga_think'
-            | 'jigga_fast'
-            | 'jigga_multilingual'
-            | 'reasoning'
-            | undefined,
-          latency_seconds: data.meta?.latency_seconds as number | undefined,
-          tier: data.meta?.tier as
-            | 'FREE'
-            | 'JIVE'
-            | 'JIGGA'
-            | 'free'
-            | 'jive'
-            | 'jigga'
-            | undefined,
-          provider: data.meta?.provider as string | undefined,
+          ...(data.meta?.cost_zar !== undefined
+            ? { cost_zar: data.meta.cost_zar as number }
+            : {}),
+          ...(data.meta?.model_used || data.meta?.model
+            ? { model: (data.meta.model_used || data.meta.model) as string }
+            : {}),
+          ...(data.meta?.layer
+            ? {
+                layer: data.meta.layer as
+                  | 'speed'
+                  | 'complex'
+                  | 'free_text'
+                  | 'jive_speed'
+                  | 'jive_reasoning'
+                  | 'jigga_think'
+                  | 'jigga_fast'
+                  | 'jigga_multilingual'
+                  | 'reasoning',
+              }
+            : {}),
+          ...(data.meta?.latency_seconds !== undefined
+            ? { latency_seconds: data.meta.latency_seconds as number }
+            : {}),
+          ...(data.meta?.tier
+            ? {
+                tier: data.meta.tier as
+                  | 'FREE'
+                  | 'JIVE'
+                  | 'JIGGA'
+                  | 'free'
+                  | 'jive'
+                  | 'jigga',
+              }
+            : {}),
+          ...(data.meta?.provider ? { provider: data.meta.provider as string } : {}),
           rag_context: !!ragContext,
           memory_context: !!memoryContext, // Long-term memory was used
           buddy_context: !!buddyContext, // BuddySystem profile was used
           location_context: !!locationContext, // Location was included
-          has_thinking: (data.meta?.has_thinking as boolean) || !!data.thinking,
+          ...(data.meta?.has_thinking !== undefined || data.thinking
+            ? { has_thinking: (data.meta?.has_thinking as boolean) || !!data.thinking }
+            : {}),
           timestamp: new Date().toISOString(), // Response timestamp
+          // Server-detected language (more accurate than client-side)
+          ...(data.meta?.detected_language
+            ? { detected_language: data.meta.detected_language as { code: string; name: string; confidence: number; is_hybrid: boolean; family: string } }
+            : {}),
           // Math tools executed on backend
-          math_tools_executed: data.meta?.math_tools_executed as
-            | string[]
-            | undefined,
-          math_tool_count: data.meta?.math_tool_count as number | undefined,
+          ...(data.meta?.math_tools_executed
+            ? { math_tools_executed: data.meta.math_tools_executed as string[] }
+            : {}),
+          ...(data.meta?.math_tool_count !== undefined
+            ? { math_tool_count: data.meta.math_tool_count as number }
+            : {}),
         },
+        // Use server-detected language if available (more accurate than client-side detection)
+        ...(() => {
+          const detectedLang = data.meta?.detected_language as { code?: string; name?: string; confidence?: number; is_hybrid?: boolean; family?: string } | undefined;
+          if (detectedLang?.code && detectedLang.code !== 'en') {
+            return {
+              detectedLanguage: detectedLang.code as SALanguage,
+              languageConfidence: detectedLang.confidence ?? 0,
+            };
+          }
+          return {};
+        })(),
       };
 
       // Handle tool calls if present (JIGGA tier only)
@@ -888,38 +960,60 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         contentLength: botMsg.content?.length,
         contentPreview: botMsg.content?.substring(0, 100),
         hasContent: !!botMsg.content,
-        isPersistenceEnabled,
+          ...(data.meta?.cost_zar !== undefined
+            ? { cost_zar: data.meta.cost_zar as number }
+            : {}),
+          ...(data.meta?.model_used || data.meta?.model
+            ? { model: (data.meta.model_used || data.meta.model) as string }
+            : {}),
+          ...(data.meta?.layer
+            ? {
+                layer: data.meta.layer as
+                  | 'speed'
+                  | 'complex'
+                  | 'free_text'
+                  | 'jive_speed'
+                  | 'jive_reasoning'
+                  | 'jigga_think'
+                  | 'jigga_fast'
+                  | 'jigga_multilingual'
+                  | 'reasoning',
+              }
+            : {}),
+          ...(data.meta?.provider ? { provider: data.meta.provider as string } : {}),
+          rag_context: !!ragContext,
+          memory_context: !!memoryContext, // Long-term memory was used
+          buddy_context: !!buddyContext, // BuddySystem profile was used
+          location_context: !!locationContext, // Location was included
+          ...(data.meta?.has_thinking !== undefined || data.thinking
+            ? { has_thinking: (data.meta?.has_thinking as boolean) || !!data.thinking }
+            : {}),
+          timestamp: new Date().toISOString(), // Response timestamp
+          // Math tools executed on backend
+          ...(data.meta?.math_tools_executed
+            ? { math_tools_executed: data.meta.math_tools_executed as string[] }
+            : {}),
+          ...(data.meta?.math_tool_count !== undefined
+            ? { math_tool_count: data.meta.math_tool_count as number }
+            : {}),
       });
-
-      if (isPersistenceEnabled) {
-        await addMessage(botMsg);
-        console.log('[GOGGA] Message saved to persistence');
-      } else {
-        setFreeMessages((prev) => [...prev, botMsg]);
-        console.log('[GOGGA] Message added to freeMessages');
-      }
-
-      // Check for weather panel trigger from AI tool call
-      if (data.weather_panel) {
-        console.log(
-          '[GOGGA] Weather panel triggered by AI:',
-          data.weather_panel
-        );
-        setExternalWeatherLocation({
-          lat: data.weather_panel.lat,
-          lon: data.weather_panel.lon,
-          name: data.weather_panel.name,
-        });
-        // Clear after panel has shown
-        setTimeout(() => setExternalWeatherLocation(null), 10000);
-      }
     } catch (error: any) {
-      console.error('Chat Error:', error);
+      // Synergy: Gracefully handle abort (user navigated away)
+      if (error?.name === 'AbortError') {
+        console.log('[GOGGA] Request aborted - user navigated away, API cost saved');
+        return; // Don't show error message for intentional abort
+      }
+      
       const { response, message } = error;
+      const errorMessage = `Eish! Something went wrong: ${response?.data?.detail || message}`;
+      
+      // Mark optimistic bot message as error
+      markAsError(optimisticBotId, errorMessage);
+      
+      // Still add error message to persistence for history
       const errorMsg: ChatMessage = {
         role: 'assistant',
-        content: `Eish! Something went wrong: ${response?.data?.detail || message
-          }`,
+        content: errorMessage,
       };
 
       if (isPersistenceEnabled) {
@@ -978,12 +1072,30 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     const originalPrompt = input;
     const userMsg: ChatMessage = { role: 'user', content: `🖼️ ${input}` };
 
-    if (isPersistenceEnabled) {
-      await addMessage(userMsg);
-    } else {
-      setFreeMessages((prev) => [...prev, userMsg]);
+    // Add user message optimistically
+    const optimisticUserId = addOptimisticMessage(userMsg);
+    
+    // Persist user message
+    try {
+      if (isPersistenceEnabled) {
+        await addMessage(userMsg);
+      } else {
+        setFreeMessages((prev) => [...prev, userMsg]);
+      }
+    } catch (error) {
+      console.error('[GOGGA] Failed to persist image request:', error);
+      markAsError(optimisticUserId, 'Failed to save message');
     }
+    
     setInput('');
+
+    // Add optimistic image placeholder
+    const imagePlaceholder: OptimisticMessage = {
+      role: 'assistant',
+      content: '🎨 Generating your image...',
+      isPending: true,
+    };
+    const optimisticImageId = addOptimisticMessage(imagePlaceholder);
 
     try {
       const response = await axios.post('/api/v1/images/generate', {
@@ -1033,34 +1145,56 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
 
       const botMsg: ChatMessage = {
         role: 'assistant',
-        content: botContent,
-        imageId,
+        content: data.response,
+        ...(data.thinking ? { thinking: data.thinking } : {}), // JIGGA thinking block
         meta: {
-          tier: tier,
-          provider: data.meta?.pipeline || 'unknown',
-          model: data.meta?.generation_model || 'unknown',
+          ...(data.meta?.cost_zar !== undefined
+            ? { cost_zar: data.meta.cost_zar as number }
+            : {}),
+          ...(data.meta?.model_used || data.meta?.model
+            ? { model: (data.meta.model_used || data.meta.model) as string }
+            : {}),
+          ...(data.meta?.layer
+            ? {
+                layer: data.meta.layer as
+                  | 'speed'
+                  | 'complex'
+                  | 'free_text'
+                  | 'jive_speed'
+                  | 'jive_reasoning'
+                  | 'jigga_think'
+                  | 'jigga_fast'
+                  | 'jigga_multilingual'
+                  | 'reasoning',
+              }
+            : {}),
+          ...(data.meta?.provider ? { provider: data.meta.provider as string } : {}),
+          ...(data.meta?.latency_seconds !== undefined
+            ? { latency_seconds: data.meta.latency_seconds as number }
+            : {}),
+          ...(data.meta?.tier
+            ? {
+                tier: data.meta.tier as
+                  | 'FREE'
+                  | 'JIVE'
+                  | 'JIGGA'
+                  | 'free'
+                  | 'jive'
+                  | 'jigga',
+              }
+            : {}),
+          ...(data.meta?.has_thinking !== undefined || data.thinking
+            ? { has_thinking: (data.meta?.has_thinking as boolean) || !!data.thinking }
+            : {}),
+          ...(data.meta?.math_tools_executed
+            ? { math_tools_executed: data.meta.math_tools_executed as string[] }
+            : {}),
+          ...(data.meta?.math_tool_count !== undefined
+            ? { math_tool_count: data.meta.math_tool_count as number }
+            : {}),
+          timestamp: new Date().toISOString(), // Response timestamp
         },
       };
-
-      if (isPersistenceEnabled) {
-        await addMessage(botMsg);
-      } else {
-        setFreeMessages((prev) => [...prev, botMsg]);
-      }
-    } catch (error: any) {
-      console.error('Image error:', error);
-      const { response, message } = error;
-      const errorMsg: ChatMessage = {
-        role: 'assistant',
-        content: `Eish! Image generation failed: ${response?.data?.detail || message
-          }`,
-      };
-
-      if (isPersistenceEnabled) {
-        await addMessage(errorMsg);
-      } else {
-        setFreeMessages((prev) => [...prev, errorMsg]);
-      }
     } finally {
       setIsGeneratingImage(false);
     }
@@ -1122,11 +1256,33 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   };
 
   // Render message content with image support, markdown, and collapsible thinking
-  const renderMessageContent = (msg: ChatMessage, messageIndex: number) => {
+  const renderMessageContent = (msg: OptimisticMessage, messageIndex: number) => {
     const isUser = msg.role === 'user';
 
+    // Show pending indicator for optimistic messages
+    if (msg.isPending) {
+      return (
+        <div className="flex items-center gap-2 text-neutral-400">
+          <GoggaSpinner size="sm" />
+          <span className="text-sm">
+            {msg.role === 'assistant' ? 'GOGGA is thinking...' : 'Sending...'}
+          </span>
+        </div>
+      );
+    }
+
+    // Show error state for failed messages
+    if (msg.isError) {
+      return (
+        <div className="text-red-500">
+          <p className="font-medium">Error</p>
+          <p className="text-sm">{msg.errorMessage || 'Something went wrong'}</p>
+        </div>
+      );
+    }
+
     // Extract thinking from message - either from dedicated field or from content
-    let thinkingContent = (msg as ChatMessage).thinking || '';
+    let thinkingContent = msg.thinking || '';
     let mainContent = msg.content;
 
     // If no thinking field, try to extract from content (fallback)
@@ -1135,7 +1291,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/i
       );
       if (thinkMatch) {
-        thinkingContent = thinkMatch[1].trim();
+        thinkingContent = thinkMatch[1]?.trim() || '';
       }
     }
 
@@ -1467,6 +1623,14 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             </button>
           )}
 
+          {/* Export PDF Button (JIVE/JIGGA only) */}
+          {isPersistenceEnabled && (
+            <ExportButton
+              onClick={() => setShowExportModal(true)}
+              disabled={!chatSessionId}
+            />
+          )}
+
           {/* Location Badge */}
           <LocationBadge
             location={userLocation}
@@ -1793,19 +1957,35 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                         : 'message-bubble-assistant'
                       }`}
                   >
-                    {renderMessageContent(m as ChatMessage, i)}
+                    {renderMessageContent(m, i)}
 
                     {/* Language Badge for user messages (shows detected SA language) */}
                     {m.role === 'user' &&
-                      (m as ChatMessage).detectedLanguage &&
-                      (m as ChatMessage).detectedLanguage !== 'en' && (
-                        <div className="mt-1 flex justify-end">
-                          <LanguageBadge
-                            language={(m as ChatMessage).detectedLanguage!}
-                            confidence={(m as ChatMessage).languageConfidence}
-                          />
-                        </div>
-                      )}
+                      (m.detectedLanguage as SALanguage | undefined) &&
+                      (m.detectedLanguage as SALanguage | undefined) !== 'en' && (
+                      <div className="mt-1 flex justify-end">
+                        <LanguageBadge
+                          language={m.detectedLanguage as SALanguage}
+                          {...(m.languageConfidence !== undefined
+                            ? { confidence: m.languageConfidence }
+                            : {})}
+                        />
+                      </div>
+                    )}
+
+                    {/* Language Badge for assistant messages (server-detected language) */}
+                    {m.role === 'assistant' &&
+                      m.detectedLanguage &&
+                      m.detectedLanguage !== 'en' && (
+                      <div className="mt-1 flex justify-start">
+                        <LanguageBadge
+                          language={m.detectedLanguage as SALanguage}
+                          {...(m.languageConfidence !== undefined
+                            ? { confidence: m.languageConfidence }
+                            : {})}
+                        />
+                      </div>
+                    )}
 
                     {/* Metadata Display - Clean button indicators */}
                     {m.meta && (
@@ -2367,6 +2547,15 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           getCapture={getCapture}
         />
       )}
+
+      {/* PDF Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        sessionId={chatSessionId}
+        {...(currentSessionTitle ? { sessionTitle: currentSessionTitle } : {})}
+        tier={tier}
+      />
     </div>
   );
 }

@@ -28,8 +28,10 @@ import {
   TrendingUp,
   Image as ImageIcon,
   Settings,
-  Loader2
+  Loader2,
+  Brain
 } from 'lucide-react'
+import { PersonalitySettings } from './PersonalitySettings'
 
 interface SubscriptionData {
   email: string
@@ -88,6 +90,7 @@ export function AccountMenu({
 }: AccountMenuProps) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
+  const [showPersonality, setShowPersonality] = useState(false)
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [isLoading, setIsLoading] = useState(true) // Start loading immediately
   const menuRef = useRef<HTMLDivElement>(null)
@@ -303,7 +306,36 @@ export function AccountMenu({
               </button>
             )}
 
-            {/* Settings */}
+            {/* Personality & Context Settings (inline) */}
+            <div className="px-3 py-2">
+              <button
+                onClick={() => setShowPersonality(!showPersonality)}
+                className="w-full flex items-center justify-between py-2 text-left rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Brain size={18} className="text-purple-600" />
+                  <span className="text-sm font-medium text-gray-900">Personality & Language</span>
+                </div>
+                <ChevronDown 
+                  size={14} 
+                  className={`text-gray-400 transition-transform ${showPersonality ? 'rotate-180' : ''}`} 
+                />
+              </button>
+              
+              {/* Inline Personality Settings */}
+              {showPersonality && (
+                <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <PersonalitySettings 
+                    compact 
+                    onSettingsChange={() => {
+                      // Settings saved automatically via useBuddySystem
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Settings - Link to full dashboard */}
             <button
               onClick={() => {
                 setIsOpen(false)
@@ -312,7 +344,7 @@ export function AccountMenu({
               className="w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-lg hover:bg-gray-100 transition-colors"
             >
               <Settings size={18} className="text-gray-600" />
-              <span className="text-sm font-medium text-gray-900">Settings</span>
+              <span className="text-sm font-medium text-gray-900">All Settings</span>
             </button>
 
             {/* Divider */}

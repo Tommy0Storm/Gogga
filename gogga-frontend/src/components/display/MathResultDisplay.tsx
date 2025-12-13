@@ -14,6 +14,7 @@ import { AlertCards } from './AlertCards';
 import { DataTable } from './DataTable';
 import { FormulaView } from './FormulaView';
 import TerminalView, { TerminalLine } from './TerminalView';
+import PythonTerminalView from './PythonTerminalView';
 import ChartRenderer from '../ChartRenderer';
 import { 
   MathToolResult, 
@@ -99,6 +100,26 @@ export function MathResultDisplay({ result, showTitle = true, showTerminal = tru
 
   // Render based on display type
   switch (result.display_type) {
+    case 'python_terminal':
+      // Python code execution result from python_execute tool
+      const pythonData = result.data as {
+        code?: string;
+        description?: string;
+        output?: string;
+      };
+      return (
+        <div className="space-y-4">
+          <PythonTerminalView
+            code={pythonData?.code || ''}
+            output={result.result?.toString() || pythonData?.output || ''}
+            error={result.error}
+            executionTimeMs={result.execution_time_ms}
+            description={pythonData?.description}
+            success={result.success}
+          />
+        </div>
+      );
+
     case 'chart':
       return (
         <div className="space-y-4">
@@ -222,5 +243,6 @@ export { AlertCards } from './AlertCards';
 export { DataTable } from './DataTable';
 export { FormulaView } from './FormulaView';
 export { default as TerminalView } from './TerminalView';
+export { default as PythonTerminalView } from './PythonTerminalView';
 export type { AlertItem } from './AlertCards';
 export type { TableColumn } from './DataTable';

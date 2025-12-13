@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Crown, Zap, Sparkles, Loader2, Check, Gift, ArrowRight } from 'lucide-react'
+import { PageErrorBoundary } from '@/components/ErrorBoundary'
 
 interface SubscriptionData {
   email: string
@@ -92,7 +93,8 @@ export default function PaymentSuccessPage() {
   const TierIcon = tierInfo.icon
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center p-6">
+    <PageErrorBoundary pageName="Payment Success">
+      <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
         {/* Success Icon */}
         <div className="w-16 h-16 mx-auto mb-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -165,6 +167,7 @@ export default function PaymentSuccessPage() {
           It may take a few minutes for all features to activate. If you experience any issues, please refresh the page.
         </p>
       </div>
-    </div>
+      </div>
+    </PageErrorBoundary>
   )
 }

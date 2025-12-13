@@ -393,6 +393,36 @@ async def execute_math_tool(
                 to_unit=arguments.get("to_unit", "")
             )
         
+        elif tool_name == "python_execute":
+            # Python executor for custom calculations
+            from app.services.python_executor import get_python_executor
+            
+            code = arguments.get("code", "")
+            description = arguments.get("description", "")
+            timeout = arguments.get("timeout", 10)
+            
+            executor = get_python_executor()
+            result = executor.execute(
+                code=code,
+                description=description,
+                timeout=timeout
+            )
+            
+            return {
+                "success": result.success,
+                "result": result.output,  # For MathResultDisplay
+                "output": result.output,
+                "error": result.error,
+                "execution_time_ms": result.execution_time_ms,
+                "display_type": "python_terminal",
+                "type": "python_terminal",  # Frontend display hint
+                "data": {
+                    "code": code,
+                    "description": description,
+                    "output": result.output,
+                }
+            }
+        
         else:
             return {
                 "success": False,

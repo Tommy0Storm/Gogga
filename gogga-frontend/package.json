@@ -30,6 +30,7 @@
     "dotenv": "^16.5.0",
     "flexsearch": "^0.8.212",
     "html2canvas": "^1.4.1",
+    "html2pdf.js": "^0.12.1",
     "jszip": "^3.10.1",
     "katex": "^0.16.27",
     "mathjs": "^15.1.0",
@@ -39,13 +40,15 @@
     "papaparse": "^5.5.3",
     "posthog-js": "^1.302.2",
     "posthog-node": "^5.17.2",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",
     "recharts": "^3.5.1",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
+    "rxdb": "^16.21.1",
+    "rxjs": "^7.8.2",
     "unpdf": "^1.4.0",
     "zustand": "^5.0.9"
   },
@@ -55,20 +58,33 @@
     "@types/node": "^20.10.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "@vitest/coverage-v8": "^4.0.15",
     "autoprefixer": "^10.4.16",
-    "eslint": "^9.39.1",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "^9.39.2",
     "eslint-config-next": "16.0.7",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "fake-indexeddb": "^6.2.5",
     "ignore-loader": "^0.1.2",
     "lucide-react": "^0.555.0",
     "null-loader": "^4.0.1",
     "postcss": "^8.4.32",
     "prisma": "^7.1.0",
     "tailwindcss": "^4.1.17",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.15"
   },
   "overrides": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "better-sqlite3": "^12.5.0"
+  },
+  "imports": {
+    "#components/*": "./src/components/*",
+    "#lib/*": "./src/lib/*",
+    "#types/*": "./src/types/*"
   }
 }

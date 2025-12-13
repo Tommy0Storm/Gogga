@@ -236,7 +236,7 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
               
               const inputData = e.inputBuffer.getChannelData(0);
               const int16Data = float32ToInt16(inputData);
-              const base64Audio = arrayBufferToBase64(int16Data.buffer);
+              const base64Audio = arrayBufferToBase64(int16Data.buffer as ArrayBuffer);
               
               // CRITICAL FIX: Use 'media' key not 'audio' like tested examples
               sessionPromise.then(session => {

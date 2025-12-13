@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { PageErrorBoundary } from '@/components/ErrorBoundary';
 
 // Dynamic import to avoid SSR issues with Recharts
 const RAGDashboard = dynamic(
@@ -51,11 +52,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <main>
-      <RAGDashboard 
-        tier={tier} 
-        sessionId={sessionId}
-      />
-    </main>
+    <PageErrorBoundary pageName="RAG Dashboard">
+      <main>
+        <RAGDashboard 
+          tier={tier} 
+          sessionId={sessionId}
+        />
+      </main>
+    </PageErrorBoundary>
   );
 }

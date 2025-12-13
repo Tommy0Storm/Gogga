@@ -1,20 +1,22 @@
 /**
  * GOGGA - Login Page (Server Component)
  * 
- * Server-side protection:
+ * Next.js 16 optimized with connection() API and ModernLoginForm:
  * - If already logged in → redirect to /
- * - If not logged in → show login form
+ * - If not logged in → show React 19 login form
  * 
- * This is the recommended approach for NextAuth v5:
- * Use `auth()` on the server side, not client-side checks
+ * Uses Next.js 16 Partial Prerendering with connection() API
  */
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
-import { LoginClient } from './LoginClient'
+import { connection } from 'next/server'
+import { ModernLoginForm } from '@/components/ModernLoginForm'
 
 export default async function LoginPage() {
+  // Wait for actual request (PPR dynamic boundary)
+  await connection()
+  
   // Server-side session check
-  // auth() returns null if no session, only throws on actual errors
   let session = null;
   try {
     session = await auth();
@@ -28,6 +30,6 @@ export default async function LoginPage() {
     redirect('/');
   }
 
-  // Not logged in - render login form
-  return <LoginClient />;
+  // Not logged in - render modern login form with React 19 patterns
+  return <ModernLoginForm />;
 }

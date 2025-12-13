@@ -1,7 +1,7 @@
 # ============================
 # Stage 1: Builder
 # ============================
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN pip install --user --no-cache-dir -r requirements.txt
 # ============================
 # Stage 2: Runtime
 # ============================
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
@@ -34,4 +34,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Python 3.14: Use free-threaded build for 2-3x better concurrency
+CMD ["python3.14t", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

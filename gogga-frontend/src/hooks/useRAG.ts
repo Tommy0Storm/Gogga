@@ -10,11 +10,11 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useEffectEvent } from 'react';
 import type { Document, ChatSession } from '@/lib/db';
-import { 
-  getStorageStats, 
-  generateSessionId, 
+import {
+  getStorageStats,
+  generateSessionId,
   checkStorageLimits,
   getAllDocuments,
   getDocumentsByIds,
@@ -23,6 +23,8 @@ import {
 } from '@/lib/db';
 import rag from '@/lib/rag';
 import { RagManager, type RagMode, type SemanticChunk } from '@/lib/ragManager';
+import { isValidDocument, isValidRAGDocument } from '@/lib/utils/typeGuards';
+import { getTierConfig, getMaxDocsPerSession, canSelectAcrossSessions } from '@/lib/config/tierConfig';
 
 export type Tier = 'free' | 'jive' | 'jigga';
 
@@ -120,6 +122,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
 
   // Determine RAG mode based on tier
   const ragMode: RagMode = tier === 'jigga' ? 'semantic' : 'basic';
+  const ragConfig = getTierConfig(tier, ragMode);
 
   const [state, setState] = useState<RAGState>({
     sessionId: sessionIdRef.current,
@@ -146,26 +149,22 @@ export function useRAG(tier: Tier): UseRAGReturn {
   // JIVE and JIGGA can use RAG
   const isRAGEnabled = tier === 'jive' || tier === 'jigga';
   const canUpload = tier === 'jive' || tier === 'jigga';
-  const canSelectFromAllSessions = tier === 'jigga';
+  const canSelectFromAllSessions = canSelectAcrossSessions(tier);
   const canUseSemanticRAG = tier === 'jigga';
 
-  const getMaxDocsPerSession = useCallback(() => {
-    return tier === 'jive'
-      ? RAG_LIMITS.JIVE_MAX_DOCS_PER_SESSION
-      : RAG_LIMITS.JIGGA_MAX_DOCS_PER_SESSION;
-  }, [tier]);
-
   const getRemainingDocsSlots = useCallback(() => {
-    const max = getMaxDocsPerSession();
+    const max = getMaxDocsPerSession(tier);
     const used = state.documents.length + state.selectedDocIds.length;
     return Math.max(0, max - used);
   }, [
-    getMaxDocsPerSession,
+    tier,
     state.documents.length,
     state.selectedDocIds.length,
   ]);
 
-  const updateStorageUsage = useCallback(async () => {
+  // React 19.2: Stable effect handler for storage updates
+  // Always accesses latest state without being in dependency arrays
+  const onUpdateStorageUsage = useEffectEvent(async () => {
     try {
       const usage = await getStorageUsageBreakdown();
       setState((prev) => ({
@@ -180,7 +179,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
     } catch (err) {
       console.error('Failed to get storage usage:', err);
     }
-  }, []);
+  });
 
   const refreshDocuments = useCallback(async () => {
     if (!isRAGEnabled) return;
@@ -207,7 +206,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
         },
       }));
 
-      await updateStorageUsage();
+      await onUpdateStorageUsage();
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -215,20 +214,26 @@ export function useRAG(tier: Tier): UseRAGReturn {
         error: err instanceof Error ? err.message : 'Failed to load documents',
       }));
     }
-  }, [isRAGEnabled, updateStorageUsage]);
+  }, [isRAGEnabled]); // onUpdateStorageUsage is stable via useEffectEvent
+
+  // React 19.2: Stable effect handlers for document loading
+  // Always use latest functions without restarting effect
+  const onLoadDocuments = useEffectEvent(() => {
+    refreshDocuments();
+    onUpdateStorageUsage();
+  });
 
   // Load documents on mount or when session changes
   useEffect(() => {
     if (isRAGEnabled) {
-      refreshDocuments();
-      updateStorageUsage();
+      onLoadDocuments();
     }
 
     // Cleanup: unload session index when unmounting
     return () => {
       rag.unloadSession(sessionIdRef.current);
     };
-  }, [isRAGEnabled, refreshDocuments, updateStorageUsage]);
+  }, [isRAGEnabled]); // Stable handlers, only re-run when RAG enabled/disabled
 
   const loadAllDocuments = useCallback(async () => {
     if (!canSelectFromAllSessions) return;
@@ -236,7 +241,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
     setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
-      const allDocs = await getAllDocuments();
+      const allDocs = (await getAllDocuments()).filter(isValidDocument);
       setState((prev) => ({
         ...prev,
         allDocuments: allDocs,
@@ -267,9 +272,9 @@ export function useRAG(tier: Tier): UseRAGReturn {
         );
       }
 
-      // Load the selected documents and index them for search
+      // Load the selected documents using RagManager (TypeScript 5.5 Set intersection)
       if (docIds.length > 0) {
-        const selectedDocs = await getDocumentsByIds(docIds);
+        const selectedDocs = ragManagerInstance.selectDocumentsAcrossSessions(docIds);
 
         // Index each selected document's chunks into the current session's FlexSearch index
         for (const doc of selectedDocs) {

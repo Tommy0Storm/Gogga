@@ -130,18 +130,21 @@ export const CSVPreview: React.FC<CSVPreviewProps> = ({
         
         // For single Y column, also set 'value' for compatibility
         if (selection.yColumns.length === 1) {
-          point.value = Number(row[selection.yColumns[0]]) || 0;
+          const col = selection.yColumns[0];
+          if (col !== undefined) {
+            point.value = Number(row[col]) || 0;
+          }
         }
         
         return point;
       }),
       x_label: selection.xColumn,
-      y_label: selection.yColumns.length === 1 ? selection.yColumns[0] : undefined,
-      series: selection.yColumns.length > 1 
-        ? selection.yColumns.map(col => ({ dataKey: col, name: col }))
-        : undefined,
+      ...(selection.yColumns.length === 1 ? { y_label: selection.yColumns[0] } : {}),
+      ...(selection.yColumns.length > 1 
+        ? { series: selection.yColumns.map(col => ({ dataKey: col, name: col })) }
+        : {}),
       timestamp: new Date().toISOString(),
-      source: data.meta?.filename,
+      ...(data.meta?.filename ? { source: data.meta.filename } : {}),
     };
 
     onGenerateChart(chartData);
@@ -314,7 +317,7 @@ export const CSVPreview: React.FC<CSVPreviewProps> = ({
                   style={{ fontFamily: 'Quicksand, sans-serif' }}
                 >
                   <div className="flex items-center gap-1.5">
-                    <TypeIcon type={data.columnTypes[header]} />
+                    <TypeIcon type={data.columnTypes[header] || 'string'} />
                     <span className="truncate max-w-[120px]" title={header}>
                       {header}
                     </span>

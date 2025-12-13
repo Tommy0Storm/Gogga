@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useEffectEvent } from 'react';
 import {
   X,
   RefreshCw,
@@ -126,7 +126,9 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
     return () => window.removeEventListener('keydown', handleKeydown, true);
   }, [onAdminChange]);
 
-  const fetchHealth = useCallback(async () => {
+  // React 19.2: useEffectEvent for stable health fetching
+  // Always uses latest state setters without restarting effect
+  const fetchHealth = useEffectEvent(async () => {
     setIsLoading(true);
     try {
       const res = await fetch('/health');
@@ -137,14 +139,14 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  });
 
-  // Fetch health on open
+  // Fetch health on open - effect only runs when isOpen changes
   useEffect(() => {
     if (isOpen) {
       fetchHealth();
     }
-  }, [isOpen, fetchHealth]);
+  }, [isOpen]); // fetchHealth is stable, not in deps
 
   if (!showPanel) {
     return null;

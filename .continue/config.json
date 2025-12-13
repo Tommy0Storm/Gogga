@@ -1,0 +1,79 @@
+{
+  "$schema": "https://continue.dev/config-schema.json",
+  "name": "Gogga AI Platform",
+  "docs": [
+    {
+      "title": "Gogga Project Docs",
+      "startUrl": "file://.github/copilot-instructions.md"
+    }
+  ],
+  "contextProviders": [
+    {
+      "name": "codebase",
+      "params": {
+        "useGitignore": true,
+        "nRetrieve": 25,
+        "nFinal": 10
+      }
+    },
+    {
+      "name": "folder"
+    },
+    {
+      "name": "diff"
+    },
+    {
+      "name": "terminal"
+    },
+    {
+      "name": "problems"
+    },
+    {
+      "name": "currentFile"
+    },
+    {
+      "name": "open"
+    }
+  ],
+  "slashCommands": [
+    {
+      "name": "tier",
+      "description": "Explain tier routing and model selection for a query type"
+    },
+    {
+      "name": "rag",
+      "description": "Debug RAG system - authoritative vs analytical mode"
+    },
+    {
+      "name": "payfast",
+      "description": "PayFast signature generation and ITN webhook debugging"
+    },
+    {
+      "name": "buddy",
+      "description": "BuddySystem relationship tracking implementation"
+    }
+  ],
+  "tabAutocompleteOptions": {
+    "disable": false,
+    "useFileSuffix": true,
+    "maxPromptTokens": 1024,
+    "debounceDelay": 350
+  },
+  "customCommands": [
+    {
+      "name": "frontend",
+      "description": "Start frontend dev server (HTTPS)",
+      "prompt": "cd gogga-frontend && pnpm dev"
+    },
+    {
+      "name": "backend",
+      "description": "Start backend dev server",
+      "prompt": "cd gogga-backend && uvicorn app.main:app --reload"
+    },
+    {
+      "name": "stack",
+      "description": "Start full Docker stack",
+      "prompt": "docker-compose up -d"
+    }
+  ]
+}

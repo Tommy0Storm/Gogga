@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { AuthProvider } from '@/components/AuthProvider'
+import { GlobalErrorBoundary } from '@/components/ErrorBoundary'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -47,9 +48,11 @@ export default function RootLayout({
         className="font-quicksand font-normal antialiased"
         suppressHydrationWarning
       >
-        {/* AuthProvider disabled until NextAuth route issues resolved */}
-        {/* <AuthProvider>{children}</AuthProvider> */}
-        {children}
+        <GlobalErrorBoundary>
+          {/* AuthProvider disabled until NextAuth route issues resolved */}
+          {/* <AuthProvider>{children}</AuthProvider> */}
+          {children}
+        </GlobalErrorBoundary>
       </body>
     </html>
   );

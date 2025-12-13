@@ -4,7 +4,9 @@ Test extended output detection for JIVE and JIGGA tiers.
 Tests:
 1. is_extended_output_request() keyword detection
 2. is_document_analysis_request() detection
-3. Token limits: JIVE_MAX/DEFAULT, JIGGA_MAX/DEFAULT
+3. Token limits: QWEN_MAX/DEFAULT, JIGGA_235B_MAX
+
+UPDATED (2025-01): Simplified architecture - all paid tiers use Qwen models
 """
 import sys
 sys.path.insert(0, "/home/ubuntu/Dev-Projects/Gogga/gogga-backend")
@@ -12,8 +14,8 @@ sys.path.insert(0, "/home/ubuntu/Dev-Projects/Gogga/gogga-backend")
 from app.core.router import (
     is_extended_output_request,
     is_document_analysis_request,
-    JIVE_MAX_TOKENS, JIVE_DEFAULT_TOKENS,
-    JIGGA_MAX_TOKENS, JIGGA_DEFAULT_TOKENS,
+    QWEN_MAX_TOKENS, QWEN_DEFAULT_TOKENS,
+    JIGGA_235B_MAX_TOKENS,
     EXTENDED_OUTPUT_KEYWORDS, DOCUMENT_ANALYSIS_KEYWORDS
 )
 
@@ -22,15 +24,14 @@ def test_token_constants():
     """Verify token limit constants are correctly set."""
     print("\n=== Token Limit Constants ===")
     
-    # JIVE (Llama 3.3 70B)
-    assert JIVE_MAX_TOKENS == 8000, f"JIVE_MAX_TOKENS should be 8000, got {JIVE_MAX_TOKENS}"
-    assert JIVE_DEFAULT_TOKENS == 4096, f"JIVE_DEFAULT_TOKENS should be 4096, got {JIVE_DEFAULT_TOKENS}"
-    print(f"✓ JIVE: {JIVE_DEFAULT_TOKENS} default, {JIVE_MAX_TOKENS} extended (max: 40,000 when ready)")
+    # UNIFIED QWEN (32B) for JIVE and JIGGA general
+    assert QWEN_MAX_TOKENS == 8000, f"QWEN_MAX_TOKENS should be 8000, got {QWEN_MAX_TOKENS}"
+    assert QWEN_DEFAULT_TOKENS == 4096, f"QWEN_DEFAULT_TOKENS should be 4096, got {QWEN_DEFAULT_TOKENS}"
+    print(f"✓ Qwen 32B: {QWEN_DEFAULT_TOKENS} default, {QWEN_MAX_TOKENS} extended")
     
-    # JIGGA (Qwen 3 32B) - Always uses max tokens for premium tier
-    assert JIGGA_MAX_TOKENS == 8000, f"JIGGA_MAX_TOKENS should be 8000, got {JIGGA_MAX_TOKENS}"
-    assert JIGGA_DEFAULT_TOKENS == 8000, f"JIGGA_DEFAULT_TOKENS should be 8000 (always max for premium), got {JIGGA_DEFAULT_TOKENS}"
-    print(f"✓ JIGGA: {JIGGA_DEFAULT_TOKENS} default (always max for premium tier)")
+    # JIGGA 235B (for complex/legal)
+    assert JIGGA_235B_MAX_TOKENS == 32000, f"JIGGA_235B_MAX_TOKENS should be 32000, got {JIGGA_235B_MAX_TOKENS}"
+    print(f"✓ JIGGA 235B: {JIGGA_235B_MAX_TOKENS} extended (max: 40,000 when ready)")
 
 
 def test_extended_output_keywords():

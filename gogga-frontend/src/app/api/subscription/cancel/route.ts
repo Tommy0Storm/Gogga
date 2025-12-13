@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         data: {
           email: session.user.email,
           action: 'subscription_cancelled_no_token',
-          ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown',
+          ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
         },
       })
 
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
           data: {
             email: session.user.email,
             action: 'subscription_cancelled_payfast_failed',
-            ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown',
+            ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
             meta: JSON.stringify({ error: errorData }),
           },
         })
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
         data: {
           email: session.user.email,
           action: 'subscription_cancelled',
-          ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown',
+          ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
           meta: JSON.stringify({ tier: subscription.tier }),
         },
       })
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
         data: {
           email: session.user.email,
           action: 'subscription_cancelled_network_error',
-          ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown',
+          ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
           meta: JSON.stringify({ error: String(fetchError) }),
         },
       })

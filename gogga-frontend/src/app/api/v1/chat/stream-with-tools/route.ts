@@ -9,7 +9,8 @@ import { NextRequest } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
-export const dynamic = 'force-dynamic';
+// Note: Removed 'dynamic = force-dynamic' as it conflicts with cacheComponents
+// API routes are dynamic by default in Next.js 16
 
 // Disable body size limit for streaming
 export const maxDuration = 120; // 2 minutes max

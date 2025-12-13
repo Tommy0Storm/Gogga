@@ -28,32 +28,39 @@ export type ChartType =
   // Circular
   | 'pie'
   | 'donut'
+  // Hierarchical & Flow
+  | 'treemap'
+  | 'sunburst'
+  | 'sankey'
   // Special
   | 'scatter'
   | 'radar'
   | 'radialBar'
   | 'composed'
   | 'funnel'
-  | 'treemap'
   | 'heatmap'
-  | 'gauge';
+  | 'gauge'
+  | 'waterfall';
 
 /**
  * Compatible chart type groups for type switching
  */
 export const CHART_TYPE_GROUPS: Record<string, ChartType[]> = {
-  bar: ['bar', 'stackedBar', 'horizontalBar', 'line', 'area'],
+  bar: ['bar', 'stackedBar', 'horizontalBar', 'waterfall', 'line', 'area'],
   line: ['line', 'stackedLine', 'smoothLine', 'bar', 'area'],
   area: ['area', 'stackedArea', 'multiArea', 'line', 'bar'],
-  pie: ['pie', 'donut'],
+  pie: ['pie', 'donut', 'sunburst'],
   scatter: ['scatter', 'line'],
   radar: ['radar'],
-  radialBar: ['radialBar', 'pie', 'donut'],
+  radialBar: ['radialBar', 'gauge', 'pie', 'donut'],
   composed: ['composed', 'bar', 'line', 'area'],
-  funnel: ['funnel'],
-  treemap: ['treemap'],
+  funnel: ['funnel', 'sankey'],
+  treemap: ['treemap', 'sunburst'],
+  sunburst: ['sunburst', 'treemap', 'pie'],
+  sankey: ['sankey', 'funnel'],
   heatmap: ['heatmap'],
   gauge: ['gauge', 'radialBar'],
+  waterfall: ['waterfall', 'bar', 'stackedBar'],
 };
 
 /**
@@ -77,8 +84,11 @@ export const CHART_TYPE_LABELS: Record<ChartType, string> = {
   composed: 'Composed Chart',
   funnel: 'Funnel Chart',
   treemap: 'Treemap',
+  sunburst: 'Sunburst',
+  sankey: 'Sankey Diagram',
   heatmap: 'Heatmap',
   gauge: 'Gauge',
+  waterfall: 'Waterfall',
 };
 
 // =============================================================================

@@ -37,6 +37,8 @@ import {
   Treemap,
   FunnelChart,
   Funnel,
+  Sankey,
+  SunburstChart,
   LabelList,
   XAxis,
   YAxis,
@@ -45,6 +47,7 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
+  Rectangle,
 } from 'recharts';
 import { 
   Maximize2, 
@@ -80,6 +83,17 @@ interface ChartRendererProps {
 
 // Gogga monochrome palette with accent colors
 const DEFAULT_COLORS = EXTENDED_PALETTE;
+
+// Fallback color when palette is exhausted
+const FALLBACK_COLOR = '#6b7280';
+
+/**
+ * Safely get a color from the palette with fallback
+ */
+function getColor(colors: readonly string[], idx: number, seriesColor?: string): string {
+  if (seriesColor) return seriesColor;
+  return colors[idx % colors.length] ?? FALLBACK_COLOR;
+}
 
 // Custom tooltip styling
 const tooltipStyle = {
@@ -265,14 +279,14 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
     tick: { fill: '#737373', fontSize: 12, fontFamily: 'Quicksand, sans-serif' },
     axisLine: { stroke: '#d4d4d4' },
     tickLine: { stroke: '#d4d4d4' },
-    label: x_label ? { value: x_label, position: 'bottom' as const, fill: '#737373', fontSize: 13, fontFamily: 'Quicksand, sans-serif', offset: -5 } : undefined,
+    ...(x_label ? { label: { value: x_label, position: 'bottom' as const, fill: '#737373', fontSize: 13, fontFamily: 'Quicksand, sans-serif', offset: -5 } } : {}),
   };
   
   const yAxisProps = {
     tick: { fill: '#737373', fontSize: 12, fontFamily: 'Quicksand, sans-serif' },
     axisLine: { stroke: '#d4d4d4' },
     tickLine: { stroke: '#d4d4d4' },
-    label: y_label ? { value: y_label, angle: -90, position: 'insideLeft' as const, fill: '#737373', fontSize: 13, fontFamily: 'Quicksand, sans-serif' } : undefined,
+    ...(y_label ? { label: { value: y_label, angle: -90, position: 'insideLeft' as const, fill: '#737373', fontSize: 13, fontFamily: 'Quicksand, sans-serif' } } : {}),
   };
   
   // Render the appropriate chart type
@@ -292,9 +306,9 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <Tooltip contentStyle={tooltipStyle} />
               <Legend {...getLegendProps()} />
               {dataKeys.length === 1 ? (
-                <Bar dataKey={dataKeys[0]} name={series?.[0]?.name || 'Value'} radius={[4, 4, 0, 0]} isAnimationActive={animate}>
+                <Bar dataKey={dataKeys[0]!} name={series?.[0]?.name || 'Value'} radius={[4, 4, 0, 0]} isAnimationActive={animate}>
                   {processedData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                    <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                   ))}
                 </Bar>
               ) : (
@@ -346,9 +360,9 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <Tooltip contentStyle={tooltipStyle} />
               <Legend {...getLegendProps()} />
               {dataKeys.length === 1 ? (
-                <Bar dataKey={dataKeys[0]} name={series?.[0]?.name || 'Value'} radius={[0, 4, 4, 0]} isAnimationActive={animate}>
+                <Bar dataKey={dataKeys[0]!} name={series?.[0]?.name || 'Value'} radius={[0, 4, 4, 0]} isAnimationActive={animate}>
                   {processedData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                    <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                   ))}
                 </Bar>
               ) : (
@@ -403,19 +417,22 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <YAxis {...yAxisProps} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend {...getLegendProps()} />
-              {dataKeys.map((key, idx) => (
-                <Area 
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  name={series?.[idx]?.name || key}
-                  stackId="stack"
-                  stroke={series?.[idx]?.color || colors[idx % colors.length]}
-                  fill={series?.[idx]?.color || colors[idx % colors.length]}
-                  fillOpacity={0.6}
-                  isAnimationActive={animate}
-                />
-              ))}
+              {dataKeys.map((key, idx) => {
+                const color = series?.[idx]?.color ?? colors[idx % colors.length] ?? '#8884d8';
+                return (
+                  <Area 
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    name={series?.[idx]?.name || key}
+                    stackId="stack"
+                    stroke={color}
+                    fill={color}
+                    fillOpacity={0.6}
+                    isAnimationActive={animate}
+                  />
+                );
+              })}
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -437,18 +454,21 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <YAxis {...yAxisProps} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend {...getLegendProps()} />
-              {dataKeys.map((key, idx) => (
-                <Area 
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  name={series?.[idx]?.name || key}
-                  stroke={series?.[idx]?.color || colors[idx % colors.length]}
-                  fillOpacity={1}
-                  fill={`url(#colorGradient-${key})`}
-                  isAnimationActive={animate}
-                />
-              ))}
+              {dataKeys.map((key, idx) => {
+                const strokeColor = series?.[idx]?.color ?? colors[idx % colors.length] ?? '#8884d8';
+                return (
+                  <Area 
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    name={series?.[idx]?.name || key}
+                    stroke={strokeColor}
+                    fillOpacity={1}
+                    fill={`url(#colorGradient-${key})`}
+                    isAnimationActive={animate}
+                  />
+                );
+              })}
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -462,19 +482,22 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <YAxis {...yAxisProps} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend {...getLegendProps()} />
-              {dataKeys.map((key, idx) => (
-                <Area 
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  name={series?.[idx]?.name || key}
-                  stackId="stack"
-                  stroke={series?.[idx]?.color || colors[idx % colors.length]}
-                  fill={series?.[idx]?.color || colors[idx % colors.length]}
-                  fillOpacity={0.7}
-                  isAnimationActive={animate}
-                />
-              ))}
+              {dataKeys.map((key, idx) => {
+                const areaColor = series?.[idx]?.color ?? colors[idx % colors.length] ?? '#8884d8';
+                return (
+                  <Area 
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    name={series?.[idx]?.name || key}
+                    stackId="stack"
+                    stroke={areaColor}
+                    fill={areaColor}
+                    fillOpacity={0.7}
+                    isAnimationActive={animate}
+                  />
+                );
+              })}
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -496,19 +519,22 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <YAxis {...yAxisProps} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend {...getLegendProps()} />
-              {dataKeys.map((key, idx) => (
-                <Area 
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  name={series?.[idx]?.name || key}
-                  stroke={series?.[idx]?.color || colors[idx % colors.length]}
-                  strokeWidth={2}
-                  fill={`url(#multiGradient-${key})`}
-                  fillOpacity={1}
-                  isAnimationActive={animate}
-                />
-              ))}
+              {dataKeys.map((key, idx) => {
+                const multiColor = series?.[idx]?.color ?? colors[idx % colors.length] ?? '#8884d8';
+                return (
+                  <Area 
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    name={series?.[idx]?.name || key}
+                    stroke={multiColor}
+                    strokeWidth={2}
+                    fill={`url(#multiGradient-${key})`}
+                    fillOpacity={1}
+                    isAnimationActive={animate}
+                  />
+                );
+              })}
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -530,7 +556,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
                 isAnimationActive={animate}
               >
                 {processedData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                 ))}
               </Pie>
               <Tooltip 
@@ -566,7 +592,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
                 isAnimationActive={animate}
               >
                 {processedData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                 ))}
               </Pie>
               <Tooltip 
@@ -607,7 +633,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               <Legend {...getLegendProps()} />
               <Scatter name="Data" data={processedData} fill={colors[0]} isAnimationActive={animate}>
                 {processedData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                 ))}
               </Scatter>
             </ScatterChart>
@@ -658,7 +684,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
                 isAnimationActive={animate}
               >
                 {processedData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                 ))}
               </RadialBar>
               <Legend
@@ -718,7 +744,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
                 isAnimationActive={animate}
               >
                 {processedData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
                 ))}
                 <LabelList position="center" fill="#fff" stroke="none" dataKey="name" fontSize={12} fontFamily="Quicksand, sans-serif" />
               </Funnel>
@@ -734,14 +760,204 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               dataKey="value"
               aspectRatio={4 / 3}
               stroke="#fff"
-              fill={colors[0]}
+              fill={getColor(colors, 0)}
               isAnimationActive={animate}
             >
               {processedData.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                <Cell key={`cell-${index}`} fill={getColor(colors, index)} />
               ))}
               <Tooltip contentStyle={tooltipStyle} />
             </Treemap>
+          </ResponsiveContainer>
+        );
+      
+      case 'sunburst':
+        // Sunburst chart for hierarchical data
+        return (
+          <ResponsiveContainer width="100%" height={chartHeight}>
+            <SunburstChart
+              data={processedData.length > 0 ? { 
+                name: 'root', 
+                children: processedData.map((item, idx) => ({
+                  ...item,
+                  fill: getColor(colors, idx, (item as Record<string, unknown>).fill as string | undefined),
+                }))
+              } : { name: 'root', children: [] }}
+              dataKey="value"
+              fill={getColor(colors, 0)}
+            >
+              <Tooltip contentStyle={tooltipStyle} />
+            </SunburstChart>
+          </ResponsiveContainer>
+        );
+      
+      case 'sankey':
+        // Sankey flow diagram - needs nodes and links data structure
+        // Data format: { nodes: [{name}], links: [{source, target, value}] }
+        const sankeyData = (() => {
+          // Check if data has sankey format
+          const firstItem = processedData[0] as Record<string, unknown> | undefined;
+          if (firstItem && 'nodes' in firstItem && 'links' in firstItem) {
+            return firstItem as unknown as { nodes: { name: string }[]; links: { source: number; target: number; value: number }[] };
+          }
+          // Convert simple data to sankey format
+          const nodes = processedData.map(d => ({ name: String(d.name || 'Unknown') }));
+          const links = processedData.slice(0, -1).map((_, idx) => ({
+            source: idx,
+            target: idx + 1,
+            value: Number(processedData[idx + 1]?.value || 0),
+          }));
+          return { nodes, links };
+        })();
+        return (
+          <ResponsiveContainer width="100%" height={chartHeight}>
+            <Sankey
+              data={sankeyData}
+              nodeWidth={15}
+              nodePadding={30}
+              linkCurvature={0.5}
+              iterations={32}
+              node={(props) => {
+                const { x, y, width, height, index } = props as { x: number; y: number; width: number; height: number; index: number };
+                return (
+                  <Rectangle
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    fill={getColor(colors, index)}
+                    fillOpacity={0.9}
+                  />
+                );
+              }}
+              link={(props) => {
+                const linkProps = props as { sourceX: number; targetX: number; sourceY: number; targetY: number; sourceControlX: number; targetControlX: number; linkWidth: number };
+                return (
+                  <path
+                    d={`
+                      M${linkProps.sourceX},${linkProps.sourceY}
+                      C${linkProps.sourceControlX},${linkProps.sourceY}
+                       ${linkProps.targetControlX},${linkProps.targetY}
+                       ${linkProps.targetX},${linkProps.targetY}
+                    `}
+                    fill="none"
+                    stroke="#a3a3a3"
+                    strokeOpacity={0.4}
+                    strokeWidth={Math.max(linkProps.linkWidth, 1)}
+                  />
+                );
+              }}
+            >
+              <Tooltip contentStyle={tooltipStyle} />
+            </Sankey>
+          </ResponsiveContainer>
+        );
+      
+      case 'gauge':
+        // Gauge chart using RadialBarChart with single value
+        const gaugeValue = processedData[0]?.value ?? 0;
+        const maxValue = Math.max(...processedData.map(d => Number(d.value || 0)), 100);
+        const percentage = (gaugeValue / maxValue) * 100;
+        const gaugeData = [{ name: 'Value', value: percentage, fill: getColor(colors, 0) }];
+        return (
+          <ResponsiveContainer width="100%" height={chartHeight}>
+            <RadialBarChart
+              cx="50%"
+              cy="60%"
+              innerRadius="60%"
+              outerRadius="90%"
+              barSize={20}
+              data={gaugeData}
+              startAngle={180}
+              endAngle={0}
+            >
+              <RadialBar
+                background={{ fill: '#e5e5e5' }}
+                dataKey="value"
+                cornerRadius={10}
+                isAnimationActive={animate}
+              />
+              <text
+                x="50%"
+                y="55%"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                style={{ fontSize: isExpanded ? '32px' : '24px', fontWeight: 'bold', fontFamily: 'Quicksand, sans-serif', fill: '#1a1a1a' }}
+              >
+                {gaugeValue.toLocaleString()}
+              </text>
+              <text
+                x="50%"
+                y="70%"
+                textAnchor="middle"
+                style={{ fontSize: '12px', fontFamily: 'Quicksand, sans-serif', fill: '#737373' }}
+              >
+                {processedData[0]?.name || 'Value'}
+              </text>
+            </RadialBarChart>
+          </ResponsiveContainer>
+        );
+      
+      case 'waterfall':
+        // Waterfall chart - shows running total
+        const waterfallData = processedData.map((item, idx) => {
+          const value = Number(item.value || 0);
+          const prevTotal = processedData.slice(0, idx).reduce((sum, d) => sum + Number(d.value || 0), 0);
+          return {
+            ...item,
+            start: prevTotal,
+            end: prevTotal + value,
+            isPositive: value >= 0,
+          };
+        });
+        return (
+          <ResponsiveContainer width="100%" height={chartHeight}>
+            <BarChart data={waterfallData} margin={{ top: 20, right: 30, left: 20, bottom: x_label ? 30 : 5 }}>
+              {gridProps && <CartesianGrid {...gridProps} />}
+              <XAxis {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Legend {...getLegendProps()} />
+              {/* Invisible bar for positioning */}
+              <Bar dataKey="start" stackId="waterfall" fill="transparent" />
+              {/* Actual value bar */}
+              <Bar dataKey="value" stackId="waterfall" isAnimationActive={animate}>
+                {waterfallData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.isPositive ? '#22c55e' : '#ef4444'} 
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        );
+      
+      case 'heatmap':
+        // Simple heatmap using bar chart with color scale
+        const maxHeatValue = Math.max(...processedData.map(d => Number(d.value || 0)));
+        const minHeatValue = Math.min(...processedData.map(d => Number(d.value || 0)));
+        const getHeatColor = (value: number) => {
+          const normalized = (value - minHeatValue) / (maxHeatValue - minHeatValue || 1);
+          // Gradient from light to dark
+          const r = Math.round(26 + (1 - normalized) * 180);
+          const g = Math.round(26 + (1 - normalized) * 180);
+          const b = Math.round(26 + (1 - normalized) * 180);
+          return `rgb(${r}, ${g}, ${b})`;
+        };
+        return (
+          <ResponsiveContainer width="100%" height={chartHeight}>
+            <BarChart data={processedData} layout="vertical" margin={{ top: 20, right: 30, left: 80, bottom: 5 }}>
+              {gridProps && <CartesianGrid {...gridProps} />}
+              <XAxis type="number" tick={{ fill: '#737373', fontSize: 12, fontFamily: 'Quicksand, sans-serif' }} />
+              <YAxis type="category" dataKey="name" tick={{ fill: '#737373', fontSize: 12, fontFamily: 'Quicksand, sans-serif' }} width={70} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="value" isAnimationActive={animate}>
+                {processedData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={getHeatColor(Number(entry.value || 0))} />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         );
         

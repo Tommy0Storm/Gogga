@@ -344,6 +344,53 @@ MATH_CONVERSION_TOOL: ToolDefinition = {
 
 
 # =============================================================================
+# Python Executor Tool (Python 3.14 Features)
+# =============================================================================
+
+PYTHON_EXECUTOR_TOOL: ToolDefinition = {
+    "type": "function",
+    "function": {
+        "name": "python_execute",
+        "strict": True,
+        "description": (
+            "Execute Python code for complex mathematical calculations, data analysis, "
+            "or any computation that requires precision. Uses Python 3.14 with features like "
+            "Decimal.from_number(), Fraction.from_number(), template strings, and improved formatting. "
+            "Returns formatted terminal-style output with syntax highlighting. "
+            "Use this for: algebraic expressions, symbolic math, custom formulas, "
+            "iterative calculations, or when other math tools don't fit the use case. "
+            "Code runs in a sandboxed environment with math, decimal, fractions, statistics, "
+            "numpy, and scipy available."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": (
+                        "Python code to execute. Must print results to stdout. "
+                        "Available imports: math, decimal (Decimal), fractions (Fraction), "
+                        "statistics, numpy (np), scipy. Use f-strings or print() for output. "
+                        "Example: 'from decimal import Decimal; result = Decimal.from_number(22) / Decimal.from_number(7); print(f\"Pi approx: {result:.50f}\")'"
+                    )
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Brief description of what the code calculates (shown to user)"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Execution timeout in seconds (default: 10, max: 30)"
+                }
+            },
+            "required": ["code", "description"],
+            "additionalProperties": False
+        }
+    }
+}
+
+
+# =============================================================================
 # Tool Registry
 # =============================================================================
 
@@ -354,6 +401,7 @@ MATH_TOOLS = [
     MATH_FRAUD_TOOL,
     MATH_PROBABILITY_TOOL,
     MATH_CONVERSION_TOOL,
+    PYTHON_EXECUTOR_TOOL,
 ]
 
 
@@ -373,7 +421,7 @@ def get_math_tools_for_tier(tier: str) -> list[ToolDefinition]:
     if tier_lower == "free":
         return [MATH_SA_TAX_TOOL, MATH_CONVERSION_TOOL]
     
-    # JIVE tier: add statistics, financial, probability
+    # JIVE tier: add statistics, financial, probability, python executor
     if tier_lower == "jive":
         return [
             MATH_STATISTICS_TOOL,
@@ -381,9 +429,10 @@ def get_math_tools_for_tier(tier: str) -> list[ToolDefinition]:
             MATH_SA_TAX_TOOL,
             MATH_PROBABILITY_TOOL,
             MATH_CONVERSION_TOOL,
+            PYTHON_EXECUTOR_TOOL,
         ]
     
-    # JIGGA tier: all tools including fraud analysis
+    # JIGGA tier: all tools including fraud analysis and python executor
     return MATH_TOOLS
 
 
@@ -396,6 +445,7 @@ JIVE_MATH_TOOLS: list[ToolDefinition] = [
     MATH_SA_TAX_TOOL,
     MATH_PROBABILITY_TOOL,
     MATH_CONVERSION_TOOL,
+    PYTHON_EXECUTOR_TOOL,
 ]
 
-JIGGA_MATH_TOOLS: list[ToolDefinition] = MATH_TOOLS  # All tools including fraud
+JIGGA_MATH_TOOLS: list[ToolDefinition] = MATH_TOOLS  # All tools including fraud + python

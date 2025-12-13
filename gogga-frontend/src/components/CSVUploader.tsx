@@ -68,7 +68,9 @@ export const CSVUploader: React.FC<CSVUploaderProps> = ({
       let sampleSize = Math.min(rows.length, 20); // Sample first 20 rows
       
       for (let i = 0; i < sampleSize; i++) {
-        const value = rows[i][header];
+        const row = rows[i];
+        if (!row) continue;
+        const value = row[header];
         if (value === null || value === undefined || value === '') continue;
         
         const strValue = String(value).trim();
@@ -121,7 +123,11 @@ export const CSVUploader: React.FC<CSVUploaderProps> = ({
         
         if (results.errors.length > 0) {
           const firstError = results.errors[0];
-          setError(`Parse error: ${firstError.message}${firstError.row !== undefined ? ` (row ${firstError.row})` : ''}`);
+          if (firstError) {
+            setError(`Parse error: ${firstError.message}${firstError.row !== undefined ? ` (row ${firstError.row})` : ''}`);
+          } else {
+            setError('Parse error occurred');
+          }
           return;
         }
         

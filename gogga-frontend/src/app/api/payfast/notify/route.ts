@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get client IP for whitelist check
     const clientIp =
-      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
 
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       console.error('PayFast ITN: Invalid signature');
       await prisma.authLog.create({
         data: {
-          email: data.email_address,
+          email: data.email_address || null,
           action: 'payfast_itn_invalid_signature',
           ip: clientIp,
         },

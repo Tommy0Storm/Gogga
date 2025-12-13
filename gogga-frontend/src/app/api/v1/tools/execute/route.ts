@@ -12,7 +12,8 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 // Extended timeout for AI Horde (can take 60+ seconds)
 const TOOL_TIMEOUT_MS = 120_000;
 
-export const dynamic = 'force-dynamic';
+// Note: Removed 'dynamic = force-dynamic' as it conflicts with cacheComponents
+// API routes are dynamic by default in Next.js 16
 
 export async function POST(request: NextRequest) {
   try {

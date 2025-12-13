@@ -235,8 +235,9 @@ export interface ChatMessageMeta {
 
 /**
  * Parse a JSON string to typed meta object with validation
+ * TypeScript 5.9: const type parameter preserves exact object shape
  */
-export function parseMetaJson<T extends Record<string, unknown>>(
+export function parseMetaJson<const T extends Record<string, unknown>>(
   jsonString: string | null | undefined,
   defaultValue: T = {} as T
 ): T {
@@ -252,8 +253,9 @@ export function parseMetaJson<T extends Record<string, unknown>>(
 
 /**
  * Stringify meta object for database storage
+ * TypeScript 5.9: const type parameter for exact type preservation
  */
-export function stringifyMeta<T extends Record<string, unknown>>(
+export function stringifyMeta<const T extends Record<string, unknown>>(
   meta: T | null | undefined
 ): string | null {
   if (!meta || Object.keys(meta).length === 0) return null;

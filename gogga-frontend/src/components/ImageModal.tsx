@@ -5,8 +5,9 @@
 
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useEffectEvent } from 'react';
 import { X, Download, Trash2 } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface ImageModalProps {
   isOpen: boolean;
@@ -19,7 +20,7 @@ interface ImageModalProps {
   isUrl?: boolean; // If true, imageData is a URL, not base64
 }
 
-export default function ImageModal({
+function ImageModalContent({
   isOpen,
   imageData,
   mimeType,
@@ -29,12 +30,14 @@ export default function ImageModal({
   onDelete,
   isUrl = false,
 }: ImageModalProps) {
-  // Handle escape key
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  // React 19.2: useEffectEvent for stable keyboard handler
+  // Prevents event listener re-attachment on every render
+  // Always uses latest onClose without being in dependency array
+  const handleKeyDown = useEffectEvent((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
     }
-  }, [onClose]);
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -46,7 +49,7 @@ export default function ImageModal({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]); // handleKeyDown is stable, not in deps
 
   if (!isOpen) return null;
 
@@ -155,5 +158,25 @@ export default function ImageModal({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ImageModal(props: ImageModalProps) {
+  return (
+    <ErrorBoundary fallback={
+      <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+          <p className="text-red-500 font-medium">Error loading image modal</p>
+          <button
+            onClick={props.onClose}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    }>
+      <ImageModalContent {...props} />
+    </ErrorBoundary>
   );
 }

@@ -4,10 +4,12 @@
  * Shown when user cancels PayFast payment.
  */
 import Link from 'next/link'
+import { PageErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function PaymentCancelPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center p-6">
+    <PageErrorBoundary pageName="Payment Cancel">
+      <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
         {/* Cancel Icon */}
         <div className="w-16 h-16 mx-auto mb-6 bg-gray-400 rounded-full flex items-center justify-center">
@@ -41,5 +43,6 @@ export default function PaymentCancelPage() {
         </p>
       </div>
     </div>
+    </PageErrorBoundary>
   )
 }

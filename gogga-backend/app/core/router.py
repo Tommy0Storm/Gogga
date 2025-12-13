@@ -3,24 +3,36 @@ GOGGA Tier-Based Cognitive Router
 
 Routes requests based on user subscription tier:
 - FREE: OpenRouter Llama 3.3 70B (text) + Pollinations.ai (images)
-- JIVE: Cerebras Llama 3.1 8B + CePO (text) + FLUX 1.1 Pro (images, capped)
-- JIGGA: Cerebras Qwen 3 235B think/no_think (text) + FLUX 1.1 Pro (images, higher cap)
+- JIVE: Cerebras Qwen 3 32B (text) + FLUX 1.1 Pro (images, capped)
+- JIGGA: Cerebras Qwen 3 32B/235B (text) + FLUX 1.1 Pro (images, higher cap)
 
 Universal across all tiers:
 - Prompt Enhancement: OpenRouter Llama 3.3 70B FREE
+
+SIMPLIFIED ARCHITECTURE (2025-01):
+- Removed CePO/OptiLLM sidecar (optillm enhancements handled differently)
+- JIVE and JIGGA both use Qwen models (unified streaming path)
+- FREE tier uses OpenRouter only
 """
 from enum import Enum
 from functools import lru_cache
-from typing import Final
+from typing import Final, TypedDict
+import sys
+
+from app.models.domain import ChatRequest
 
 from app.config import settings
+
+# Python 3.14: Enable JIT compiler for hot path optimization (20-40% faster)
+if sys.version_info >= (3, 14) and hasattr(sys, '_experimental_jit'):
+    sys._experimental_jit = 1  # Enable tier 1 JIT for routing hot paths
 
 
 class UserTier(str, Enum):
     """User subscription tiers."""
     FREE = "free"      # OpenRouter FREE models only
-    JIVE = "jive"      # Cerebras Llama + CePO, FLUX capped
-    JIGGA = "jigga"    # Cerebras Qwen think/no_think, FLUX higher cap
+    JIVE = "jive"      # Cerebras Qwen 32B, FLUX capped
+    JIGGA = "jigga"    # Cerebras Qwen 32B/235B, FLUX higher cap
 
 
 class CognitiveLayer(str, Enum):
@@ -29,20 +41,28 @@ class CognitiveLayer(str, Enum):
     FREE_TEXT = "free_text"              # Llama 3.3 70B FREE (OpenRouter)
     FREE_IMAGE = "free_image"            # Pollinations.ai (FREE)
     
-    # JIVE tier layers (Cerebras + CePO)
-    JIVE_SPEED = "jive_speed"            # Llama 3.1 8B direct (fast queries)
-    JIVE_REASONING = "jive_reasoning"    # Llama 3.1 8B + CePO (complex queries)
+    # JIVE tier layers (Cerebras Qwen 32B)
+    JIVE_TEXT = "jive_text"              # Qwen 3 32B (general chat)
     JIVE_IMAGE = "jive_image"            # FLUX 1.1 Pro (capped)
     
-    # JIGGA tier layers (Cerebras Qwen)
+    # JIGGA tier layers (Cerebras Qwen 32B/235B)
     JIGGA_THINK = "jigga_think"          # Qwen 3 32B with thinking (temp=0.6, top_p=0.95)
-    JIGGA_FAST = "jigga_fast"            # Qwen 3 32B + /no_think (fast response)
-    JIGGA_MULTILINGUAL = "jigga_multilingual"  # Qwen 3 235B Instruct (African languages, long output)
+    JIGGA_COMPLEX = "jigga_complex"      # Qwen 3 235B for complex/legal (thinking mode)
     JIGGA_IMAGE = "jigga_image"          # FLUX 1.1 Pro (higher cap)
     
     # Universal layers
     ENHANCE_PROMPT = "enhance_prompt"    # Llama 3.3 70B FREE (all tiers)
     MULTIMODAL = "multimodal"            # Google Live API (TODO)
+
+
+class RouteConfig(TypedDict):
+    """Structured routing configuration for tier-based requests."""
+
+    service: str
+    model: str
+    reasoning: bool
+    think_mode: bool
+    no_think: bool
 
 
 # Image generation limits per tier (per month)
@@ -53,12 +73,14 @@ IMAGE_LIMITS: Final[dict[UserTier, int]] = {
 }
 
 
-# Qwen thinking mode settings (JIGGA tier)
-# Token limits
-# NOTE: Llama 3.3 70B supports up to 40,000 output tokens on Cerebras
-# Currently limited to 8,000 for cost control - increase to 40,000 when ready
-JIVE_MAX_TOKENS: Final[int] = 8000  # Llama 3.3 70B extended output (max: 40,000)
-JIVE_DEFAULT_TOKENS: Final[int] = 4096  # Default for normal requests
+# Qwen thinking mode settings (all paid tiers now use Qwen)
+# Token limits - unified for JIVE and JIGGA
+# NOTE: Qwen 32B supports up to 8,000 output tokens, Qwen 235B supports up to 40,000
+QWEN_MAX_TOKENS: Final[int] = 8000  # Qwen 32B max output
+QWEN_DEFAULT_TOKENS: Final[int] = 4096  # Default for normal requests
+
+# JIGGA 235B Token limits (complex/legal)
+JIGGA_235B_MAX_TOKENS: Final[int] = 32000  # Qwen 235B extended output (max: 40,000)
 
 # JIGGA Token limits (Qwen 3 32B)
 # Context: 65k tokens (free) / 131k (paid) | Max Output: 8k tokens
@@ -141,16 +163,34 @@ DOCUMENT_ANALYSIS_KEYWORDS: Final[frozenset[str]] = frozenset([
 ])
 
 
-# Keywords that trigger CePO Reasoning (JIVE tier)
-REASONING_KEYWORDS: Final[frozenset[str]] = frozenset([
-    "think step by step", "reason through", "plan out", "break down",
-    "walk me through", "explain your reasoning", "show your work",
-    "let's think", "consider all", "weigh the options",
-    "optimize", "design a solution", "architect", "strategy",
-    "implementation plan", "roadmap", "approach this",
+# Keywords that trigger 235B model for complex reasoning (JIGGA tier)
+# These require deep analysis where 235B's superior reasoning matters
+COMPLEX_235B_KEYWORDS: Final[frozenset[str]] = frozenset([
+    # Deep analysis requests (multi-word)
+    "analyze deeply", "comprehensive analysis", "thorough review",
+    "examine carefully", "deep dive", "full assessment",
+    
+    # Legal reasoning - single keywords (235B has better legal comprehension)
+    "constitutional", "precedent", "statutory", "litigation",
+    "tribunal", "advocate", "attorney", "indemnity", "compliance",
+    
+    # SA legal acts and regulations (single words with word boundary matching)
+    "popia", "gdpr", "fica", "rica", "sars", "bbbee", "b-bbee",
+    
+    # Legal multi-word phrases
+    "legal implications", "case analysis", "constitutional analysis",
+    "statutory interpretation", "consumer protection", "rental housing",
+    "labour relations", "employment law",
+    
+    # Complex coding/architecture
+    "system design", "architecture review", "refactor entire",
+    "performance optimization", "security audit",
+    
+    # Research tasks
+    "research thoroughly", "investigate thoroughly", "evaluate all options",
 ])
 
-# Keywords that trigger thinking mode (JIGGA tier)
+# Keywords that trigger thinking mode (JIVE and JIGGA default)
 THINKING_KEYWORDS: Final[frozenset[str]] = frozenset([
     # Deep analysis
     "analyze deeply", "comprehensive analysis", "thorough review",
@@ -166,32 +206,6 @@ THINKING_KEYWORDS: Final[frozenset[str]] = frozenset([
     
     # Research
     "research thoroughly", "investigate", "evaluate all options",
-])
-
-# Keywords that trigger fast mode /no_think (JIGGA tier)
-# Also auto-triggered for long contexts (131k+ tokens)
-FAST_MODE_KEYWORDS: Final[frozenset[str]] = frozenset([
-    "quick answer", "briefly", "short answer", "tldr", "summary",
-    "just tell me", "simple answer", "fast", "quickly",
-])
-
-# Complex keywords (for JIVE tier routing to CePO)
-COMPLEX_KEYWORDS: Final[frozenset[str]] = frozenset([
-    # Legal terms
-    "popia", "gdpr", "constitution", "act", "regulation", "compliance",
-    "contract", "clause", "liability", "indemnity", "lawsuit", "court",
-    "tribunal", "advocate", "attorney", "litigation", "damages", "rights",
-    "consumer protection", "rental housing", "labour", "employment",
-    "bbbee", "b-bbee", "fica", "rica", "sars",
-    
-    # Coding and technical
-    "code", "function", "class", "algorithm", "debug", "api", "database",
-    "python", "javascript", "typescript", "react", "fastapi", "django",
-    "sql", "query", "optimization", "architecture", "deploy", "docker",
-    
-    # Translation
-    "translate", "isizulu", "isixhosa", "afrikaans", "sesotho", "setswana",
-    "tshivenda", "xitsonga", "siswati", "isindebele", "sepedi",
 ])
 
 # Image intent keywords
@@ -326,22 +340,124 @@ def should_use_thinking(message: str, context_tokens: int = 0) -> bool:
     return True
 
 
+def _extract_keywords(message: str) -> set[str]:
+    """Lightweight keyword extraction for routing decisions.
+    
+    Supports both single-word and multi-word keyword matching.
+    Multi-word phrases are matched by checking if they exist as substrings
+    in the lowercased message.
+    """
+    lowered = message.lower()
+    
+    # Single-word tokens for simple matching
+    tokens = {token.strip(".,!?;:") for token in lowered.split()}
+    tokens = {token for token in tokens if token}
+    
+    # For multi-word keywords, we check if they appear in the message
+    # This is done in the caller by also checking substring matches
+    return tokens
+
+
+def _matches_complex_keywords(message: str) -> bool:
+    """Check if message matches any COMPLEX_235B_KEYWORDS (word-boundary aware).
+    
+    Uses word boundary matching to avoid false positives like:
+    - 'rica' matching 'Africa'
+    - 'act' matching 'practical'
+    """
+    import re
+    lowered = message.lower()
+    
+    # Check each keyword with word boundaries
+    for keyword in COMPLEX_235B_KEYWORDS:
+        # Multi-word keywords: check as substring (already unique enough)
+        if " " in keyword:
+            if keyword in lowered:
+                return True
+        else:
+            # Single-word: use word boundary matching
+            # \b matches word boundaries (start/end of word)
+            pattern = r'\b' + re.escape(keyword) + r'\b'
+            if re.search(pattern, lowered):
+                return True
+    return False
+
+
+def get_default_config(tier: str) -> RouteConfig:
+    """Default routing configuration per tier."""
+
+    tier_upper = tier.upper()
+    if tier_upper == "FREE":
+        return RouteConfig(
+            service="openrouter",
+            model=settings.OPENROUTER_MODEL_LLAMA,
+            reasoning=False,
+            think_mode=False,
+            no_think=False,
+        )
+    if tier_upper == "JIVE":
+        return RouteConfig(
+            service="cerebras",
+            model=settings.MODEL_JIVE,
+            reasoning=False,
+            think_mode=True,  # JIVE uses Qwen thinking mode
+            no_think=False,
+        )
+    if tier_upper == "JIGGA":
+        return RouteConfig(
+            service="cerebras",
+            model=settings.MODEL_JIGGA,
+            reasoning=False,
+            think_mode=True,  # JIGGA defaults to thinking mode
+            no_think=False,
+        )
+
+    raise ValueError(f"Unknown tier: {tier}")
+
+
+def route_request(request: ChatRequest, user_tier: str) -> RouteConfig:
+    """Structural pattern matching router for tier-based model selection.
+    
+    SIMPLIFIED (2025-01):
+    - FREE: OpenRouter Llama 3.3 70B
+    - JIVE: Cerebras Qwen 32B (thinking mode)
+    - JIGGA: Cerebras Qwen 32B (default) or 235B (complex/legal keywords)
+    """
+
+    normalized_tier = user_tier.upper()
+
+    # JIGGA tier with complex/legal keywords -> 235B model
+    if normalized_tier == "JIGGA" and _matches_complex_keywords(request.message):
+        return RouteConfig(
+            service="cerebras",
+            model=settings.MODEL_JIGGA_235B,
+            reasoning=False,
+            think_mode=True,  # 235B uses thinking for deep analysis
+            no_think=False,
+        )
+
+    # Default routing by tier (FREE/JIVE/JIGGA default)
+    return get_default_config(normalized_tier)
+
+
+
 class TierRouter:
     """
     Routes requests based on user tier and intent.
+    
+    SIMPLIFIED ARCHITECTURE (2025-01):
     
     FREE Tier:
         Text → OpenRouter Llama 3.3 70B FREE
         Image → Pollinations.ai FREE
         
     JIVE Tier (Pro):
-        Simple text → Cerebras Llama 3.1 8B direct
-        Complex text → Cerebras Llama 3.1 8B + CePO
+        Text → Cerebras Qwen 3 32B (thinking mode)
         Image → FLUX 1.1 Pro (capped at 200/month)
         
     JIGGA Tier (Advanced):
-        Text (thinking) → Cerebras Qwen 3 235B (temp=0.6, top_p=0.95)
-        Text (fast) → Cerebras Qwen 3 235B + /no_think
+        Text (general) → Cerebras Qwen 3 32B (thinking mode)
+        Text (complex/legal) → Cerebras Qwen 3 235B (deep reasoning)
         Image → FLUX 1.1 Pro (capped at 1000/month)
         
     Universal (all tiers):
@@ -357,14 +473,20 @@ class TierRouter:
         """
         Route request to appropriate layer based on tier and intent.
         
+        SIMPLIFIED (2025-01):
+        - FREE: OpenRouter Llama 3.3 70B
+        - JIVE: Cerebras Qwen 32B (unified - no speed/reasoning split)
+        - JIGGA: Cerebras Qwen 32B (default) or 235B (complex/legal/multilingual)
+        
         Args:
             message: User's input message
             user_tier: User's subscription tier
-            context_tokens: Number of tokens in context (for thinking mode decision)
+            context_tokens: Number of tokens in context (unused, kept for API compatibility)
             
         Returns:
             CognitiveLayer indicating which layer to use
         """
+        _ = context_tokens  # Unused but kept for API compatibility
         message_lower = message.lower()
         
         # Check for image generation intent - only route to image layer for FREE tier
@@ -377,21 +499,17 @@ class TierRouter:
             return CognitiveLayer.FREE_TEXT
         
         elif user_tier == UserTier.JIVE:
-            # Check for reasoning/complex keywords → CePO
-            if any(kw in message_lower for kw in REASONING_KEYWORDS):
-                return CognitiveLayer.JIVE_REASONING
-            if any(kw in message_lower for kw in COMPLEX_KEYWORDS):
-                return CognitiveLayer.JIVE_REASONING
-            # Simple queries → direct Llama
-            return CognitiveLayer.JIVE_SPEED
+            # JIVE tier: All text goes to Qwen 32B with thinking mode
+            return CognitiveLayer.JIVE_TEXT
         
         else:  # JIGGA
-            # Check for African language content → 235B Instruct model
-            # The 235B model has better multilingual support and longer output (up to 40k tokens)
+            # Check for complex/legal keywords OR African language → 235B model
+            if _matches_complex_keywords(message):
+                return CognitiveLayer.JIGGA_COMPLEX
             if contains_african_language(message):
-                return CognitiveLayer.JIGGA_MULTILINGUAL
+                return CognitiveLayer.JIGGA_COMPLEX  # 235B for multilingual
             
-            # Default: 32B with thinking mode for better quality analysis
+            # Default: 32B with thinking mode for general chat
             return CognitiveLayer.JIGGA_THINK
     
     @staticmethod
@@ -403,8 +521,6 @@ class TierRouter:
         - provider: "openrouter" | "cerebras" | "deepinfra"
         - model: model identifier
         - settings: temperature, top_p, etc.
-        - use_cepo: whether to route through CePO sidecar
-        - append_no_think: whether to append /no_think
         """
         configs = {
             # FREE tier
@@ -412,69 +528,41 @@ class TierRouter:
                 "provider": "openrouter",
                 "model": settings.OPENROUTER_MODEL_LLAMA,
                 "settings": {"temperature": 0.7, "max_tokens": 2048},
-                "use_cepo": False,
-                "append_no_think": False,
             },
             CognitiveLayer.FREE_IMAGE: {
                 "provider": "openrouter",
                 "model": settings.OPENROUTER_MODEL_LONGCAT,
                 "settings": {},
-                "use_cepo": False,
-                "append_no_think": False,
             },
             
-            # JIVE tier
-            CognitiveLayer.JIVE_SPEED: {
+            # JIVE tier (Qwen 32B)
+            CognitiveLayer.JIVE_TEXT: {
                 "provider": "cerebras",
-                "model": settings.MODEL_CEPO,  # Llama 3.3 70B at 2,000 tokens/s
-                "settings": {"temperature": 0.7, "max_tokens": 4096},
-                "use_cepo": False,
-                "append_no_think": False,
-            },
-            CognitiveLayer.JIVE_REASONING: {
-                "provider": "cerebras",
-                "model": settings.MODEL_CEPO,  # Llama 3.3 70B at 2,000 reasoning tokens/s
-                "settings": {"temperature": 0.7, "max_tokens": 4096},
-                "use_cepo": False,  # Direct API (OptiLLM CePO has reasoning_effort bug)
-                "append_no_think": False,
+                "model": settings.MODEL_JIVE,  # Qwen 3 32B
+                "settings": QWEN_THINKING_SETTINGS,  # temp=0.6, top_p=0.95
             },
             CognitiveLayer.JIVE_IMAGE: {
                 "provider": "deepinfra",
                 "model": settings.DEEPINFRA_IMAGE_MODEL,  # FLUX 1.1 Pro
                 "settings": {},
-                "use_cepo": False,
-                "append_no_think": False,
             },
             
-            # JIGGA tier
+            # JIGGA tier (Qwen 32B default, 235B for complex)
             CognitiveLayer.JIGGA_THINK: {
                 "provider": "cerebras",
-                "model": settings.MODEL_COMPLEX,  # Qwen 3 32B
+                "model": settings.MODEL_JIGGA,  # Qwen 3 32B
                 "settings": QWEN_THINKING_SETTINGS,  # temp=0.6, top_p=0.95, top_k=20, min_p=0
-                "use_cepo": False,
-                "append_no_think": False,
             },
-            CognitiveLayer.JIGGA_FAST: {
+            CognitiveLayer.JIGGA_COMPLEX: {
                 "provider": "cerebras",
-                "model": settings.MODEL_COMPLEX,  # Qwen 3 32B
-                "settings": QWEN_FAST_SETTINGS,  # temp=0.7, top_p=0.8, top_k=20, min_p=0
-                "use_cepo": False,
-                "append_no_think": True,  # Append /no_think to prompt
-            },
-            CognitiveLayer.JIGGA_MULTILINGUAL: {
-                "provider": "cerebras",
-                "model": settings.MODEL_COMPLEX_235B,  # Qwen 3 235B Instruct
-                "settings": QWEN_FAST_SETTINGS,  # Non-thinking model, use fast settings
-                "use_cepo": False,
-                "append_no_think": False,  # 235B Instruct is already non-thinking
-                "max_tokens": 32000,  # 235B supports up to 40k output tokens
+                "model": settings.MODEL_JIGGA_235B,  # Qwen 3 235B for complex/legal
+                "settings": QWEN_THINKING_SETTINGS,  # Thinking mode for deep reasoning
+                "max_tokens": JIGGA_235B_MAX_TOKENS,  # 235B supports up to 40k output tokens
             },
             CognitiveLayer.JIGGA_IMAGE: {
                 "provider": "deepinfra",
                 "model": settings.DEEPINFRA_IMAGE_MODEL,  # FLUX 1.1 Pro
                 "settings": {},
-                "use_cepo": False,
-                "append_no_think": False,
             },
             
             # Universal
@@ -482,8 +570,6 @@ class TierRouter:
                 "provider": "openrouter",
                 "model": settings.OPENROUTER_MODEL_LLAMA,  # Llama 3.3 70B FREE
                 "settings": {"temperature": 0.7, "max_tokens": 500},
-                "use_cepo": False,
-                "append_no_think": False,
             },
         }
         
@@ -495,13 +581,12 @@ class TierRouter:
         from app.prompts import get_prompt_for_layer
         
         # Map CognitiveLayer enum to prompt registry keys
+        # SIMPLIFIED: JIVE_TEXT maps to jive_think, JIGGA_COMPLEX to jigga_think
         layer_mapping = {
             CognitiveLayer.FREE_TEXT: "free_text",
-            CognitiveLayer.JIVE_SPEED: "jive_speed",
-            CognitiveLayer.JIVE_REASONING: "jive_reasoning",
+            CognitiveLayer.JIVE_TEXT: "jive_think",  # JIVE uses thinking prompts
             CognitiveLayer.JIGGA_THINK: "jigga_think",
-            CognitiveLayer.JIGGA_FAST: "jigga_fast",
-            CognitiveLayer.JIGGA_MULTILINGUAL: "jigga_multilingual",  # 235B for African languages
+            CognitiveLayer.JIGGA_COMPLEX: "jigga_think",  # Same prompts, different model
             CognitiveLayer.ENHANCE_PROMPT: "enhance_prompt",
         }
         

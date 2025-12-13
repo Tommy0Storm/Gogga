@@ -1,6 +1,51 @@
 # GOGGA Data Visualization & Math Tools System
 
-## Last Updated: December 8, 2025 - Phase 2 + Router Integration Complete
+## Last Updated: December 13, 2025 - Recharts 3.x Migration + React 19.2
+
+## Recharts 3.x Key Changes (from v2)
+
+### Breaking Changes
+- **No more CategoricalChartState** - Use hooks like `useActiveTooltipLabel` instead
+- **Customized no longer receives extra props** - Use hooks to access internal state
+- **Removed internal props** - `activeIndex`, Scatter `points`, Area `points`, Legend `payload` props removed
+- **Z-Index** - Determined by render order (SVG has no z-index concept) - render Tooltip below Legend in JSX
+- **accessibilityLayer now true by default** - Disable with `accessibilityLayer={false}`
+- **New minimum requirements** - React 16.8+, TypeScript 5.x+, Node.js v18+
+
+### New Features
+- **Custom components support** - Wrap axes/charts in custom React components, no Customized needed
+- **Tooltip portal** - `portal` prop to render tooltip anywhere in DOM
+- **Multiple axes in Polar charts** - Radar charts now support multiple axes
+- **Auto width Y-axis** - Set `width="auto"` for auto-calculated width
+- **symlog scale type** - New scale type for large value ranges
+
+### Best Practices
+- Keep dataKey functions stable with `useCallback` or define outside component
+- Isolate frequently changing components to prevent full chart re-render
+- Use `React.memo` for expensive child components
+- Debounce mouse handlers for smoother interactions
+
+### Example Patterns
+```tsx
+// ✅ Direct custom component (v3.0)
+const MyAxes = () => (
+  <>
+    <XAxis dataKey="name" />
+    <YAxis tickCount={7} />
+  </>
+)
+<BarChart data={data}>
+  <Bar dataKey="uv" />
+  <MyAxes />
+</BarChart>
+
+// ✅ Stable dataKey (performance)
+const dataKey = useCallback((entry) => entry.value, [])
+<Line dataKey={dataKey} />
+
+// ✅ Auto-width Y-axis (v3.0)
+<YAxis width="auto" />
+```
 
 
 ## Overview

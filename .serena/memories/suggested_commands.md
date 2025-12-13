@@ -5,8 +5,9 @@
 ### Start Backend
 ```bash
 cd /home/ubuntu/Dev-Projects/Gogga/gogga-backend
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+source venv314/bin/activate
+# Use python3.14t (free-threaded) for 2-3x better concurrency
+python3.14t -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Start Frontend
@@ -54,9 +55,9 @@ docker-compose down
 ```bash
 cd gogga-backend
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
+# Create virtual environment (Python 3.14)
+python3.14 -m venv venv314
+source venv314/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt

@@ -19,6 +19,7 @@ from app.core.exceptions import (
     gogga_exception_handler,
     general_exception_handler
 )
+from app.core.compression import zstd_compress_response, is_zstd_available
 
 
 # Configure logging
@@ -40,9 +41,8 @@ async def lifespan(app: FastAPI):
     logger.info("GOGGA API Starting...")
     logger.info("Environment: %s", settings.PAYFAST_ENV)
     logger.info("FREE Tier: OpenRouter Llama 3.3 70B")
-    logger.info("JIVE Tier: Cerebras %s + CePO", settings.MODEL_CEPO)
-    logger.info("JIGGA Tier: Cerebras %s (thinking) + %s (multilingual)", settings.MODEL_COMPLEX, settings.MODEL_COMPLEX_235B)
-    logger.info("CePO Enabled: %s (URL: %s)", settings.CEPO_ENABLED, settings.CEPO_URL)
+    logger.info("JIVE Tier: Cerebras %s (thinking)", settings.MODEL_JIVE)
+    logger.info("JIGGA Tier: Cerebras %s (general) + %s (complex/legal)", settings.MODEL_JIGGA, settings.MODEL_JIGGA_235B)
     
     # Start the scheduler for subscription management
     scheduler_service.start()
@@ -105,6 +105,43 @@ async def log_requests(request: Request, call_next: Callable) -> Response:
     return response
 
 
+# Zstd compression middleware for non-streaming JSON responses
+# Synergy: Python 3.14 PEP 784 + React 19.2 cacheSignal for efficient data transfer
+@app.middleware("http")
+async def zstd_compression_middleware(request: Request, call_next: Callable) -> Response:
+    """Compress JSON responses with Zstandard when client supports it."""
+    response: Response = await call_next(request)
+    
+    # Skip if client doesn't accept zstd, or response is streaming/small
+    accept_encoding = request.headers.get("Accept-Encoding", "")
+    content_type = response.headers.get("Content-Type", "")
+    
+    # Only compress JSON responses (not SSE streams)
+    if (
+        "zstd" not in accept_encoding
+        or "text/event-stream" in content_type
+        or "application/json" not in content_type
+    ):
+        return response
+    
+    # Read response body for compression
+    if hasattr(response, "body"):
+        body = response.body
+        if len(body) >= 512 and is_zstd_available():  # Lower threshold for chat (high compressibility)
+            compressed, headers = zstd_compress_response(body, min_size=512, level=3)
+            if headers:  # Compression was successful
+                for key, value in headers.items():
+                    response.headers[key] = value
+                return Response(
+                    content=compressed,
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    media_type=response.media_type,
+                )
+    
+    return response
+
+
 # Include API routers
 app.include_router(chat.router, prefix=settings.API_V1_STR)
 app.include_router(payments.router, prefix=settings.API_V1_STR)
@@ -139,7 +176,6 @@ async def health_check():
     import os
     
     from app.services.ai_service import ai_service
-    from app.services.cepo_service import cepo_service
     from app.services.openrouter_service import openrouter_service
     from app.core.router import UserTier, IMAGE_LIMITS
     
@@ -147,7 +183,6 @@ async def health_check():
     
     # Check all services in parallel
     cerebras_status = await ai_service.health_check()
-    cepo_status = await cepo_service.health_check() if settings.CEPO_ENABLED else {"status": "disabled"}
     openrouter_status = await openrouter_service.health_check()
     
     # Calculate overall status
@@ -157,11 +192,6 @@ async def health_check():
     if cerebras_status.get("status") != "healthy":
         overall = "degraded"
         issues.append("Cerebras unavailable - JIVE/JIGGA text affected")
-    
-    if cepo_status.get("status") not in ("healthy", "disabled"):
-        if overall == "healthy":
-            overall = "degraded"
-        issues.append("CePO unavailable - JIVE reasoning fallback to direct")
     
     if openrouter_status.get("status") != "healthy":
         if overall == "healthy":
@@ -210,16 +240,11 @@ async def health_check():
             "cerebras": {
                 **cerebras_status,
                 "models": {
-                    "jive": settings.MODEL_CEPO,
-                    "jigga": settings.MODEL_COMPLEX
+                    "jive": settings.MODEL_JIVE,
+                    "jigga": settings.MODEL_JIGGA,
+                    "jigga_complex": settings.MODEL_JIGGA_235B
                 },
                 "tiers_affected": ["jive", "jigga"]
-            },
-            "cepo": {
-                **cepo_status,
-                "url": settings.CEPO_URL if settings.CEPO_ENABLED else None,
-                "enabled": settings.CEPO_ENABLED,
-                "tiers_affected": ["jive (reasoning)"]
             },
             "openrouter": {
                 **openrouter_status,
@@ -236,7 +261,7 @@ async def health_check():
             }
         },
         
-        # Tier configuration
+        # Tier configuration - SIMPLIFIED (2025-01)
         "tiers": {
             "free": {
                 "text": "OpenRouter Llama 3.3 70B FREE",
@@ -244,12 +269,12 @@ async def health_check():
                 "cost": "FREE"
             },
             "jive": {
-                "text": "Cerebras Llama 3.1 8B + CePO",
+                "text": f"Cerebras {settings.MODEL_JIVE} (thinking)",
                 "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIVE]}/month)",
                 "cost": "Subscription"
             },
             "jigga": {
-                "text": "Cerebras Qwen 3 235B (think/no_think)",
+                "text": f"Cerebras {settings.MODEL_JIGGA} (general) + {settings.MODEL_JIGGA_235B} (complex/legal)",
                 "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIGGA]}/month)",
                 "cost": "Premium"
             }

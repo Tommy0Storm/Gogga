@@ -61,18 +61,18 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             )
             return ToolExecuteResponse(success=True, result=result)
         
-        elif request.tool_name.startswith("math_"):
-            # Execute math tool
-            logger.info(f"🔧 MATH TOOL: Executing {request.tool_name}")
+        elif request.tool_name.startswith("math_") or request.tool_name == "python_execute":
+            # Execute math tool or python executor
+            logger.info(f"🔧 MATH/PYTHON TOOL: Executing {request.tool_name}")
             tier = request.arguments.pop("tier", "free") if "tier" in request.arguments else "free"
-            logger.debug(f"🔧 MATH TOOL: tier={tier}, args={request.arguments}")
+            logger.debug(f"🔧 MATH/PYTHON TOOL: tier={tier}, args={request.arguments}")
             result = await execute_math_tool(
                 tool_name=request.tool_name,
                 arguments=request.arguments,
                 tier=tier
             )
             # Convert MathResult dataclass to dict if needed
-            if hasattr(result, '__dict__'):
+            if hasattr(result, '__dict__') and not isinstance(result, dict):
                 result = {
                     "type": "math",  # Required for frontend to render MathResultDisplay
                     "success": result.success,
@@ -80,13 +80,16 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
                     "display_type": result.display_type,
                     "error": result.error
                 }
-            logger.info(f"🔧 MATH TOOL SUCCESS: result_type={result.get('display_type')}, success={result.get('success')}")
+            # Handle python_execute results (already a dict)
+            if request.tool_name == "python_execute":
+                result["type"] = "python_terminal"
+            logger.info(f"🔧 MATH/PYTHON TOOL SUCCESS: result_type={result.get('display_type')}, success={result.get('success')}")
             return ToolExecuteResponse(success=result.get("success", True), result=result)
         
         else:
             return ToolExecuteResponse(
                 success=False,
-                error=f"Unknown tool: {request.tool_name}. Supported: generate_image, math_*"
+                error=f"Unknown tool: {request.tool_name}. Supported: generate_image, math_*, python_execute"
             )
             
     except Exception as e:
@@ -142,6 +145,16 @@ TOOL_METADATA = {
         "examples": [
             {"description": "Benford's Law", "params": {"operation": "benfords_law", "data": [123, 456, 789, 234, 567]}},
             {"description": "Anomalies", "params": {"operation": "anomaly_detection", "data": [10, 11, 12, 100, 13, 14]}},
+        ]
+    },
+    "python_execute": {
+        "category": "math",
+        "examples": [
+            {"description": "Precise decimals", "params": {"code": "from decimal import Decimal\nresult = Decimal.from_number(0.1) + Decimal.from_number(0.2)\nprint(f'0.1 + 0.2 = {result}')", "description": "Precise decimal arithmetic using Python 3.14"}},
+            {"description": "Fractions", "params": {"code": "from fractions import Fraction\nf = Fraction.from_number(0.75)\nprint(f'0.75 as fraction: {f}')", "description": "Convert float to fraction"}},
+            {"description": "Custom formula", "params": {"code": "import math\nfor n in range(1, 6):\n    print(f'√{n} = {math.sqrt(n):.6f}')", "description": "Square roots table"}},
+            {"description": "Statistics", "params": {"code": "import statistics\ndata = [12, 15, 18, 22, 25, 28, 31]\nprint(f'Mean: {statistics.mean(data):.2f}')\nprint(f'Stdev: {statistics.stdev(data):.2f}')", "description": "Statistical analysis"}},
+            {"description": "Number formatting", "params": {"code": "pi = 3.14159265358979\nprint(f'Pi: {pi:,.6f}')\nbig = 1234567890.123456\nprint(f'Big: {big:,.2f}')", "description": "Number formatting with separators"}},
         ]
     },
     "create_chart": {

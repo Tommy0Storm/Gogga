@@ -14,7 +14,7 @@ GOGGA implements a **Bicameral Cognitive Strategy** that routes traffic between 
 ## Tech Stack
 
 ### Backend (FastAPI)
-- Python 3.11+ with async processing
+- Python 3.14 with async processing
 - Cerebras Cloud SDK for inference
 - PayFast integration for ZAR payments
 - PostgreSQL for persistence

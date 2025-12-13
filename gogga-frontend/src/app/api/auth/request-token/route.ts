@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       data: {
         email: email.toLowerCase().trim(),
         action: 'token_requested',
-        ip: ip.split(',')[0].trim(),
+        ip: ip.split(',')[0]?.trim() || 'unknown',
         meta: JSON.stringify({
           expires_in_minutes: 15,
           timestamp: new Date().toISOString(),

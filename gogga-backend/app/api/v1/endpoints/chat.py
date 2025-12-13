@@ -430,16 +430,11 @@ async def list_tiers():
                 "id": "jive",
                 "name": "Jive Tier (Pro)",
                 "text": {
-                    "simple": {
-                        "model": settings.MODEL_SPEED,
-                        "name": "Llama 3.1 8B",
-                        "provider": "Cerebras"
-                    },
-                    "complex": {
-                        "model": f"{settings.MODEL_SPEED}+CePO",
-                        "name": "Llama 3.1 8B + CePO",
-                        "provider": "Cerebras"
-                    }
+                    "model": settings.MODEL_JIVE,
+                    "name": "Qwen 3 32B",
+                    "provider": "Cerebras",
+                    "settings": "temp=0.6, top_p=0.95, top_k=20",
+                    "mode": "thinking"
                 },
                 "images": {
                     "model": settings.DEEPINFRA_IMAGE_MODEL,
@@ -455,12 +450,19 @@ async def list_tiers():
                 "id": "jigga",
                 "name": "Jigga Tier (Advanced)",
                 "text": {
-                    "model": settings.MODEL_COMPLEX,
-                    "name": "Qwen 3 32B",
+                    "general": {
+                        "model": settings.MODEL_JIGGA,
+                        "name": "Qwen 3 32B",
+                        "mode": "thinking"
+                    },
+                    "complex": {
+                        "model": settings.MODEL_JIGGA_235B,
+                        "name": "Qwen 3 235B",
+                        "mode": "thinking",
+                        "note": "Used for complex/legal queries and African languages"
+                    },
                     "provider": "Cerebras",
-                    "settings": "temp=0.6, top_p=0.95, top_k=20",
-                    "mode": "thinking (always enabled)",
-                    "note": "/no_think removed for better quality on analysis and long documents"
+                    "settings": "temp=0.6, top_p=0.95, top_k=20"
                 },
                 "images": {
                     "model": settings.DEEPINFRA_IMAGE_MODEL,

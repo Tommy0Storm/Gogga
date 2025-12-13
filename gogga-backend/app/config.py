@@ -6,12 +6,19 @@ Fails fast at startup if critical keys are missing.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
     
     PROJECT_NAME: str = "GOGGA API"
     API_V1_STR: str = "/api/v1"
@@ -23,38 +30,37 @@ class Settings(BaseSettings):
     # Cerebras Configuration (Text only)
     CEREBRAS_API_KEY: str = Field(..., description="Cerebras Cloud API Key")
     
-    # Model Identification (Cerebras)
-    # JIVE tier: Llama 3.3 70B via CePO at ~2,200 tokens/s
-    # JIGGA tier: Qwen 3 32B (fast/general) + Qwen 3 235B (thinking/complex/African languages)
-    MODEL_SPEED: str = "llama3.3-70b"  # JIVE tier (was llama3.1-8b, now unified)
-    MODEL_COMPLEX: str = "qwen-3-32b"  # JIGGA tier - Qwen 3 32B (cost-effective, general chat)
-    MODEL_COMPLEX_235B: str = "qwen-3-235b-a22b-instruct-2507"  # JIGGA tier - Qwen 3 235B (thinking, African languages)
-    MODEL_CEPO: str = "llama3.3-70b"  # JIVE reasoning model (same as MODEL_SPEED)
+    # SIMPLIFIED MODEL ARCHITECTURE (2025-01):
+    # - Removed CePO/OptiLLM, Llama models
+    # - JIVE tier: Qwen 3 32B (same model as JIGGA general)
+    # - JIGGA tier: Qwen 3 32B (general) + Qwen 3 235B (complex/legal)
+    # - FREE tier: OpenRouter Llama 3.3 70B (unchanged)
+    
+    # JIVE tier: Qwen 3 32B (general chat, thinking mode)
+    MODEL_JIVE: str = "qwen-3-32b"
+    
+    # JIGGA tier: Qwen 3 32B (general) + Qwen 3 235B (complex/legal/multilingual)
+    MODEL_JIGGA: str = "qwen-3-32b"  # Default for general queries
+    MODEL_JIGGA_235B: str = "qwen-3-235b-a22b-instruct-2507"  # Complex/legal queries
     
     # Model Settings (JIGGA Qwen)
     JIGGA_MAX_TOKENS: int = 8000  # Max output tokens for Qwen 3 32B
     
-    # Qwen Thinking Mode Settings (enable_thinking=True)
+    # Qwen Thinking Mode Settings (all paid tiers now use thinking mode)
     # DO NOT use greedy decoding (temp=0) - causes performance degradation and repetitions
     QWEN_THINKING_TEMPERATURE: float = 0.6
     QWEN_THINKING_TOP_P: float = 0.95
     QWEN_THINKING_TOP_K: int = 20
     QWEN_THINKING_MIN_P: float = 0.0
     
-    # Qwen Non-Thinking Mode Settings (enable_thinking=False)
-    QWEN_FAST_TEMPERATURE: float = 0.7
-    QWEN_FAST_TOP_P: float = 0.8
-    QWEN_FAST_TOP_K: int = 20
-    QWEN_FAST_MIN_P: float = 0.0
-    
     # Pricing Configuration (USD per Million Tokens)
     # FREE tier: OpenRouter free models - no cost but still track tokens
     COST_FREE_INPUT: float = 0.0
     COST_FREE_OUTPUT: float = 0.0
     
-    # JIVE tier: Llama 3.3 70B (via Cerebras)
-    COST_JIVE_INPUT: float = 0.10   # $0.10 per M tokens
-    COST_JIVE_OUTPUT: float = 0.10  # $0.10 per M tokens
+    # JIVE tier: Qwen 3 32B (via Cerebras)
+    COST_JIVE_INPUT: float = 0.40   # $0.40 per M tokens (same pricing as JIGGA 32B)
+    COST_JIVE_OUTPUT: float = 0.80  # $0.80 per M tokens
     
     # JIGGA tier: Qwen 3 32B (via Cerebras)
     COST_JIGGA_INPUT: float = 0.40   # $0.40 per M tokens
@@ -63,12 +69,6 @@ class Settings(BaseSettings):
     # JIGGA tier 235B: Qwen 3 235B Instruct (via Cerebras)
     COST_JIGGA_235B_INPUT: float = 0.60   # $0.60 per M tokens
     COST_JIGGA_235B_OUTPUT: float = 1.20  # $1.20 per M tokens
-    
-    # Legacy pricing (kept for backwards compatibility)
-    COST_SPEED_INPUT: float = 0.10
-    COST_SPEED_OUTPUT: float = 0.10
-    COST_COMPLEX_INPUT: float = 0.40
-    COST_COMPLEX_OUTPUT: float = 0.80
     
     # Image Generation Pricing
     COST_FLUX_IMAGE: float = 0.04  # $0.04 per FLUX 1.1 Pro image
@@ -90,11 +90,6 @@ class Settings(BaseSettings):
     
     # Internal API Key (for scheduler to call frontend internal APIs)
     INTERNAL_API_KEY: str = Field(default="dev-internal-key-change-in-production")
-    
-    # CePO (Cerebras Planning Optimization) - OptiLLM sidecar
-    # In Docker: http://cepo:8080, locally: http://localhost:8080
-    CEPO_URL: str = Field(default="http://localhost:8080")
-    CEPO_ENABLED: bool = Field(default=True)
     
     # DeepInfra - Image Generation (FLUX 1.1 Pro)
     DEEPINFRA_API_KEY: str = Field(default="", description="DeepInfra API Key for image generation")
@@ -127,12 +122,6 @@ class Settings(BaseSettings):
         if v not in ("sandbox", "production"):
             raise ValueError("PAYFAST_ENV must be 'sandbox' or 'production'")
         return v
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-        extra = "ignore"  # Ignore extra environment variables  # Ignore extra environment variables
 
 
 @lru_cache()

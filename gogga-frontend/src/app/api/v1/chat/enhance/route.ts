@@ -11,7 +11,8 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 // Standard timeout for enhance (30 seconds)
 const ENHANCE_TIMEOUT_MS = 30_000;
 
-export const dynamic = 'force-dynamic';
+// Note: Removed 'dynamic = force-dynamic' as it conflicts with cacheComponents
+// API routes are dynamic by default in Next.js 16
 
 export async function POST(request: NextRequest) {
   try {

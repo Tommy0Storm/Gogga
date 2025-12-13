@@ -103,10 +103,10 @@ export async function POST(request: NextRequest) {
                 promptTokens: { increment: promptTokens },
                 completionTokens: { increment: completionTokens },
                 totalCostCents: { increment: costCents },
-                chatRequests: !isImage && !isEnhance ? { increment: 1 } : undefined,
-                enhanceRequests: isEnhance ? { increment: 1 } : undefined,
-                imageRequests: isImage ? { increment: 1 } : undefined,
-                imagesUsed: isImage ? { increment: 1 } : undefined,
+                ...(!isImage && !isEnhance ? { chatRequests: { increment: 1 } } : {}),
+                ...(isEnhance ? { enhanceRequests: { increment: 1 } } : {}),
+                ...(isImage ? { imageRequests: { increment: 1 } } : {}),
+                ...(isImage ? { imagesUsed: { increment: 1 } } : {}),
             },
         })
 

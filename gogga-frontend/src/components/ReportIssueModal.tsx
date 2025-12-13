@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Bug, X, Send, CheckCircle2 } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface ReportIssueModalProps {
     isOpen: boolean;
@@ -14,7 +15,7 @@ interface ReportIssueModalProps {
     };
 }
 
-export function ReportIssueModal({ isOpen, onClose, userEmail, getCapture }: ReportIssueModalProps) {
+function ReportIssueModalContent({ isOpen, onClose, userEmail, getCapture }: ReportIssueModalProps) {
     const [reason, setReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -164,5 +165,25 @@ export function ReportIssueModal({ isOpen, onClose, userEmail, getCapture }: Rep
                 )}
             </div>
         </div>
+    );
+}
+
+export function ReportIssueModal(props: ReportIssueModalProps) {
+    return (
+        <ErrorBoundary fallback={
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+                    <p className="text-red-500 font-medium">Error loading report modal</p>
+                    <button
+                        onClick={props.onClose}
+                        className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        }>
+            <ReportIssueModalContent {...props} />
+        </ErrorBoundary>
     );
 }

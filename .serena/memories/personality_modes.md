@@ -1,7 +1,7 @@
 # GOGGA Personality Modes System
 
 ## Last Updated
-December 9, 2025
+December 13, 2025
 
 ## Overview
 Three distinct personality modes for user choice: System (default balanced), Dark Gogga (sarcastic), and Goody Gogga (positive - DEFAULT).
@@ -84,6 +84,49 @@ The AI reads this and adjusts its response style accordingly, following the deta
 - `setHumorEnabled(true)` now switches to 'goody' if in 'system' mode
 - `setHumorEnabled(false)` now switches to 'system' mode
 
+## Frontend PersonalitySettings Component (NEW Dec 13, 2025)
+
+### New File: `gogga-frontend/src/components/PersonalitySettings.tsx`
+- Compact personality settings for embedding in AccountMenu dropdown
+- Full standalone mode for dedicated settings page
+- Props: `compact?: boolean`, `onSettingsChange?: () => void`
+
+### Modified File: `gogga-frontend/src/components/AccountMenu.tsx`
+- Added "Personality & Language" expandable section with Brain icon
+- Integrates `<PersonalitySettings compact />` inline in dropdown
+- User can now change personality mode directly from main chat page
+- No need to navigate to dashboard for basic settings
+
+## Test Files
+
+### Backend Tests (`gogga-backend/tests/test_personality_modes.py`)
+- **60 comprehensive pytest tests** covering:
+  - Personality mode definitions (3 modes + serious mode)
+  - Dark Gogga characteristics (sarcasm, load shedding humor, helpful)
+  - Goody Gogga characteristics (positive, encouraging, authentic)
+  - System neutral mode (professional, balanced, warm)
+  - Empathetic reasoning instruction components
+  - Tier enhancement integration (FREE/JIVE/JIGGA)
+  - SA context awareness (slang, institutions, laws)
+  - User advocacy stance
+  - Language support (11 SA languages)
+  - Serious mode override for sensitive topics
+
+### Empathetic Reasoning (NEW)
+Added to `app/services/optillm_enhancements.py`:
+```python
+EMPATHETIC_REASONING_INSTRUCTION = """
+EMPATHETIC THINKING - UNDERSTAND THE HUMAN:
+1. WHY is the user asking this?
+2. WHAT is the underlying human need?
+3. WHAT can I offer beyond the literal answer?
+4. HOW should I tailor my response?
+"""
+```
+- Included by default in `enhance_system_prompt()`
+- Can be excluded with `include_empathy=False`
+- Makes LLM think about user motivation and proactive offerings
+
 ## Testing Recommendations
 1. Test each personality mode with various prompts
 2. Verify Dark Gogga maintains sarcasm but drops it for serious topics
@@ -92,3 +135,5 @@ The AI reads this and adjusts its response style accordingly, following the deta
 5. Test personality mode persistence across sessions
 6. Test UI controls switch modes correctly and update greetings
 7. Verify AI context includes personality mode and AI follows it
+8. Test PersonalitySettings component in AccountMenu dropdown
+9. Run: `pytest tests/test_personality_modes.py -v` (60 tests)

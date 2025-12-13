@@ -1,10 +1,16 @@
-# CePO (Cerebras Planning Optimization) Configuration
+# CePO Configuration - DEPRECATED
 
-## Overview
-CePO is an advanced reasoning system using OptiLLM with Cerebras Inference API.
-It provides enhanced chain-of-thought planning and reasoning capabilities.
+## Status (Dec 13, 2025)
+⚠️ **DEPRECATED**: CePO sidecar has been removed from the architecture.
+OptiLLM enhancements are now implemented directly in code.
+See `optillm_enhancements` memory for the new implementation.
 
-## Current Status (Dec 3, 2025)
+## Migration Path
+- CePO sidecar (Docker container) → Removed
+- OptiLLM techniques → Integrated into `app/services/optillm_enhancements.py`
+- Qwen models → Direct Cerebras API calls (no proxy)
+
+## Legacy Reference (Dec 3, 2025)
 
 ### JIVE Configuration Confirmed
 **JIVE tier uses `llama3.3-70b` for ALL Cerebras calls via OptiLLM CePO:**
