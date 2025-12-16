@@ -34,7 +34,7 @@ import {
   Calendar,
   Layers,
 } from 'lucide-react';
-import { db, TokenUsage, getTokenUsageHistory } from '@/lib/db';
+import { db, TokenUsage, ChatMessage, getTokenUsageHistory } from '@/lib/db';
 import {
   AreaChart,
   Area,
@@ -56,23 +56,27 @@ import {
 // ============================================================================
 
 interface TokenStats {
-  today: {
-    totalTokens: number;
-    inputTokens: number;
-    outputTokens: number;
-    costZar: number;
-    requestCount: number;
-    byTier: Record<string, TierStats>;
-  };
-  allTime: {
-    totalTokens: number;
-    inputTokens: number;
-    outputTokens: number;
-    costZar: number;
-    requestCount: number;
-  };
+  today: TodayStats;
+  allTime: AllTimeStats;
   history: TokenUsage[];
   avgLatency: number;
+}
+
+interface TodayStats {
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  costZar: number;
+  requestCount: number;
+  byTier: Record<string, TierStats>;
+}
+
+interface AllTimeStats {
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  costZar: number;
+  requestCount: number;
 }
 
 interface TierStats {
@@ -277,11 +281,11 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
       const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
       
       // Get records based on time range (today or past 7 days)
-      const primaryRecords = externalTimeRange === '7days'
+      const primaryRecords = (externalTimeRange === '7days'
         ? await db.tokenUsage.where('date').aboveOrEqual(sevenDaysAgoStr).toArray()
-        : await db.tokenUsage.where('date').equals(today).toArray();
+        : await db.tokenUsage.where('date').equals(today).toArray()) as TokenUsage[];
       
-      const todayStats = primaryRecords.reduce((acc, record) => {
+      const todayStats = primaryRecords.reduce((acc: TodayStats, record: TokenUsage) => {
         acc.totalTokens += record.totalTokens;
         acc.inputTokens += record.inputTokens;
         acc.outputTokens += record.outputTokens;
@@ -298,11 +302,14 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
             requestCount: 0,
           };
         }
-        acc.byTier[record.tier].totalTokens += record.totalTokens;
-        acc.byTier[record.tier].inputTokens += record.inputTokens;
-        acc.byTier[record.tier].outputTokens += record.outputTokens;
-        acc.byTier[record.tier].costZar += record.costZar;
-        acc.byTier[record.tier].requestCount += record.requestCount;
+        const tierData = acc.byTier[record.tier];
+        if (tierData) {
+          tierData.totalTokens += record.totalTokens;
+          tierData.inputTokens += record.inputTokens;
+          tierData.outputTokens += record.outputTokens;
+          tierData.costZar += record.costZar;
+          tierData.requestCount += record.requestCount;
+        }
         
         return acc;
       }, {
@@ -315,8 +322,8 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
       });
 
       // Get all-time usage
-      const allRecords = await db.tokenUsage.toArray();
-      const allTimeStats = allRecords.reduce((acc, record) => {
+      const allRecords = await db.tokenUsage.toArray() as TokenUsage[];
+      const allTimeStats = allRecords.reduce((acc: AllTimeStats, record: TokenUsage) => {
         acc.totalTokens += record.totalTokens;
         acc.inputTokens += record.inputTokens;
         acc.outputTokens += record.outputTokens;
@@ -340,14 +347,14 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
         .orderBy('timestamp')
         .reverse()
         .limit(100)
-        .toArray();
+        .toArray() as ChatMessage[];
       
       const latencies = recentMessages
-        .filter(m => m.meta?.latency_seconds)
-        .map(m => (m.meta?.latency_seconds as number) * 1000);
+        .filter((m: ChatMessage) => m.meta?.latency_seconds)
+        .map((m: ChatMessage) => (m.meta?.latency_seconds as number) * 1000);
       
       const avgLatency = latencies.length > 0 
-        ? latencies.reduce((a, b) => a + b, 0) / latencies.length 
+        ? latencies.reduce((a: number, b: number) => a + b, 0) / latencies.length 
         : 0;
 
       setStats({

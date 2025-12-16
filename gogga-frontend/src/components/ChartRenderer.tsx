@@ -165,12 +165,14 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
     // Auto-detect numeric keys from data
     if (processedData.length > 0) {
       const firstItem = processedData[0] as Record<string, unknown>;
+      // Get keys that are numeric but not internal/meta keys
+      const internalKeys = new Set(['name', 'x', 'y']);
       const numericKeys = Object.keys(firstItem).filter(key => 
-        key !== 'name' && key !== 'x' && typeof firstItem[key] === 'number'
+        !internalKeys.has(key) && typeof firstItem[key] === 'number'
       );
-      // If we have more than just 'value', return all numeric keys
-      if (numericKeys.length > 1) {
-        return numericKeys.filter(k => k !== 'value' && k !== 'y');
+      // Return all numeric keys found (supports multi-series like value, value2, etc.)
+      if (numericKeys.length > 0) {
+        return numericKeys;
       }
     }
     return ['value'];

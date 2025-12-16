@@ -74,6 +74,7 @@ export function useChatHistory(tier: Tier): UseChatHistoryReturn {
       if (sessions.length > 0) {
         // Load most recent session
         const latestSession = sessions[0];
+        if (!latestSession) throw new Error('Session not found');
         const messages = await getSessionMessages(latestSession.id!);
 
         setState({
@@ -214,9 +215,11 @@ export function useChatHistory(tier: Tier): UseChatHistoryReturn {
 
       if (sessions.length > 0) {
         // Load another session
-        const messages = await getSessionMessages(sessions[0].id!);
+        const firstSession = sessions[0];
+        if (!firstSession) throw new Error('Session not found');
+        const messages = await getSessionMessages(firstSession.id!);
         setState({
-          sessionId: sessions[0].id!,
+          sessionId: firstSession.id!,
           sessions,
           messages: messages.map((m) => ({
             role: m.role,
@@ -265,9 +268,11 @@ export function useChatHistory(tier: Tier): UseChatHistoryReturn {
         // If we deleted the current session, load another or create new
         if (sessionId === state.sessionId) {
           if (sessions.length > 0) {
-            const messages = await getSessionMessages(sessions[0].id!);
+            const nextSession = sessions[0];
+            if (!nextSession) throw new Error('Session not found');
+            const messages = await getSessionMessages(nextSession.id!);
             setState({
-              sessionId: sessions[0].id!,
+              sessionId: nextSession.id!,
               sessions,
               messages: messages.map((m) => ({
                 role: m.role,
@@ -320,9 +325,11 @@ export function useChatHistory(tier: Tier): UseChatHistoryReturn {
         // If current session was deleted, load another or create new
         if (sessionIds.includes(state.sessionId!)) {
           if (sessions.length > 0) {
-            const messages = await getSessionMessages(sessions[0].id!);
+            const remainingSession = sessions[0];
+            if (!remainingSession) throw new Error('Session not found');
+            const messages = await getSessionMessages(remainingSession.id!);
             setState({
-              sessionId: sessions[0].id!,
+              sessionId: remainingSession.id!,
               sessions,
               messages: messages.map((m) => ({
                 role: m.role,

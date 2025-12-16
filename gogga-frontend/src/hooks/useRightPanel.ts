@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 
-type TabId = 'tools' | 'documents' | 'weather';
+type TabId = 'tools' | 'documents' | 'weather' | 'search';
 
 interface RightPanelState {
   isOpen: boolean;

@@ -26,8 +26,6 @@ def _get_provider(model: str, layer: str) -> str:
     
     if "openrouter" in layer_lower or "free" in layer_lower:
         return "openrouter"
-    elif "cepo" in layer_lower or "optillm" in layer_lower:
-        return "optillm"
     elif "cerebras" in model_lower or "llama" in model_lower or "qwen" in model_lower:
         return "cerebras"
     else:
@@ -70,7 +68,7 @@ async def track_usage(
     
     Pricing tiers (USD per Million Tokens):
     - FREE tier: $0.00 (still tracked for usage limits)
-    - JIVE tier (Llama 3.3 70B): $0.10 input, $0.10 output
+    - JIVE tier (Qwen 3 235B): $0.10 input, $0.10 output
     - JIGGA tier (Qwen 3 32B): $0.40 input, $0.80 output
     
     Args:
@@ -98,7 +96,7 @@ async def track_usage(
             input_cost_per_m = settings.COST_JIGGA_INPUT   # $0.40
             output_cost_per_m = settings.COST_JIGGA_OUTPUT  # $0.80
     elif tier_lower == "jive":
-        # JIVE: Llama 3.3 70B pricing
+        # JIVE: Qwen 3 235B pricing
         input_cost_per_m = settings.COST_JIVE_INPUT   # $0.10
         output_cost_per_m = settings.COST_JIVE_OUTPUT  # $0.10
     else:

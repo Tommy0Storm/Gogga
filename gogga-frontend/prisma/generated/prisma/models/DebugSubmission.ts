@@ -254,7 +254,7 @@ export type DebugSubmissionWhereInput = {
   resolvedAt?: Prisma.DateTimeNullableFilter<"DebugSubmission"> | Date | string | null
   resolvedBy?: Prisma.StringNullableFilter<"DebugSubmission"> | string | null
   createdAt?: Prisma.DateTimeFilter<"DebugSubmission"> | Date | string
-  user?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
+  User?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
 }
 
 export type DebugSubmissionOrderByWithRelationInput = {
@@ -272,7 +272,7 @@ export type DebugSubmissionOrderByWithRelationInput = {
   resolvedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   resolvedBy?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
-  user?: Prisma.UserOrderByWithRelationInput
+  User?: Prisma.UserOrderByWithRelationInput
 }
 
 export type DebugSubmissionWhereUniqueInput = Prisma.AtLeast<{
@@ -293,7 +293,7 @@ export type DebugSubmissionWhereUniqueInput = Prisma.AtLeast<{
   resolvedAt?: Prisma.DateTimeNullableFilter<"DebugSubmission"> | Date | string | null
   resolvedBy?: Prisma.StringNullableFilter<"DebugSubmission"> | string | null
   createdAt?: Prisma.DateTimeFilter<"DebugSubmission"> | Date | string
-  user?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
+  User?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
 }, "id">
 
 export type DebugSubmissionOrderByWithAggregationInput = {
@@ -350,7 +350,7 @@ export type DebugSubmissionCreateInput = {
   resolvedAt?: Date | string | null
   resolvedBy?: string | null
   createdAt?: Date | string
-  user?: Prisma.UserCreateNestedOneWithoutDebugSubmissionsInput
+  User?: Prisma.UserCreateNestedOneWithoutDebugSubmissionInput
 }
 
 export type DebugSubmissionUncheckedCreateInput = {
@@ -384,7 +384,7 @@ export type DebugSubmissionUpdateInput = {
   resolvedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   resolvedBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneWithoutDebugSubmissionsNestedInput
+  User?: Prisma.UserUpdateOneWithoutDebugSubmissionNestedInput
 }
 
 export type DebugSubmissionUncheckedUpdateInput = {
@@ -454,16 +454,6 @@ export type DebugSubmissionUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
-export type DebugSubmissionListRelationFilter = {
-  every?: Prisma.DebugSubmissionWhereInput
-  some?: Prisma.DebugSubmissionWhereInput
-  none?: Prisma.DebugSubmissionWhereInput
-}
-
-export type DebugSubmissionOrderByRelationAggregateInput = {
-  _count?: Prisma.SortOrder
-}
-
 export type DebugSubmissionCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -513,6 +503,16 @@ export type DebugSubmissionMinOrderByAggregateInput = {
   resolvedAt?: Prisma.SortOrder
   resolvedBy?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+}
+
+export type DebugSubmissionListRelationFilter = {
+  every?: Prisma.DebugSubmissionWhereInput
+  some?: Prisma.DebugSubmissionWhereInput
+  none?: Prisma.DebugSubmissionWhereInput
+}
+
+export type DebugSubmissionOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type DebugSubmissionCreateNestedManyWithoutUserInput = {
@@ -715,7 +715,7 @@ export type DebugSubmissionSelect<ExtArgs extends runtime.Types.Extensions.Inter
   resolvedAt?: boolean
   resolvedBy?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.DebugSubmission$userArgs<ExtArgs>
+  User?: boolean | Prisma.DebugSubmission$UserArgs<ExtArgs>
 }, ExtArgs["result"]["debugSubmission"]>
 
 export type DebugSubmissionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -733,7 +733,7 @@ export type DebugSubmissionSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   resolvedAt?: boolean
   resolvedBy?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.DebugSubmission$userArgs<ExtArgs>
+  User?: boolean | Prisma.DebugSubmission$UserArgs<ExtArgs>
 }, ExtArgs["result"]["debugSubmission"]>
 
 export type DebugSubmissionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -751,7 +751,7 @@ export type DebugSubmissionSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   resolvedAt?: boolean
   resolvedBy?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.DebugSubmission$userArgs<ExtArgs>
+  User?: boolean | Prisma.DebugSubmission$UserArgs<ExtArgs>
 }, ExtArgs["result"]["debugSubmission"]>
 
 export type DebugSubmissionSelectScalar = {
@@ -773,19 +773,19 @@ export type DebugSubmissionSelectScalar = {
 
 export type DebugSubmissionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "reason" | "consoleLogs" | "networkLogs" | "errorStack" | "userAgent" | "url" | "screenSize" | "status" | "adminNotes" | "resolvedAt" | "resolvedBy" | "createdAt", ExtArgs["result"]["debugSubmission"]>
 export type DebugSubmissionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.DebugSubmission$userArgs<ExtArgs>
+  User?: boolean | Prisma.DebugSubmission$UserArgs<ExtArgs>
 }
 export type DebugSubmissionIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.DebugSubmission$userArgs<ExtArgs>
+  User?: boolean | Prisma.DebugSubmission$UserArgs<ExtArgs>
 }
 export type DebugSubmissionIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.DebugSubmission$userArgs<ExtArgs>
+  User?: boolean | Prisma.DebugSubmission$UserArgs<ExtArgs>
 }
 
 export type $DebugSubmissionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "DebugSubmission"
   objects: {
-    user: Prisma.$UserPayload<ExtArgs> | null
+    User: Prisma.$UserPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1196,7 +1196,7 @@ readonly fields: DebugSubmissionFieldRefs;
  */
 export interface Prisma__DebugSubmissionClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  user<T extends Prisma.DebugSubmission$userArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DebugSubmission$userArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  User<T extends Prisma.DebugSubmission$UserArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DebugSubmission$UserArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1634,9 +1634,9 @@ export type DebugSubmissionDeleteManyArgs<ExtArgs extends runtime.Types.Extensio
 }
 
 /**
- * DebugSubmission.user
+ * DebugSubmission.User
  */
-export type DebugSubmission$userArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type DebugSubmission$UserArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
    * Select specific fields to fetch from the User
    */

@@ -304,7 +304,10 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
         setSelectedIndex(prev => Math.max(prev - 1, -1));
       } else if (e.key === 'Enter' && selectedIndex >= 0) {
         e.preventDefault();
-        handleSelectSuggestion(suggestions[selectedIndex]);
+        const selectedSuggestion = suggestions[selectedIndex];
+        if (selectedSuggestion) {
+          handleSelectSuggestion(selectedSuggestion);
+        }
         return;
       } else if (e.key === 'Escape') {
         setShowSuggestions(false);
@@ -324,7 +327,7 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
     const displayText = suggestion.address?.city || 
                        suggestion.address?.town || 
                        suggestion.address?.village ||
-                       suggestion.display_name.split(',')[0];
+                       (suggestion.display_name.split(',')[0] ?? '');
     onChange(displayText);
     setShowSuggestions(false);
     setSuggestions([]);
@@ -541,8 +544,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({
     return (
       <button
         onClick={onClick}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 
-                 rounded-full text-sm text-gray-600 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-600 transition-colors"
         title="Set your location"
       >
         <span className="material-icons text-base">location_off</span>
@@ -558,14 +560,24 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({
       {/* Main location button - click to edit */}
       <button
         onClick={onEdit || onClick}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 
-                 rounded-full text-sm text-gray-700 transition-colors group cursor-pointer"
-        title={`${location.displayName || displayLocation} — Click to change`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors group cursor-pointer ${
+          location.isApproximate 
+            ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' 
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+        }`}
+        title={location.isApproximate 
+          ? `${displayLocation} (approximate - click to set exact location)` 
+          : `${location.displayName || displayLocation} — Click to change`}
       >
-        <span className="material-icons text-base text-gray-500 group-hover:text-gray-700">
-          {location.isManual ? 'edit_location' : 'my_location'}
+        <span className={`material-icons text-base group-hover:text-gray-700 ${
+          location.isApproximate ? 'text-amber-500' : 'text-gray-500'
+        }`}>
+          {location.isManual ? 'edit_location' : location.isApproximate ? 'location_searching' : 'my_location'}
         </span>
         <span className="max-w-[100px] truncate">{displayLocation}</span>
+        {location.isApproximate && (
+          <span className="text-[10px] text-amber-600">(~)</span>
+        )}
         
         {weather && (
           <>

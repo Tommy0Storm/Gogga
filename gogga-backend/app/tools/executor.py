@@ -17,6 +17,143 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Math Delegation - 235B delegates to 32B for computation
+# =============================================================================
+
+MATH_DELEGATION_PROMPT = """You are a precise mathematical computation assistant. Your ONLY job is to:
+1. Read the math task given to you
+2. Write SymPy Python code to compute it
+3. Execute the code using the python_execute tool
+4. Return the computed result
+
+Available in python_execute:
+- SymPy: Symbol, symbols, solve, diff, integrate, limit, series, Matrix, det, Eq, simplify, expand, factor, dsolve, latex
+- NumPy: np (numpy)
+- Math constants: pi, E, I (imaginary), oo (infinity)
+- Trig: sin, cos, tan, exp, log, sqrt
+
+IMPORTANT: 
+- Always print results clearly with labels
+- Include LaTeX output when relevant: print(f"LaTeX: {latex(result)}")
+- For matrices, show step by step
+- Be precise and thorough
+
+Task to compute:
+"""
+
+
+async def _execute_math_delegation(task: str, context: str = "") -> dict[str, Any]:
+    """
+    Execute math delegation by calling 32B model to write and run SymPy code.
+    
+    This creates an internal chat request to the 32B model with the python_execute
+    tool, executes the tool, and returns the result.
+    """
+    import asyncio
+    import json
+    from app.services.ai_service import get_client
+    from app.services.python_executor import get_python_executor
+    from app.tools.math_definitions import PYTHON_EXECUTOR_TOOL
+    from app.config import settings
+    
+    try:
+        # Build the prompt for 32B
+        full_prompt = MATH_DELEGATION_PROMPT + task
+        if context:
+            full_prompt += f"\n\nContext: {context}"
+        
+        logger.info(f"🧮 MATH DELEGATE: Calling 32B model for computation")
+        
+        # Get Cerebras client and call 32B with python_execute tool
+        client = get_client()
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=settings.MODEL_JIVE,  # 32B thinking model
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a precise math computation assistant. Use the python_execute tool to compute results."
+                },
+                {"role": "user", "content": full_prompt}
+            ],
+            tools=[PYTHON_EXECUTOR_TOOL],
+            temperature=0.6,  # Qwen requires non-zero temp
+            max_tokens=4000,
+        )
+        
+        # Extract the choice from OpenAI-compatible response
+        choice = response.choices[0].message
+        
+        # Check if model returned tool calls
+        if hasattr(choice, 'tool_calls') and choice.tool_calls:
+            tool_call = choice.tool_calls[0]
+            if tool_call.function.name == "python_execute":
+                # Parse the arguments
+                try:
+                    args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    args = {}
+                code = args.get("code", "")
+                description = args.get("description", "Math computation")
+                
+                logger.info(f"🧮 MATH DELEGATE: Executing SymPy code: {code[:100]}...")
+                
+                executor = get_python_executor()
+                result = executor.execute(
+                    code=code,
+                    description=description,
+                    timeout=30  # Longer timeout for complex math
+                )
+                
+                return {
+                    "success": result.success,
+                    "result": result.output,
+                    "output": result.output,
+                    "error": result.error,
+                    "execution_time_ms": result.execution_time_ms,
+                    "display_type": "math_delegate",
+                    "type": "math_delegate",
+                    "delegated_to": "qwen-3-32b",
+                    "code_executed": code,
+                    "task": task,
+                    "calculation_steps": [
+                        f"Task: {task}",
+                        f"Delegated to: Qwen 32B + SymPy",
+                        f"Code executed: {len(code)} chars",
+                        f"Result: {result.output[:200]}..." if len(result.output) > 200 else f"Result: {result.output}",
+                    ]
+                }
+        
+        # If no tool call, model might have answered directly
+        content = choice.content or ""
+        if content:
+            return {
+                "success": True,
+                "result": content,
+                "output": content,
+                "display_type": "math_delegate",
+                "type": "math_delegate",
+                "delegated_to": "qwen-3-32b",
+                "task": task,
+                "note": "Model answered directly without code execution"
+            }
+        
+        return {
+            "success": False,
+            "error": "32B model did not return a computation",
+            "display_type": "alert_cards"
+        }
+        
+    except Exception as e:
+        logger.error(f"Math delegation error: {e}")
+        return {
+            "success": False,
+            "error": f"Math delegation failed: {str(e)}",
+            "display_type": "alert_cards"
+        }
+
+
+# =============================================================================
 # Image Generation - Pollinations.ai + AI Horde (Dual Free Generators)
 # =============================================================================
 
@@ -423,6 +560,54 @@ async def execute_math_tool(
                 }
             }
         
+        elif tool_name == "sequential_think":
+            # Sequential thinking for multi-step reasoning
+            step_number = arguments.get("step_number", 1)
+            thought = arguments.get("thought", "")
+            calculation = arguments.get("calculation", "")
+            intermediate_result = arguments.get("intermediate_result", "")
+            needs_more_steps = arguments.get("needs_more_steps", False)
+            next_step_plan = arguments.get("next_step_plan", "")
+            
+            # Build calculation steps for display
+            calculation_steps = [
+                f"Step {step_number}: {thought}"
+            ]
+            if calculation:
+                calculation_steps.append(f"  Calculation: {calculation}")
+            calculation_steps.append(f"  Result: {intermediate_result}")
+            
+            if needs_more_steps and next_step_plan:
+                calculation_steps.append(f"  Next: {next_step_plan}")
+            
+            return {
+                "success": True,
+                "step_number": step_number,
+                "thought": thought,
+                "calculation": calculation,
+                "intermediate_result": intermediate_result,
+                "needs_more_steps": needs_more_steps,
+                "next_step_plan": next_step_plan,
+                "result": intermediate_result,  # For MathResultDisplay
+                "display_type": "sequential_thinking",
+                "type": "sequential_thinking",
+                "calculation_steps": calculation_steps,
+                "is_final_step": not needs_more_steps,
+            }
+        
+        elif tool_name == "math_delegate":
+            # Delegate math computation to 32B model + SymPy
+            # 235B calls this to offload computation while focusing on interpretation
+            task = arguments.get("task", "")
+            context = arguments.get("context", "")
+            
+            logger.info(f"🧮 MATH DELEGATE: Task = {task[:100]}...")
+            
+            # Call the internal delegation service
+            result = await _execute_math_delegation(task, context)
+            
+            return result
+        
         else:
             return {
                 "success": False,
@@ -476,9 +661,13 @@ async def execute_backend_tool(
     elif tool_name.startswith("math_"):
         return await execute_math_tool(tool_name, arguments, tier)
     
+    # Python executor and sequential thinking - also via MathService
+    elif tool_name in ("python_execute", "sequential_think"):
+        return await execute_math_tool(tool_name, arguments, tier)
+    
     else:
         return {
             "success": False,
-            "error": f"Unknown tool: {tool_name}",
+            "error": f"Unknown tool: {tool_name}. Supported: generate_image, math_*, python_execute, sequential_think",
             "execute_on": "frontend"  # Try frontend execution
         }

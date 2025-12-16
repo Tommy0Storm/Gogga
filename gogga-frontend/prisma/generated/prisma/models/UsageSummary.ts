@@ -316,7 +316,7 @@ export type UsageSummaryWhereInput = {
   imageRequests?: Prisma.IntFilter<"UsageSummary"> | number
   imagesUsed?: Prisma.IntFilter<"UsageSummary"> | number
   updatedAt?: Prisma.DateTimeFilter<"UsageSummary"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  User?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }
 
 export type UsageSummaryOrderByWithRelationInput = {
@@ -333,7 +333,7 @@ export type UsageSummaryOrderByWithRelationInput = {
   imageRequests?: Prisma.SortOrder
   imagesUsed?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  user?: Prisma.UserOrderByWithRelationInput
+  User?: Prisma.UserOrderByWithRelationInput
 }
 
 export type UsageSummaryWhereUniqueInput = Prisma.AtLeast<{
@@ -354,7 +354,7 @@ export type UsageSummaryWhereUniqueInput = Prisma.AtLeast<{
   imageRequests?: Prisma.IntFilter<"UsageSummary"> | number
   imagesUsed?: Prisma.IntFilter<"UsageSummary"> | number
   updatedAt?: Prisma.DateTimeFilter<"UsageSummary"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  User?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }, "id" | "userId_year_month">
 
 export type UsageSummaryOrderByWithAggregationInput = {
@@ -410,7 +410,7 @@ export type UsageSummaryCreateInput = {
   imageRequests?: number
   imagesUsed?: number
   updatedAt?: Date | string
-  user: Prisma.UserCreateNestedOneWithoutUsageSummaryInput
+  User: Prisma.UserCreateNestedOneWithoutUsageSummaryInput
 }
 
 export type UsageSummaryUncheckedCreateInput = {
@@ -442,7 +442,7 @@ export type UsageSummaryUpdateInput = {
   imageRequests?: Prisma.IntFieldUpdateOperationsInput | number
   imagesUsed?: Prisma.IntFieldUpdateOperationsInput | number
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneRequiredWithoutUsageSummaryNestedInput
+  User?: Prisma.UserUpdateOneRequiredWithoutUsageSummaryNestedInput
 }
 
 export type UsageSummaryUncheckedUpdateInput = {
@@ -506,16 +506,6 @@ export type UsageSummaryUncheckedUpdateManyInput = {
   imageRequests?: Prisma.IntFieldUpdateOperationsInput | number
   imagesUsed?: Prisma.IntFieldUpdateOperationsInput | number
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-}
-
-export type UsageSummaryListRelationFilter = {
-  every?: Prisma.UsageSummaryWhereInput
-  some?: Prisma.UsageSummaryWhereInput
-  none?: Prisma.UsageSummaryWhereInput
-}
-
-export type UsageSummaryOrderByRelationAggregateInput = {
-  _count?: Prisma.SortOrder
 }
 
 export type UsageSummaryUserIdYearMonthCompoundUniqueInput = {
@@ -596,6 +586,16 @@ export type UsageSummarySumOrderByAggregateInput = {
   enhanceRequests?: Prisma.SortOrder
   imageRequests?: Prisma.SortOrder
   imagesUsed?: Prisma.SortOrder
+}
+
+export type UsageSummaryListRelationFilter = {
+  every?: Prisma.UsageSummaryWhereInput
+  some?: Prisma.UsageSummaryWhereInput
+  none?: Prisma.UsageSummaryWhereInput
+}
+
+export type UsageSummaryOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type UsageSummaryCreateNestedManyWithoutUserInput = {
@@ -790,7 +790,7 @@ export type UsageSummarySelect<ExtArgs extends runtime.Types.Extensions.Internal
   imageRequests?: boolean
   imagesUsed?: boolean
   updatedAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usageSummary"]>
 
 export type UsageSummarySelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -807,7 +807,7 @@ export type UsageSummarySelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   imageRequests?: boolean
   imagesUsed?: boolean
   updatedAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usageSummary"]>
 
 export type UsageSummarySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -824,7 +824,7 @@ export type UsageSummarySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   imageRequests?: boolean
   imagesUsed?: boolean
   updatedAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usageSummary"]>
 
 export type UsageSummarySelectScalar = {
@@ -845,19 +845,19 @@ export type UsageSummarySelectScalar = {
 
 export type UsageSummaryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "year" | "month" | "totalTokens" | "promptTokens" | "completionTokens" | "totalCostCents" | "chatRequests" | "enhanceRequests" | "imageRequests" | "imagesUsed" | "updatedAt", ExtArgs["result"]["usageSummary"]>
 export type UsageSummaryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 export type UsageSummaryIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 export type UsageSummaryIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 
 export type $UsageSummaryPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "UsageSummary"
   objects: {
-    user: Prisma.$UserPayload<ExtArgs>
+    User: Prisma.$UserPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1267,7 +1267,7 @@ readonly fields: UsageSummaryFieldRefs;
  */
 export interface Prisma__UsageSummaryClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  User<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

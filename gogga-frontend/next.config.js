@@ -56,10 +56,23 @@ const nextConfig = {
   outputFileTracingRoot: __dirname,
   // Image optimization configuration
   images: {
-    // Use default loader for local images
-    domains: ['localhost'], // For local development
-    // Add remote patterns if you need external images
-    remotePatterns: [],
+
+
+
+
+    // Next.js 16: Use remotePatterns instead of deprecated domains
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3000',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**', // Allow any HTTPS domain for external images
+      },
+    ],
     // Disable optimization for data URLs (generated images)
     unoptimized: false,
     // Modern formats with webp first for better compatibility

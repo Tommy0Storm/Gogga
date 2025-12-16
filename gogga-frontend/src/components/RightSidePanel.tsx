@@ -12,10 +12,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Wrench, FileText, Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudFog, Wind, Upload, Trash2 } from 'lucide-react';
+import { X, Wrench, FileText, Cloud, Sun, Moon, CloudRain, CloudSnow, CloudLightning, CloudFog, Wind, Upload, Trash2, Search, Lock, Sparkles, Shield } from 'lucide-react';
 import { useDocumentStore } from '@/lib/documentStore';
 import { useToolShed, ToolDefinition, ForcedTool } from '@/lib/toolshedStore';
 import { useRightPanel } from '@/hooks/useRightPanel';
+import { EmbeddingEngine, cosineSimilarity } from '@/lib/embeddingEngine';
 
 // Weather types
 interface DayForecast {
@@ -71,11 +72,18 @@ function getWeatherDescription(code: number): string {
   return descriptions[code] || 'Unknown';
 }
 
-// Weather icon component
-function WeatherIcon({ code, size = 24, className = '' }: { code: number; size?: number; className?: string }) {
+// Check if it's currently night time (between 6pm and 6am)
+function isNightTime(): boolean {
+  const hour = new Date().getHours();
+  return hour < 6 || hour >= 18;
+}
+
+// Weather icon component with day/night support
+function WeatherIcon({ code, size = 24, className = '', isNight = false }: { code: number; size?: number; className?: string; isNight?: boolean }) {
   const iconProps = { size, className };
   
-  if (code === 0 || code === 1) return <Sun {...iconProps} />;
+  // Clear or mainly clear - show Moon at night
+  if (code === 0 || code === 1) return isNight ? <Moon {...iconProps} /> : <Sun {...iconProps} />;
   if (code >= 2 && code <= 3) return <Cloud {...iconProps} />;
   if (code >= 45 && code <= 48) return <CloudFog {...iconProps} />;
   if (code >= 51 && code <= 67) return <CloudRain {...iconProps} />;
@@ -275,7 +283,7 @@ function DocumentsTabContent({
       {documents.length === 0 ? (
         <div className="text-center text-gray-400 py-6">
           <FileText size={24} className="mx-auto mb-2 opacity-50" />
-          <p className="text-xs">No documents in this session</p>
+          <p className="text-xs">No documents uploaded yet</p>
           <p className="text-xs mt-1">Upload documents for RAG-enhanced responses</p>
         </div>
       ) : (
@@ -376,7 +384,7 @@ function WeatherTabContent({ weather, isLoading, selectedDay, onSelectDay }: Wea
       {/* Main Weather Display (Header Image Area) */}
       <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl p-6 text-center">
         <div className="flex items-center justify-center mb-2">
-          <WeatherIcon code={displayData.weatherCode} size={64} className="text-gray-700" />
+          <WeatherIcon code={displayData.weatherCode} size={64} className="text-gray-700" isNight={selectedDay === 0 && isNightTime()} />
         </div>
         <div className="text-4xl font-bold text-gray-800">
           {Math.round(displayData.temp)}°C
@@ -429,6 +437,371 @@ function WeatherTabContent({ weather, isLoading, selectedDay, onSelectDay }: Wea
   );
 }
 
+// Search result type
+interface SearchResult {
+  docId: number;
+  documentName: string;
+  snippet: string;
+  score: number;
+  chunkIndex: number;
+  matchType: 'keyword' | 'semantic';
+}
+
+// Search Tab Content - Keyword and Semantic search
+interface SearchTabContentProps {
+  documents: import('@/lib/db').Document[];
+  tier: 'free' | 'jive' | 'jigga';
+  isRAGEnabled: boolean;
+}
+
+function SearchTabContent({ documents, tier, isRAGEnabled }: SearchTabContentProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>('keyword');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [embeddingEngine] = useState(() => new EmbeddingEngine());
+  const [isEngineReady, setIsEngineReady] = useState(false);
+  const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
+
+  // Initialize embedding engine for semantic search
+  useEffect(() => {
+    if (tier === 'jigga' && !isEngineReady) {
+      embeddingEngine.init().then(() => {
+        setIsEngineReady(true);
+      }).catch(err => {
+        console.error('[Search] Failed to init embedding engine:', err);
+      });
+    }
+  }, [tier, embeddingEngine, isEngineReady]);
+
+  // Perform keyword search
+  const keywordSearch = useCallback((query: string): SearchResult[] => {
+    if (!query.trim()) return [];
+    
+    const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    if (tokens.length === 0) return [];
+
+    const results: SearchResult[] = [];
+
+    for (const doc of documents) {
+      if (!doc.id || !doc.chunks) continue;
+
+      for (let i = 0; i < doc.chunks.length; i++) {
+        const chunk = doc.chunks[i];
+        if (!chunk) continue;
+        const chunkLower = chunk.toLowerCase();
+        
+        // Count keyword matches
+        let matchCount = 0;
+        for (const token of tokens) {
+          if (chunkLower.includes(token)) {
+            matchCount++;
+          }
+        }
+
+        if (matchCount > 0) {
+          // Find best snippet around first match
+          const firstToken = tokens.find(t => chunkLower.includes(t)) || tokens[0];
+          if (!firstToken) continue;
+          const matchIndex = chunkLower.indexOf(firstToken);
+          const snippetStart = Math.max(0, matchIndex - 50);
+          const snippetEnd = Math.min(chunk.length, matchIndex + 150);
+          const snippet = (snippetStart > 0 ? '...' : '') + 
+            chunk.slice(snippetStart, snippetEnd) + 
+            (snippetEnd < chunk.length ? '...' : '');
+
+          results.push({
+            docId: doc.id,
+            documentName: doc.filename,
+            snippet,
+            score: matchCount / tokens.length,
+            chunkIndex: i,
+            matchType: 'keyword',
+          });
+        }
+      }
+    }
+
+    // Sort by score descending and dedupe by docId+chunkIndex
+    const seen = new Set<string>();
+    return results
+      .sort((a, b) => b.score - a.score)
+      .filter(r => {
+        const key = `${r.docId}-${r.chunkIndex}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 20);
+  }, [documents]);
+
+  // Perform semantic search
+  const semanticSearch = useCallback(async (query: string): Promise<SearchResult[]> => {
+    if (!query.trim() || !isEngineReady) return [];
+
+    try {
+      // Generate query embedding
+      const queryEmbedding = await embeddingEngine.embedQuery(query);
+
+      const results: SearchResult[] = [];
+
+      for (const doc of documents) {
+        if (!doc.id || !doc.chunks) continue;
+
+        // Generate embeddings for document chunks
+        const docEmbeddings = await embeddingEngine.generateDocumentEmbeddings(doc);
+        if (!docEmbeddings.vectors) continue;
+
+        for (let i = 0; i < docEmbeddings.vectors.length; i++) {
+          const vector = docEmbeddings.vectors[i];
+          if (!vector) continue;
+          const score = cosineSimilarity(queryEmbedding, vector);
+          
+          if (score >= 0.3) { // Threshold for relevance
+            const chunk = docEmbeddings.chunks[i] ?? '';
+            const snippet = chunk.length > 200 
+              ? chunk.slice(0, 200) + '...' 
+              : chunk;
+
+            results.push({
+              docId: doc.id,
+              documentName: doc.filename,
+              snippet,
+              score,
+              chunkIndex: i,
+              matchType: 'semantic',
+            });
+          }
+        }
+      }
+
+      // Sort by score descending
+      return results
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20);
+    } catch (error) {
+      console.error('[Search] Semantic search error:', error);
+      return [];
+    }
+  }, [documents, embeddingEngine, isEngineReady]);
+
+  // Handle search
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) {
+      setResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      let searchResults: SearchResult[];
+      
+      if (searchMode === 'semantic' && tier === 'jigga' && isEngineReady) {
+        searchResults = await semanticSearch(searchQuery);
+      } else {
+        searchResults = keywordSearch(searchQuery);
+      }
+
+      setResults(searchResults);
+    } catch (error) {
+      console.error('[Search] Error:', error);
+      setResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchQuery, searchMode, tier, isEngineReady, keywordSearch, semanticSearch]);
+
+  // Toggle result expansion
+  const toggleExpanded = (index: number) => {
+    setExpandedResults(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  // FREE tier - show upgrade message
+  if (!isRAGEnabled) {
+    return (
+      <div className="text-center text-gray-500 py-8">
+        <Search size={32} className="mx-auto mb-2 opacity-50" />
+        <p className="text-sm">Document Search</p>
+        <p className="text-xs mt-2">Upgrade to JIVE or JIGGA for document search</p>
+        <div className="mt-4 p-3 bg-gray-100 rounded-lg text-xs text-gray-600">
+          <p><strong>JIVE:</strong> Keyword search</p>
+          <p><strong>JIGGA:</strong> Semantic AI search</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No documents
+  if (documents.length === 0) {
+    return (
+      <div className="text-center text-gray-500 py-8">
+        <Search size={32} className="mx-auto mb-2 opacity-50" />
+        <p className="text-sm">No documents to search</p>
+        <p className="text-xs mt-2">Upload documents in the Docs tab first</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Search Mode Toggle - JIVE gets teaser, JIGGA gets full toggle */}
+      {(tier === 'jive' || tier === 'jigga') && (
+        <div className="flex rounded-lg bg-gray-100 p-1">
+          <button
+            onClick={() => setSearchMode('keyword')}
+            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+              searchMode === 'keyword'
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Keyword
+          </button>
+          {tier === 'jigga' ? (
+            <button
+              onClick={() => setSearchMode('semantic')}
+              className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+                searchMode === 'semantic'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Semantic AI
+            </button>
+          ) : (
+            /* JIVE tier: Show locked semantic button as tease */
+            <button
+              disabled
+              className="flex-1 py-1.5 px-3 rounded-md text-xs font-medium text-gray-400 cursor-not-allowed flex items-center justify-center gap-1"
+              title="Upgrade to JIGGA for semantic search"
+            >
+              <Lock size={10} />
+              Semantic AI
+            </button>
+          )}
+        </div>
+      )}
+      
+      {/* JIVE tier semantic search tease */}
+      {tier === 'jive' && (
+        <div className="p-2.5 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Sparkles size={14} className="text-purple-500 mt-0.5 flex-shrink-0" />
+            <div className="text-xs">
+              <p className="text-purple-700 font-medium">Try: &quot;What are my rights?&quot;</p>
+              <p className="text-purple-600 mt-0.5">JIGGA&apos;s semantic search finds meaning, not just words</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Input */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          placeholder={searchMode === 'semantic' ? 'Ask a question...' : 'Search keywords...'}
+          className="w-full px-4 py-2.5 pr-10 rounded-lg border border-gray-200 focus:border-gray-400 focus:ring-1 focus:ring-gray-400 outline-none text-sm"
+        />
+        <button
+          onClick={handleSearch}
+          disabled={isSearching || !searchQuery.trim()}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+        >
+          {isSearching ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
+          ) : (
+            <Search size={16} />
+          )}
+        </button>
+      </div>
+
+      {/* Search Mode Info */}
+      <div className="text-xs text-gray-400">
+        {tier === 'jive' && 'Keyword search only'}
+        {tier === 'jigga' && searchMode === 'keyword' && 'Exact keyword matching'}
+        {tier === 'jigga' && searchMode === 'semantic' && (
+          isEngineReady ? 'AI-powered similarity search' : 'Loading AI model...'
+        )}
+      </div>
+      
+      {/* JIGGA Authoritative Mode badge - tease for JIVE */}
+      {tier === 'jive' && (
+        <div className="p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Shield size={14} className="text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs">
+              <p className="text-amber-700 font-medium">Authoritative Mode</p>
+              <p className="text-amber-600 mt-0.5">JIGGA quotes directly from your docs - no hallucinations</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Results */}
+      {results.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-500 font-medium">
+            {results.length} result{results.length !== 1 ? 's' : ''} found
+          </div>
+          
+          {results.map((result, index) => {
+            const isExpanded = expandedResults.has(index);
+            return (
+              <div
+                key={`${result.docId}-${result.chunkIndex}-${index}`}
+                className="p-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition-colors cursor-pointer"
+                onClick={() => toggleExpanded(index)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm text-gray-800 truncate">
+                        {result.documentName}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        result.matchType === 'semantic' 
+                          ? 'bg-purple-100 text-purple-700' 
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {result.matchType === 'semantic' ? 'AI' : 'KW'}
+                      </span>
+                    </div>
+                    <div className={`text-xs text-gray-600 mt-1 ${isExpanded ? '' : 'line-clamp-2'}`}>
+                      {result.snippet}
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1">
+                      Chunk {result.chunkIndex + 1} • Score: {(result.score * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* No results message */}
+      {searchQuery && !isSearching && results.length === 0 && (
+        <div className="text-center text-gray-400 py-6">
+          <p className="text-sm">No matches found</p>
+          <p className="text-xs mt-1">Try different keywords or a broader query</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Vertical Tab Button - Stacked with vertical text
 interface VerticalTabProps {
   icon: React.ReactNode;
@@ -468,6 +841,7 @@ export function RightSidePanel() {
   // Document store for synced document state
   const {
     documents,
+    allDocuments,
     selectedDocIds,
     isLoading: isLoadingDocs,
     isEmbedding,
@@ -480,6 +854,9 @@ export function RightSidePanel() {
     onRemoveDocument,
   } = useDocumentStore();
   
+  // Use allDocuments for display (shows full document pool), session-scoped for RAG context indicator
+  const displayDocuments = allDocuments.length > 0 ? allDocuments : documents;
+  
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
   const [selectedDay, setSelectedDay] = useState(0);
@@ -488,10 +865,10 @@ export function RightSidePanel() {
   const fetchWeather = useCallback(async () => {
     setIsLoadingWeather(true);
     try {
-      // Get user location or use Cape Town as default
-      let lat = -33.9249;
-      let lon = 18.4241;
-      let locationName = 'Cape Town';
+      // Get user location or use Pretoria as default
+      let lat = -25.7479;
+      let lon = 28.2293;
+      let locationName = 'Pretoria';
 
       if ('geolocation' in navigator) {
         try {
@@ -500,7 +877,25 @@ export function RightSidePanel() {
           });
           lat = position.coords.latitude;
           lon = position.coords.longitude;
-          locationName = 'Your Location';
+          
+          // Reverse geocode to get city name using Open-Meteo geocoding
+          try {
+            const geoResponse = await fetch(
+              `https://geocoding-api.open-meteo.com/v1/search?name=&latitude=${lat}&longitude=${lon}&count=1&format=json`
+            );
+            // Fallback: Use Nominatim for reverse geocoding (free, no key)
+            const nominatimResponse = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+            );
+            const nominatimData = await nominatimResponse.json();
+            locationName = nominatimData.address?.city || 
+                          nominatimData.address?.town ||
+                          nominatimData.address?.suburb ||
+                          nominatimData.address?.municipality ||
+                          'Your Location';
+          } catch {
+            locationName = 'Your Location';
+          }
         } catch {
           // Use default location
         }
@@ -605,6 +1000,18 @@ export function RightSidePanel() {
             }
           }}
         />
+        <VerticalTab
+          icon={<Search size={18} />}
+          label="Search"
+          isActive={isOpen && activeTab === 'search'}
+          onClick={() => {
+            if (isOpen && activeTab === 'search') {
+              closePanel();
+            } else {
+              setActiveTab('search');
+            }
+          }}
+        />
       </div>
 
       {/* Backdrop */}
@@ -627,6 +1034,7 @@ export function RightSidePanel() {
             {activeTab === 'tools' && 'Tool Shed'}
             {activeTab === 'documents' && 'Documents'}
             {activeTab === 'weather' && 'Weather'}
+            {activeTab === 'search' && 'Search'}
           </h2>
           <button
             onClick={closePanel}
@@ -649,7 +1057,7 @@ export function RightSidePanel() {
           )}
           {activeTab === 'documents' && (
             <DocumentsTabContent
-              documents={documents}
+              documents={displayDocuments}
               selectedDocIds={selectedDocIds}
               isLoading={isLoadingDocs}
               isEmbedding={isEmbedding}
@@ -672,6 +1080,13 @@ export function RightSidePanel() {
               isLoading={isLoadingWeather}
               selectedDay={selectedDay}
               onSelectDay={setSelectedDay}
+            />
+          )}
+          {activeTab === 'search' && (
+            <SearchTabContent
+              documents={displayDocuments}
+              tier={tier}
+              isRAGEnabled={isRAGEnabled}
             />
           )}
         </div>

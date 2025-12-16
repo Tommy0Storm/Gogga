@@ -18,11 +18,11 @@ COPY --chown=node:node . .
 # Generate Prisma client
 RUN ./node_modules/.bin/prisma generate
 
-# Copy SSL certificates
+# Copy SSL certificates (optional, for HTTPS mode if needed)
 COPY --chown=node:node certs/ ./certs/
 
 EXPOSE 3000
 
 # Run Prisma generate using local node_modules version (not npx which downloads latest)
-# Then start the dev server
-CMD ["sh", "-c", "./node_modules/.bin/prisma generate && npm run dev"]
+# Then start the dev server with HTTP (proxy handles external connections)
+CMD ["sh", "-c", "./node_modules/.bin/prisma generate && npm run dev:http"]

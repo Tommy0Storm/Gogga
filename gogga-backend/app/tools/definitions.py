@@ -2,14 +2,14 @@
 GOGGA Tool Definitions
 
 OpenAI-compatible tool schemas for Cerebras API.
-These tools are called by the AI and executed on the frontend.
+These tools are called by the AI and executed on the frontend or backend.
 
 Tool Flow:
 1. AI receives user message + tool definitions
 2. AI decides to call a tool (returns tool_calls in response)
-3. Backend returns tool_calls to frontend
-4. Frontend executes the tool (e.g., saves to IndexedDB)
-5. Frontend sends tool result back to continue conversation
+3. Backend executes server-side tools (search, math) OR returns to frontend
+4. Frontend executes client-side tools (memory, image, charts)
+5. Tool result injected back into conversation
 """
 
 from typing import TypedDict, Any
@@ -25,6 +25,17 @@ from app.tools.math_definitions import (
     FREE_MATH_TOOLS,
     JIVE_MATH_TOOLS,
     JIGGA_MATH_TOOLS,
+    JIGGA_235B_MATH_TOOLS,  # For 235B model with math_delegate
+)
+
+# Import search tool definitions
+from app.tools.search_definitions import (
+    SEARCH_TOOL,
+    LEGAL_SEARCH_TOOL,
+    SHOPPING_SEARCH_TOOL,
+    PLACES_SEARCH_TOOL,
+    SEARCH_TOOLS,
+    get_search_tools,
 )
 
 
@@ -311,15 +322,31 @@ UNIVERSAL_TOOLS: list[ToolDefinition] = [
     CREATE_CHART_TOOL,
 ]
 
-# All tools combined (non-math)
+# All tools combined (non-math, non-search)
 GOGGA_TOOLS: list[ToolDefinition] = MEMORY_TOOLS + UNIVERSAL_TOOLS
 
-# All tools including math
-ALL_TOOLS: list[ToolDefinition] = GOGGA_TOOLS + MATH_TOOLS
+# All tools including math and search
+ALL_TOOLS: list[ToolDefinition] = GOGGA_TOOLS + MATH_TOOLS + SEARCH_TOOLS
 
 # Tool name to definition mapping (includes all tools)
 TOOL_MAP: dict[str, ToolDefinition] = {
     tool["function"]["name"]: tool for tool in ALL_TOOLS
+}
+
+# Server-side tools (executed on backend, not frontend)
+# These tools require the AI to PAUSE and WAIT for results before continuing
+SERVER_SIDE_TOOLS: set[str] = {
+    # Search tools - require server-side API calls
+    "web_search",
+    "legal_search", 
+    "shopping_search",
+    "places_search",
+    # Math tools are also server-side
+    "math_statistics",
+    "math_financial",
+    "math_sa_tax",
+    "math_fraud_detection",
+    "math_delegate",
 }
 
 
@@ -328,22 +355,39 @@ def get_tool_by_name(name: str) -> ToolDefinition | None:
     return TOOL_MAP.get(name)
 
 
-def get_tools_for_tier(tier: str) -> list[ToolDefinition]:
+def is_server_side_tool(tool_name: str) -> bool:
+    """Check if a tool should be executed on the server."""
+    return tool_name in SERVER_SIDE_TOOLS
+
+
+def get_tools_for_tier(tier: str, model: str = "") -> list[ToolDefinition]:
     """
-    Get tools available for a specific tier.
+    Get tools available for a specific tier and model.
     
-    - FREE: Universal tools (image, chart) + basic math (tax, conversion)
-    - JIVE: Universal + stats, financial, probability, tax, conversion
-    - JIGGA: All tools (memory + image + charts + all math including fraud)
+    - FREE: Universal tools (image, chart) + basic math + basic search
+    - JIVE: Universal + math + all search tools
+    - JIGGA (32B): All tools (memory + image + charts + all math + all search)
+    - JIGGA (235B): All JIGGA tools + math_delegate for delegating to 32B
+    
+    Args:
+        tier: User tier (free, jive, jigga)
+        model: Model name - if contains "235" uses 235B tool set
     """
     tier_lower = tier.lower() if tier else ""
     
     if tier_lower == "jigga":
-        return GOGGA_TOOLS + JIGGA_MATH_TOOLS  # All tools including memory + all math
+        # Check if using 235B model (has math_delegate for delegation)
+        search_tools = get_search_tools(tier_lower)
+        if "235" in model:
+            return GOGGA_TOOLS + JIGGA_235B_MATH_TOOLS + search_tools
+        return GOGGA_TOOLS + JIGGA_MATH_TOOLS + search_tools
     elif tier_lower == "jive":
-        return UNIVERSAL_TOOLS + JIVE_MATH_TOOLS  # Image + Charts + most math
+        search_tools = get_search_tools(tier_lower)
+        return UNIVERSAL_TOOLS + JIVE_MATH_TOOLS + search_tools
     elif tier_lower == "free":
-        return UNIVERSAL_TOOLS + FREE_MATH_TOOLS  # Image + Charts + basic math
+        # FREE tier gets basic search only
+        search_tools = get_search_tools(tier_lower)
+        return UNIVERSAL_TOOLS + FREE_MATH_TOOLS + search_tools
     return []
 
 

@@ -123,6 +123,41 @@ export default function ServicesPage() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [logContent, setLogContent] = useState<string>('');
   const [logLoading, setLogLoading] = useState(false);
+  
+  // OpenRouter Fallback toggle state
+  const [openRouterFallback, setOpenRouterFallback] = useState(false);
+  const [fallbackLoading, setFallbackLoading] = useState(false);
+
+  // Fetch OpenRouter fallback status
+  const fetchFallbackStatus = useCallback(async () => {
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const res = await fetch(`${backendUrl}/api/v1/admin/openrouter-fallback`);
+      const data = await res.json();
+      setOpenRouterFallback(data.enabled);
+    } catch (error) {
+      console.error('Failed to fetch fallback status:', error);
+    }
+  }, []);
+
+  // Toggle OpenRouter fallback
+  const toggleFallback = async () => {
+    setFallbackLoading(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const res = await fetch(`${backendUrl}/api/v1/admin/openrouter-fallback?enabled=${!openRouterFallback}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOpenRouterFallback(data.enabled);
+      }
+    } catch (error) {
+      console.error('Failed to toggle fallback:', error);
+    } finally {
+      setFallbackLoading(false);
+    }
+  };
 
   const fetchServices = useCallback(async () => {
     try {
@@ -167,10 +202,11 @@ export default function ServicesPage() {
 
   useEffect(() => {
     fetchServices();
+    fetchFallbackStatus(); // Fetch fallback status on mount
     // Auto-refresh every 15 seconds
     const interval = setInterval(fetchServices, 15000);
     return () => clearInterval(interval);
-  }, [fetchServices]);
+  }, [fetchServices, fetchFallbackStatus]);
 
   // Fetch service admins
   const fetchServiceAdmins = useCallback(async () => {
@@ -367,6 +403,40 @@ export default function ServicesPage() {
 
   return (
     <div className="space-y-6">
+      {/* OpenRouter Fallback Toggle - Testing Mode */}
+      <div className={`admin-card border-2 ${openRouterFallback ? 'border-yellow-500 bg-yellow-500/5' : 'border-[var(--admin-border)]'}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-[var(--admin-text)] flex items-center gap-2">
+              🔄 OpenRouter Fallback Mode
+              {openRouterFallback && (
+                <span className="text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-full font-bold">
+                  ACTIVE
+                </span>
+              )}
+            </h3>
+            <p className="text-sm text-[var(--admin-text-secondary)] mt-1">
+              {openRouterFallback 
+                ? 'JIVE/JIGGA tiers are routing to OpenRouter (Qwen 235B) instead of Cerebras'
+                : 'JIVE/JIGGA tiers are using Cerebras (normal operation)'}
+            </p>
+          </div>
+          <button
+            onClick={toggleFallback}
+            disabled={fallbackLoading}
+            className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+              openRouterFallback ? 'bg-yellow-500' : 'bg-[var(--admin-surface-2)]'
+            } ${fallbackLoading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+          >
+            <span
+              className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                openRouterFallback ? 'translate-x-7' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

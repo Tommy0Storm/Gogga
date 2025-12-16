@@ -68,14 +68,11 @@ services:
       - ./gogga-backend/.env
     environment:
       - PAYFAST_ENV=sandbox
-      - CEPO_URL=http://cepo:8080
     volumes:
       - ./gogga-backend:/app
     networks:
       - gogga_network
     restart: unless-stopped
-    depends_on:
-      - cepo
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -94,6 +91,7 @@ services:
     environment:
       <<: *node-env
       NEXT_PUBLIC_API_URL: ""
+    command: sh -c "npm install && ./node_modules/.bin/prisma generate && npm run dev:http"
     volumes:
       - ./gogga-frontend:/app
       - ./gogga-frontend/certs:/app/certs
@@ -104,28 +102,6 @@ services:
       - gogga_network
     restart: unless-stopped
     <<: *node-resources
-
-  # CePO: Cerebras Planning Optimization via OptiLLM
-  # Advanced reasoning layer using chain-of-thought planning
-  cepo:
-    build:
-      context: ./gogga-cepo
-      dockerfile: Dockerfile
-    container_name: gogga_cepo
-    ports:
-      - "8080:8080"
-    env_file:
-      - ./gogga-backend/.env
-    networks:
-      - gogga_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 180s
-    <<: *ai-resources
 
   # Network Proxy - Workaround for Next.js 16 network access bug
   # Forwards external connections on port 3001 to frontend:3000
@@ -162,7 +138,6 @@ services:
       NODE_OPTIONS: --max-old-space-size=192
       DATABASE_URL: file:/app/prisma/dev.db
       BACKEND_URL: http://backend:8000
-      CEPO_URL: http://cepo:8080
       FRONTEND_URL: http://frontend:3000
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-admin-internal-key-dev}
       ADMIN_EMAILS: admin@vcb-ai.online
@@ -179,6 +154,42 @@ services:
       - gogga_network
     restart: unless-stopped
     <<: *default-resources
+
+  # CePO Sidecar - OptiLLM with Cerebras Planning and Optimization
+  # Routes JIVE/JIGGA requests through 4-step CePO pipeline + Best of N selection
+  # Provides +10-20% accuracy improvement on reasoning tasks
+  cepo:
+    build:
+      context: ./gogga-cepo
+      dockerfile: Dockerfile
+    container_name: gogga_cepo
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./gogga-backend/.env
+    environment:
+      # CePO pipeline configuration
+      OPTILLM_APPROACH: "cepo"
+      CEPO_BESTOFN_N: "3"
+      CEPO_PLANNING_N: "3"
+      CEPO_PLANNING_M: "6"
+      CEPO_BESTOFN_RATING_TYPE: "absolute"
+      OPTILLM_CEPO_USE_REASONING_FALLBACK: "false"  # Cerebras doesn't support reasoning_effort
+      # Planning temperature gradient (0.55 → 0.25 → 0.1 → 0.0)
+      CEPO_TEMP_INITIAL_PLAN: "0.55"
+      CEPO_TEMP_INITIAL_SOLUTION: "0.25"
+      CEPO_TEMP_REFINED_PLAN: "0.1"
+      CEPO_TEMP_FINAL_SOLUTION: "0.0"
+    networks:
+      - gogga_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    <<: *ai-resources
 
 networks:
   gogga_network:

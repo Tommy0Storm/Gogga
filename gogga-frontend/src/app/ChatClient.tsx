@@ -76,6 +76,8 @@ import { useToolShed } from '@/lib/toolshedStore';
 import { useDocumentStore } from '@/lib/documentStore';
 import { RightSidePanel } from '@/components/RightSidePanel';
 import { ExportModal, ExportButton } from '@/components/ExportModal';
+import { useGoggaSmart } from '@/hooks/useGoggaSmart';
+import { GoggaSmartButton, GoggaSmartModal, FeedbackButtons } from '@/components/GoggaSmartUI';
 
 // Extended message with image and thinking support
 interface ChatMessage extends Message {
@@ -227,11 +229,33 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     getAIContext: getBuddyContext,
   } = useBuddySystem();
 
+  // GoggaSmart hook (self-improving AI learning system)
+  const {
+    isEnabled: isGoggaSmartEnabled,
+    isLoading: goggaSmartLoading,
+    skills: goggaSmartSkills,
+    stats: goggaSmartStats,
+    promptContext: goggaSmartPrompt,
+    applyFeedback: applyGoggaSmartFeedback,
+    resetSkillbook: resetGoggaSmart,
+    removeSkill: removeGoggaSmartSkill,
+    getUsedSkillIds,
+    setUsedSkillIds,
+  } = useGoggaSmart({ tier });
+
+  // State for GoggaSmart modal
+  const [showGoggaSmartModal, setShowGoggaSmartModal] = useState(false);
+
   // ToolShed hook (tool forcing for JIVE/JIGGA)
   const { forcedTool, fetchTools, clearForcedTool } = useToolShed();
 
   // Document store sync (for RightSidePanel)
-  const documentStore = useDocumentStore();
+  // Use selectors to get stable function references
+  const syncDocumentState = useDocumentStore((state) => state.syncState);
+  const setUploadHandler = useDocumentStore((state) => state.setUploadHandler);
+  const setRemoveHandler = useDocumentStore((state) => state.setRemoveHandler);
+  const setSelectHandler = useDocumentStore((state) => state.setSelectHandler);
+  const setLoadAllHandler = useDocumentStore((state) => state.setLoadAllHandler);
 
   // Fetch tools when tier changes or on mount for paid tiers
   useEffect(() => {
@@ -242,7 +266,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
 
   // Sync RAG state with document store for RightSidePanel
   useEffect(() => {
-    documentStore.syncState({
+    syncDocumentState({
       documents,
       selectedDocIds,
       allDocuments,
@@ -254,28 +278,28 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       canUpload,
       maxDocsPerSession: getMaxDocsPerSession(),
     });
-  }, [documents, selectedDocIds, allDocuments, ragLoading, isEmbedding, storageUsage, tier, isRAGEnabled, canUpload, getMaxDocsPerSession]);
+  }, [syncDocumentState, documents, selectedDocIds, allDocuments, ragLoading, isEmbedding, storageUsage, tier, isRAGEnabled, canUpload, getMaxDocsPerSession]);
 
   // Set up action handlers for document store
   useEffect(() => {
-    documentStore.setUploadHandler(uploadDocument);
-    documentStore.setRemoveHandler(removeDocument);
-    documentStore.setSelectHandler(selectDocuments);
-    documentStore.setLoadAllHandler(loadAllDocuments);
+    setUploadHandler(uploadDocument);
+    setRemoveHandler(removeDocument);
+    setSelectHandler(selectDocuments);
+    setLoadAllHandler(loadAllDocuments);
 
     return () => {
       // Cleanup handlers on unmount
-      documentStore.setUploadHandler(null);
-      documentStore.setRemoveHandler(null);
-      documentStore.setSelectHandler(null);
-      documentStore.setLoadAllHandler(null);
+      setUploadHandler(null);
+      setRemoveHandler(null);
+      setSelectHandler(null);
+      setLoadAllHandler(null);
       // Synergy: Abort any in-flight streaming request to save API costs
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
     };
-  }, [uploadDocument, removeDocument, selectDocuments, loadAllDocuments]);
+  }, [setUploadHandler, setRemoveHandler, setSelectHandler, setLoadAllHandler, uploadDocument, removeDocument, selectDocuments, loadAllDocuments]);
 
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
@@ -415,14 +439,8 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     const hasDocuments = documents.length > 0 || selectedDocIds.length > 0;
 
     if (isRAGEnabled && hasDocuments && useRAGContext) {
-      const rawContext = await getContext(text);
-      if (rawContext) {
-        const modeInstruction =
-          ragMode === 'authoritative'
-            ? 'IMPORTANT: Only quote directly from the provided documents. Do not synthesize or interpret beyond what is explicitly stated.'
-            : 'Analyze and synthesize information from the provided documents to give a comprehensive answer.';
-        ragContext = `${modeInstruction}\n\n${rawContext}`;
-      }
+      // Pass authoritative mode to getContext - formatting is handled in ragManager
+      ragContext = await getContext(text, { authoritative: ragMode === 'authoritative' });
     }
 
     // Create user message with language detection
@@ -478,6 +496,15 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           buddyContext.slice(0, 200) + '...'
         );
         messageToSend = `USER CONTEXT:\n${buddyContext}\n\n---\n\n${messageToSend}`;
+      }
+
+      // Add GoggaSmart context (learned skills and preferences)
+      if (goggaSmartPrompt) {
+        console.log(
+          '[GOGGA] GoggaSmart context found:',
+          goggaSmartPrompt.slice(0, 200) + '...'
+        );
+        messageToSend = `${goggaSmartPrompt}\n\n---\n\n${messageToSend}`;
       }
 
       // Add Long-Term Memory context (persistent user info)
@@ -615,6 +642,10 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                     tier: eventData.tier,
                     layer: eventData.layer,
                     model: eventData.model,
+                    // Capture detected_language from initial meta event
+                    ...(eventData.detected_language
+                      ? { detected_language: eventData.detected_language }
+                      : {}),
                   };
                   break;
 
@@ -694,6 +725,10 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                     math_tool_count: eventData.math_tool_count,
                     cost_zar: eventData.cost,
                     tokens: eventData.tokens,
+                    // Capture detected_language from SSE stream
+                    ...(eventData.detected_language
+                      ? { detected_language: eventData.detected_language }
+                      : {}),
                   };
                   // Capture any tool calls (charts, images) for frontend execution
                   if (
@@ -854,17 +889,9 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             ? { math_tool_count: data.meta.math_tool_count as number }
             : {}),
         },
-        // Use server-detected language if available (more accurate than client-side detection)
-        ...(() => {
-          const detectedLang = data.meta?.detected_language as { code?: string; name?: string; confidence?: number; is_hybrid?: boolean; family?: string } | undefined;
-          if (detectedLang?.code && detectedLang.code !== 'en') {
-            return {
-              detectedLanguage: detectedLang.code as SALanguage,
-              languageConfidence: detectedLang.confidence ?? 0,
-            };
-          }
-          return {};
-        })(),
+        // NOTE: Server detected_language is for the USER's input, not the response
+        // Don't apply it to assistant message - the badge would be misleading
+        // The server uses this to know what language to respond in, not to label the response
       };
 
       // Handle tool calls if present (JIGGA tier only)
@@ -997,6 +1024,13 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             ? { math_tool_count: data.meta.math_tool_count as number }
             : {}),
       });
+
+      // Save bot message to persistence
+      if (isPersistenceEnabled) {
+        await addMessage(botMsg);
+      } else {
+        setFreeMessages((prev) => [...prev, botMsg]);
+      }
     } catch (error: any) {
       // Synergy: Gracefully handle abort (user navigated away)
       if (error?.name === 'AbortError') {
@@ -1681,6 +1715,16 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
               <span>{TIER_DISPLAY[tier].name}</span>
             </div>
           )}
+
+          {/* GoggaSmart Button (JIVE/JIGGA only) */}
+          {isGoggaSmartEnabled && (
+            <GoggaSmartButton
+              isEnabled={isGoggaSmartEnabled}
+              stats={goggaSmartStats}
+              onClick={() => setShowGoggaSmartModal(true)}
+            />
+          )}
+
           {/* Report Issue button (testers only) */}
           {isTester && (
             <button
@@ -1959,16 +2003,16 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                   >
                     {renderMessageContent(m, i)}
 
-                    {/* Language Badge for user messages (shows detected SA language) */}
+                    {/* Language Badge for user messages (always show to indicate detection) */}
                     {m.role === 'user' &&
-                      (m.detectedLanguage as SALanguage | undefined) &&
-                      (m.detectedLanguage as SALanguage | undefined) !== 'en' && (
+                      (m.detectedLanguage as SALanguage | undefined) && (
                       <div className="mt-1 flex justify-end">
                         <LanguageBadge
                           language={m.detectedLanguage as SALanguage}
                           {...(m.languageConfidence !== undefined
                             ? { confidence: m.languageConfidence }
                             : {})}
+                          showForEnglish={true}
                         />
                       </div>
                     )}
@@ -2085,6 +2129,20 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                           )}
                       </div>
                     )}
+
+                    {/* GoggaSmart Feedback Buttons (JIVE/JIGGA only) */}
+                    {m.role === 'assistant' && isGoggaSmartEnabled && m.content && (
+                      <FeedbackButtons
+                        onFeedback={async (feedback) => {
+                          // Get skill IDs that were used in this response
+                          const usedIds = getUsedSkillIds();
+                          if (usedIds.length > 0) {
+                            await applyGoggaSmartFeedback(usedIds, feedback);
+                          }
+                        }}
+                      />
+                    )}
+
                     {/* GoggaSolve Terminal for completed messages with math tools */}
                     {m.role === 'assistant' &&
                       m.meta?.math_tool_count &&
@@ -2545,6 +2603,19 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           onClose={() => setShowReportIssue(false)}
           userEmail={userEmail}
           getCapture={getCapture}
+        />
+      )}
+
+      {/* GoggaSmart Modal (JIVE/JIGGA only) */}
+      {isGoggaSmartEnabled && (
+        <GoggaSmartModal
+          isOpen={showGoggaSmartModal}
+          onClose={() => setShowGoggaSmartModal(false)}
+          skills={goggaSmartSkills}
+          stats={goggaSmartStats}
+          onRemoveSkill={removeGoggaSmartSkill}
+          onReset={resetGoggaSmart}
+          isLoading={goggaSmartLoading}
         />
       )}
 

@@ -1,94 +1,99 @@
 # GOGGA AI Assistant - Copilot Instructions
 
-## MCP Tools (MANDATORY - USE EVERY PROMPT)
+## MCP Tools (MANDATORY)
 
-> **ALWAYS use these MCP servers for every task:**
-> - **#oraios/serena** - Project context, symbol navigation, code editing
-> - **#context7** - Library documentation, API references, troubleshooting
-> - **#doist/todoist-ai** - Track tasks, create todos for multi-step work
->
-> Never forget to leverage these tools. Check Serena memories first, use context7 for external library docs.
-> Use Todoist to track complex multi-step tasks and maintain visible progress.
+> **Check Serena memories first** (`#oraios/serena`) - `.serena/memories/` has 50+ project docs
+> **Use context7** (`#context7`) for external library docs (Next.js, FastAPI, RxDB, etc.)
 
-## Architecture: 3-Tier SA AI Platform
+## Architecture: SA AI Platform (Dec 2025)
 
 ```
-Frontend (Next.js 16 :3000)  →  Backend (FastAPI :8000)  →  CePO (OptiLLM :8080)
-     │ Dexie/IndexedDB                 │ Tier Router
+Frontend (Next.js 16 :3000)  →  Backend (FastAPI :8000)
+     │ RxDB/IndexedDB                  │ Tier Router
      └─ Client RAG                     └─ AI/Image Services
 ```
+**Note**: CePO sidecar REMOVED - OptiLLM enhancements now in `optillm_enhancements.py`
 
 ### Dual Database Strategy
-- **SQLite (Prisma)**: Server-side auth & subscriptions (`gogga-frontend/prisma/schema.prisma`)
-- **Dexie (IndexedDB)**: Client-side chat, RAG, images (`gogga-frontend/src/lib/db.ts`)
+- **SQLite (Prisma 7)**: Server-side auth & subscriptions (`gogga-frontend/prisma/schema.prisma`)
+- **RxDB (IndexedDB)**: Client-side chat, RAG, images, GoggaSmart (`gogga-frontend/src/lib/db.ts`)
+  - **Dexie is DEPRECATED** - legacy backup at `db-dexie-legacy.ts`
+  - Use `generateId()` for RxDB primary keys
+  - All Date fields must use `.toISOString()` (RxDB requires JSON-serializable data)
 
 ### Tier Routing (`gogga-backend/app/core/router.py`)
-| Tier | Text Model | Image | Provider |
-|------|------------|-------|----------|
-| FREE | Llama 3.3 70B | LongCat Flash (50/mo) | OpenRouter |
-| JIVE | Llama 3.1 8B + CePO | FLUX 1.1 Pro (200/mo) | Cerebras |
-| JIGGA | Qwen 3 32B think/no_think | FLUX 1.1 Pro (1000/mo) | Cerebras |
+| Tier | Default Model | Complex/Legal Model | Image | Provider |
+|------|---------------|---------------------|-------|----------|
+| FREE | Qwen 235B | Qwen 235B | Pollinations (50/mo) | OpenRouter |
+| JIVE (R49) | Qwen 32B | Qwen 235B | FLUX 1.1 Pro (200/mo) | Cerebras |
+| JIGGA (R149) | Qwen 32B | Qwen 235B | FLUX 1.1 Pro (1000/mo) | Cerebras |
+
+**JIVE & JIGGA are IDENTICAL in features** - only token/image limits differ.
+
+## Tech Stack
+
+| Layer | Technology | Version |
+|-------|------------|---------|
+| Frontend | Next.js + Turbopack | 16.0.10 |
+| React | React 19 | 19.2.3 |
+| Styling | Tailwind CSS | 4.1.17 |
+| Auth | NextAuth | 5.0.0-beta.30 |
+| Client DB | RxDB | 16.21.1 |
+| Backend | FastAPI (Python) | 3.14 |
 
 ## Key Entry Points
 
-| Area | File | Notes |
-|------|------|-------|
-| Backend API | `gogga-backend/app/main.py` | FastAPI lifespan events |
-| Tier Router | `gogga-backend/app/core/router.py` | Keyword-based routing logic |
-| AI Service | `gogga-backend/app/services/ai_service.py` | Cerebras/OpenRouter integration |
-| System Prompts | `gogga-backend/app/prompts.py` | SA personality, identity firewall |
-| Frontend Entry | `gogga-frontend/src/app/page.tsx` | Imports ChatClient, session handling |
-| Frontend Chat | `gogga-frontend/src/app/ChatClient.tsx` | Main chat UI (~1500 lines) |
-| Auth Config | `gogga-frontend/src/auth.ts` | NextAuth v5 passwordless tokens |
-| RAG System | `gogga-frontend/src/lib/ragManager.ts` | E5 embeddings (JIGGA only) |
-| BuddySystem | `gogga-frontend/src/lib/buddySystem.ts` | User relationship tracking |
-
-## RAG System: Authoritative vs Analytical
-
-```typescript
-// Analytical (default) - AI synthesizes document content
-getContext(query, { authoritative: false })
-
-// Authoritative - Documents as ground truth, must cite (JIGGA only)
-getContext(query, { authoritative: true })
-```
-- **JIVE**: Keyword retrieval, 5 docs/session max
-- **JIGGA**: E5 semantic embeddings, 10 docs, cross-session selection
-
-## BuddySystem (User Relationship)
-
-```typescript
-type RelationshipStatus = 'stranger' | 'acquaintance' | 'friend' | 'bestie';
-// Thresholds: 50 → acquaintance, 200 → friend, 500 → bestie
-```
-- Detects SA language, extracts name/interests/location
-- Profile in localStorage (`gogga_buddy_profile`), memories in Dexie
-
-## API Endpoints (all `/api/v1`)
-
-| Endpoint | Method | Notes |
-|----------|--------|-------|
-| `/chat` | POST | Main chat (requires `user_tier`) |
-| `/chat/enhance` | POST | Prompt enhancement (all tiers) |
-| `/images/generate` | POST | Tier-limited image gen |
-| `/payments/subscribe` | POST | PayFast subscription |
-| `/payments/notify` | POST | PayFast ITN webhook |
+| Area | File |
+|------|------|
+| Tier Router | `gogga-backend/app/core/router.py` |
+| AI Service | `gogga-backend/app/services/ai_service.py` |
+| OptiLLM | `gogga-backend/app/services/optillm_enhancements.py` |
+| Math Tools | `gogga-backend/app/tools/math_definitions.py` |
+| Config | `gogga-backend/app/config.py` |
+| Frontend Chat | `gogga-frontend/src/app/ChatClient.tsx` |
+| Client DB | `gogga-frontend/src/lib/db.ts` (RxDB - NOT Dexie) |
+| RxDB Schemas | `gogga-frontend/src/lib/rxdb/schemas.ts` |
+| RAG Manager | `gogga-frontend/src/lib/ragManager.ts` |
+| BuddySystem | `gogga-frontend/src/lib/buddySystem.ts` |
+| GoggaSmart | `gogga-frontend/src/lib/goggaSmart.ts` |
 
 ## Development Commands
 
 ```bash
 docker-compose up -d                              # Full stack
-cd gogga-frontend && pnpm dev                     # HTTPS frontend (voice recording)
+cd gogga-frontend && pnpm dev                     # HTTPS frontend (voice)
 cd gogga-frontend && pnpm dev:http                # HTTP fallback
 cd gogga-backend && uvicorn app.main:app --reload # Backend only
-rm -rf gogga-frontend/.next                       # Clean frontend cache
+rm -rf gogga-frontend/.next                       # Clean cache (required often!)
 
 # Testing
-cd gogga-backend && pytest tests/ -v              # Backend tests
-pnpm test                                         # Jest (root) - RAG tests
+cd gogga-backend && pytest tests/ -v              # Backend (69 tests)
 ```
 
+**Dev URLs** (local dev, LAN IP auto-detected):
+- Frontend: `https://192.168.0.130:3000` (run `pnpm dev` - auto-detects LAN IP)
+- Backend: `http://localhost:8000`
+- Admin: `https://192.168.0.130:3000?admin=true` (or `Ctrl+Shift+A`)
+
 ## Critical Patterns
+
+### Qwen Thinking Mode - NEVER use temp=0
+```python
+# temp=0 causes infinite loops! Always use 0.6+
+QWEN_THINKING_SETTINGS = {"temperature": 0.6, "top_p": 0.95, "top_k": 20}
+```
+
+### OptiLLM Enhancement Tiers
+| Tier | Techniques |
+|------|------------|
+| FREE | SPL, Re-Read |
+| JIVE | + CoT Reflection |
+| JIGGA | + Planning, Empathy |
+
+### 235B Triggers (keyword routing)
+- **Complex**: `constitutional`, `legal`, `compliance`, `litigation`
+- **Extended output**: `comprehensive analysis`, `detailed report`
+- **African languages**: Zulu, Xhosa, Sotho, Tswana auto-route to 235B
 
 ### Backend Service Pattern (lazy singleton)
 ```python
@@ -99,25 +104,12 @@ async def _get_client(self) -> httpx.AsyncClient:
     return self._client
 ```
 
-### Qwen Thinking Mode - NEVER use temp=0
-```python
-QWEN_THINKING_SETTINGS = {"temperature": 0.6, "top_p": 0.95, "top_k": 20}
-THINK_PATTERN = re.compile(r'<think(?:ing)?>(.*?)</think(?:ing)?>', re.DOTALL)
-```
-
 ### PayFast Signature (ZAR payments)
 ```python
 # MUST use quote_plus (+ for spaces), not quote (%20)
 query_parts = [f"{key}={urllib.parse.quote_plus(str(value))}"]
-query_string += f"&passphrase={passphrase_encoded}"
 signature = hashlib.md5(query_string.encode("utf-8")).hexdigest()
 ```
-
-### Keyword Routing (`router.py` frozensets)
-- `COMPLEX_KEYWORDS`: Legal/coding → CePO for JIVE
-- `THINKING_KEYWORDS`: Deep analysis → `<think>` mode for JIGGA
-- `FAST_MODE_KEYWORDS`: Quick responses → `/no_think` for JIGGA
-- `EXTENDED_OUTPUT_KEYWORDS`: Long-form requests → 8000 tokens
 
 ## SA-Specific Requirements
 
@@ -125,20 +117,42 @@ signature = hashlib.md5(query_string.encode("utf-8")).hexdigest()
 - **Languages**: 11 official - switch seamlessly, never announce
 - **Context**: Load shedding, SASSA, CCMA, POPIA, CPA, LRA, BBBEE
 - **Personality**: User-advocate (not neutral), sarcastic-friendly default
-- **Serious Mode**: Auto-triggers for legal/medical/financial/abuse topics
+- **Serious Mode**: Auto-triggers for legal/medical/financial/abuse
+
+## Code Style
+
+### Python (Backend)
+- Type hints required on all functions
+- Google-style docstrings
+- Custom exceptions inherit `GoggaException`
+- async/await for all I/O
+
+### TypeScript (Frontend)
+- `'use client'` for client components
+- Tailwind only (monochrome palette: `primary-50` to `primary-950`)
+- Icons: Lucide React, black only
+- Font: Quicksand (400, 700)
 
 ## Common Gotchas
 
-1. **Qwen temp=0** causes infinite loops - always use 0.6+
-2. **HTTPS required** for frontend voice recording (MediaRecorder API)
-3. **CePO timeout** is 120s for complex reasoning chains
-4. **IndexedDB limits**: 100MB total, 15MB per document
-5. **Image limits**: Monthly caps enforced per tier
-6. **Clean .next** after major frontend changes: `rm -rf gogga-frontend/.next`
+1. **Qwen temp=0** → infinite loops (use 0.6+)
+2. **HTTPS required** for voice recording (MediaRecorder API)
+3. **Clean .next** after major changes: `rm -rf gogga-frontend/.next`
+4. **Next.js 16 LAN bug** → bind to specific IP (auto-detected by `pnpm dev`)
+5. **RxDB Date fields** → use `.toISOString()`, not `new Date()` objects
+6. **RxDB primary keys** → use `generateId()` from `db.ts` for `id` field
+7. **IndexedDB limits**: 100MB total, 15MB per document
 
-## Testing Files
+## Key Memories (`.serena/memories/`)
 
-- `gogga-backend/tests/test_routing.py` - Tier router, keyword detection
-- `gogga-backend/tests/test_payments.py` - PayFast signature verification
-- `gogga-frontend/src/lib/rag.test.ts` - RAG chunking/search tests
-- Root `__mocks__/` for: `flexsearch`, `jszip`, `@huggingface/transformers`
+| Memory | Content |
+|--------|---------|
+| `architecture.md` | Tier routing, math delegation |
+| `tech_stack.md` | Dependencies, versions |
+| `rxdb_implementation.md` | RxDB schemas, vector search, migrations |
+| `network_configuration.md` | LAN IP auto-detection, Next.js 16 bug workaround |
+| `gogga_smart.md` | Self-improving AI, skill management |
+| `optillm_enhancements.md` | SPL, Re-Read, CoT, Planning |
+| `persona.md` | BuddySystem, SA personality |
+| `payfast_integration.md` | Payment signature, webhooks |
+| `tool_calling.md` | Math tools, executor |

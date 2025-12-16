@@ -181,7 +181,7 @@ export function useActivityEffect(
   deps: React.DependencyList = []
 ) {
   const { isActive } = useActivityStatus()
-  const cleanupRef = useRef<(() => void) | void>()
+  const cleanupRef = useRef<(() => void) | void>(undefined)
   
   useEffect(() => {
     if (isActive) {

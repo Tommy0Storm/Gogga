@@ -58,7 +58,8 @@ asyncpg>=0.29.0
   "@prisma/client": "5.22.0",
   "axios": "^1.6.2",
   "recharts": "^3.5.1",
-  "dexie": "^4.2.1"
+  "rxdb": "^16.21.1"  // PRIMARY - replaced Dexie
+  // "dexie": "^4.2.1" - DEPRECATED, legacy backup only
 }
 ```
 

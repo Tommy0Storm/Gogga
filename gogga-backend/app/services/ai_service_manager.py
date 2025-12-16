@@ -25,7 +25,6 @@ class AIServiceManager:
         self.interpreters = {
             "cerebras": create(),
             "openrouter": create(),
-            "cepo": create(),
         }
         
         # Python 3.14: Check if running with GIL disabled (free-threaded mode)
@@ -82,8 +81,6 @@ print(result)
     @staticmethod
     def _get_endpoint(service: str) -> str:
         service_lower = service.lower()
-        if service_lower == "cepo":
-            return f"{settings.CEPO_URL}/chat"
         if service_lower == "cerebras":
             # Placeholder endpoint; Cerebras is usually accessed via SDK.
             return f"{settings.API_URL}/cerebras/chat"

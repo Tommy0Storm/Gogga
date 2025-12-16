@@ -491,7 +491,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
 // Wrapped with error boundary
 export const ExportModal: React.FC<ExportModalProps> = (props) => {
   return (
-    <ErrorBoundary fallback={
+    <ErrorBoundary fallback={() => (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
           <p className="text-red-500 font-medium">Error loading export modal</p>
@@ -503,7 +503,7 @@ export const ExportModal: React.FC<ExportModalProps> = (props) => {
           </button>
         </div>
       </div>
-    }>
+    )}>
       <ExportModalContent {...props} />
     </ErrorBoundary>
   );

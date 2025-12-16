@@ -14,6 +14,7 @@ interface LanguageBadgeProps {
   confidence?: number;
   className?: string;
   showName?: boolean;
+  showForEnglish?: boolean; // Show badge even for English (for user messages)
 }
 
 // Language flag emojis (using closest available)
@@ -50,14 +51,15 @@ export function LanguageBadge({
   language, 
   confidence, 
   className = '',
-  showName = false 
+  showName = false,
+  showForEnglish = false 
 }: LanguageBadgeProps) {
   const langInfo = SA_LANGUAGES[language];
   const flag = LANGUAGE_FLAGS[language];
   const shortCode = SHORT_CODES[language];
   
-  // Only show badge for non-English languages (English is default)
-  if (language === 'en') {
+  // Only show badge for non-English languages unless showForEnglish is true
+  if (language === 'en' && !showForEnglish) {
     return null;
   }
 

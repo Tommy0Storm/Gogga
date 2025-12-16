@@ -2,7 +2,8 @@
 GOGGA Tool Execution Endpoint
 
 Handles tool execution requests from the frontend.
-This allows the backend to perform complex operations like dual image generation.
+This allows the backend to perform complex operations like dual image generation,
+math calculations, and web search.
 """
 
 import logging
@@ -14,7 +15,8 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Query
 
 from app.tools.executor import execute_generate_image, execute_math_tool
-from app.tools.definitions import get_tools_for_tier, get_tool_by_name
+from app.tools.search_executor import execute_search_tool
+from app.tools.definitions import get_tools_for_tier, get_tool_by_name, is_server_side_tool
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,6 +48,9 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
     - math_probability: Probability calculations
     - math_conversion: Unit conversions
     - math_fraud_analysis: Fraud detection (JIGGA only)
+    - web_search: Google search with page scraping
+    - legal_search: SA legal database search
+    - shopping_search: SA product/price search
     
     Frontend-only tools (save_memory, delete_memory) should NOT be called here.
     """
@@ -61,11 +66,24 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             )
             return ToolExecuteResponse(success=True, result=result)
         
-        elif request.tool_name.startswith("math_") or request.tool_name == "python_execute":
-            # Execute math tool or python executor
-            logger.info(f"🔧 MATH/PYTHON TOOL: Executing {request.tool_name}")
+        elif request.tool_name in ("web_search", "legal_search", "shopping_search", "places_search"):
+            # Execute search tool
+            logger.info(f"🔍 SEARCH TOOL: Executing {request.tool_name}")
+            result = await execute_search_tool(
+                tool_name=request.tool_name,
+                arguments=request.arguments,
+            )
+            # Add type for frontend rendering
+            result["type"] = "search"
+            result["tool_name"] = request.tool_name
+            logger.info(f"🔍 SEARCH TOOL SUCCESS: results={result.get('results_count', result.get('places_count', 0))}, cached={result.get('cached', False)}")
+            return ToolExecuteResponse(success=result.get("success", False), result=result)
+        
+        elif request.tool_name.startswith("math_") or request.tool_name in ("python_execute", "sequential_think"):
+            # Execute math tool, python executor, or sequential thinking
+            logger.info(f"🔧 MATH/PYTHON/THINKING TOOL: Executing {request.tool_name}")
             tier = request.arguments.pop("tier", "free") if "tier" in request.arguments else "free"
-            logger.debug(f"🔧 MATH/PYTHON TOOL: tier={tier}, args={request.arguments}")
+            logger.debug(f"🔧 MATH/PYTHON/THINKING TOOL: tier={tier}, args={request.arguments}")
             result = await execute_math_tool(
                 tool_name=request.tool_name,
                 arguments=request.arguments,
@@ -83,13 +101,15 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             # Handle python_execute results (already a dict)
             if request.tool_name == "python_execute":
                 result["type"] = "python_terminal"
-            logger.info(f"🔧 MATH/PYTHON TOOL SUCCESS: result_type={result.get('display_type')}, success={result.get('success')}")
+            elif request.tool_name == "sequential_think":
+                result["type"] = "sequential_thinking"
+            logger.info(f"🔧 MATH/PYTHON/THINKING TOOL SUCCESS: result_type={result.get('display_type')}, success={result.get('success')}")
             return ToolExecuteResponse(success=result.get("success", True), result=result)
         
         else:
             return ToolExecuteResponse(
                 success=False,
-                error=f"Unknown tool: {request.tool_name}. Supported: generate_image, math_*, python_execute"
+                error=f"Unknown tool: {request.tool_name}. Supported: generate_image, math_*, python_execute, sequential_think"
             )
             
     except Exception as e:

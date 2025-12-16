@@ -61,8 +61,9 @@ await processBuddyMessage(text);
 
 ### Storage (SPOT Architecture)
 - BuddyProfile in localStorage (`gogga_buddy_profile`) - preferences, points, relationship
-- **User name is NOT stored in localStorage** - it's read from Dexie memories (SPOT)
-- User memories in Dexie via MemoryManager (single source of truth for user data)
+- **User name is NOT stored in localStorage** - it's read from RxDB memories (SPOT)
+- User memories in RxDB via MemoryManager (single source of truth for user data)
+- **Note**: db.ts now uses RxDB shim (Dec 2025 migration)
 
 ## Key APIs
 ```typescript

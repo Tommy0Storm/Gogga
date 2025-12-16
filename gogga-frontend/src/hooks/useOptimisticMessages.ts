@@ -5,10 +5,11 @@
  * Provides instant UI feedback for message sending
  */
 
-import { useOptimistic } from 'react'
+import { useOptimistic, startTransition } from 'react'
 import type { Message } from '@/hooks/useChatHistory'
 
 export interface OptimisticMessage extends Message {
+  id?: string
   isPending?: boolean
   isError?: boolean
   errorMessage?: string
@@ -16,6 +17,7 @@ export interface OptimisticMessage extends Message {
   thinking?: string
   detectedLanguage?: string
   languageConfidence?: number
+  timestamp?: string
 }
 
 /**
@@ -49,12 +51,16 @@ export function useOptimisticMessages(messages: OptimisticMessage[]) {
 
   const addOptimisticMessage = (message: OptimisticMessage): string => {
     const id = Date.now().toString() + Math.random()
-    setOptimisticState({ type: 'add', message: { ...message, isPending: true }, id })
+    startTransition(() => {
+      setOptimisticState({ type: 'add', message: { ...message, isPending: true }, id })
+    })
     return id
   }
 
   const markAsError = (id: string, errorMessage: string) => {
-    setOptimisticState({ type: 'error', id, errorMessage })
+    startTransition(() => {
+      setOptimisticState({ type: 'error', id, errorMessage })
+    })
   }
 
   return { 
@@ -73,7 +79,7 @@ export async function sendMessageWithOptimistic(
   sendFn: (msg: OptimisticMessage) => Promise<void>
 ) {
   // Add message optimistically with pending state
-  addOptimistic({ ...message, pending: true })
+  addOptimistic({ ...message, isPending: true })
 
   try {
     // Send to server
@@ -87,8 +93,8 @@ export async function sendMessageWithOptimistic(
     // Mark message as error
     addOptimistic({
       ...message,
-      pending: false,
-      error: true,
+      isPending: false,
+      isError: true,
     })
   }
 }
@@ -103,7 +109,7 @@ export function createOptimisticUserMessage(
   return {
     role: 'user',
     content,
-    pending: true,
+    isPending: true,
     timestamp: new Date().toISOString(),
     ...additionalProps,
   }
@@ -116,7 +122,7 @@ export function createOptimisticAssistantPlaceholder(): OptimisticMessage {
   return {
     role: 'assistant',
     content: '',
-    pending: true,
+    isPending: true,
     timestamp: new Date().toISOString(),
   }
 }

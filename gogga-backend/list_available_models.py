@@ -119,7 +119,7 @@ def test_specific_models():
         ("Gemini 2.0 Flash", f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models/gemini-2.0-flash-exp:generateContent"),
         
         # Meta models
-        ("Llama 3.3 70B", f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/meta/models/llama-3.3-70b-instruct-maas:generateContent"),
+        ("Qwen 3 235B", f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/meta/models/llama-3.3-70b-instruct-maas:generateContent"),
         ("Llama 3.1 405B", f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/meta/models/llama-3.1-405b-instruct-maas:generateContent"),
         
         # DeepSeek

@@ -188,7 +188,7 @@ export const VectorHeatmap: React.FC<VectorHeatmapProps> = ({
                     height: cellSize,
                     backgroundColor: getColor(value),
                   }}
-                  title={showValues ? `[${colIndex}]: ${vectors[rowIndex][colIndex]?.toFixed(4)}` : undefined}
+                  title={showValues ? `[${colIndex}]: ${vectors[rowIndex]?.[colIndex]?.toFixed(4) ?? 'N/A'}` : undefined}
                 />
               ))}
             </div>

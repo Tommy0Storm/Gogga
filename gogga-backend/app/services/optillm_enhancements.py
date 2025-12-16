@@ -2,7 +2,7 @@
 GOGGA OptiLLM Enhancements - Test-Time Compute Optimizations
 
 Implements OptiLLM inference optimization techniques directly in code,
-without requiring the CePO sidecar proxy.
+without requiring the OptiLLM enhancements proxy.
 
 IMPLEMENTED TECHNIQUES:
 ═══════════════════════
@@ -32,7 +32,7 @@ IMPLEMENTED TECHNIQUES:
    - Implements Karpathy's "third paradigm" for LLM learning
    - Benefit: Consistent reasoning patterns across requests
 
-6. Planning Mode (CePO-inspired)
+6. Planning Mode (OptiLLM-inspired)
    - Breaks complex problems into steps before solving
    - Validates each step before proceeding
    - Benefit: +18-30% on multi-step reasoning
@@ -149,7 +149,7 @@ Provide your final answer here, incorporating any corrections from reflection.
 </output>
 """
 
-# Planning mode instruction (CePO-inspired)
+# Planning mode instruction (OptiLLM-inspired)
 PLANNING_INSTRUCTION: Final[str] = """
 
 For complex problems, create a plan before solving:
@@ -390,7 +390,7 @@ OPTILLM_TECHNIQUES_SUMMARY: Final[dict[str, dict]] = {
         "implemented": True,
     },
     "planning": {
-        "name": "Planning Mode (CePO-inspired)",
+        "name": "Planning Mode (OptiLLM-inspired)",
         "description": "Creates structured plan before solving",
         "accuracy_improvement": "+18-30% on multi-step",
         "token_overhead": "2-4x",

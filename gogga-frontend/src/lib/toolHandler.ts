@@ -56,10 +56,12 @@ export interface CreateChartArgs {
     | 'funnel'
     | 'treemap';
   title: string;
-  data: Array<{ name?: string; value?: number; x?: number; y?: number }>;
+  subtitle?: string;
+  data: Array<{ name?: string; value?: number; value2?: number; x?: number; y?: number; [key: string]: unknown }>;
   x_label?: string;
   y_label?: string;
   colors?: string[];
+  series?: Array<{ name: string; dataKey: string; color?: string }>;
 }
 
 export interface GeneratedImageResult {
@@ -73,10 +75,12 @@ export interface ChartResult {
   type: 'chart';
   chart_type: string;
   title: string;
+  subtitle?: string;
   data: Array<Record<string, unknown>>;
   x_label?: string;
   y_label?: string;
   colors?: string[];
+  series?: Array<{ name: string; dataKey: string; color?: string }>;
 }
 
 export interface MathResult {
@@ -154,13 +158,15 @@ async function executeSaveMemory(args: SaveMemoryArgs): Promise<ToolResult> {
     }
 
     // Create the memory with source='gogga' (AI-created)
-    const memoryId = await createMemory(
-      title.slice(0, 100), // Max 100 chars for title
-      content.slice(0, 10000), // Max 10000 chars for content
-      safeCategory,
-      safePriority,
-      'gogga' // Source: AI-created memory
-    );
+    const memoryId = await createMemory({
+      title: title.slice(0, 100), // Max 100 chars for title
+      content: content.slice(0, 10000), // Max 10000 chars for content
+      category: safeCategory,
+      priority: safePriority,
+      source: 'gogga', // Source: AI-created memory
+      isActive: true,
+      tokenCount: Math.ceil(content.length / 4),
+    });
 
     console.log('[ToolHandler] Memory saved:', {
       id: memoryId,
@@ -339,7 +345,7 @@ async function executeGenerateImage(
       // Single image - use original format for backward compatibility
       const imageResult: GeneratedImageResult = {
         type: 'image',
-        image_url: imageUrls[0],
+        image_url: imageUrls[0] ?? '',
         prompt: prompt,
         style: style,
       };
@@ -391,7 +397,7 @@ async function executeGenerateImage(
  */
 function executeCreateChart(args: CreateChartArgs): ToolResult {
   try {
-    const { chart_type, title, data, x_label, y_label, colors } = args;
+    const { chart_type, title, subtitle, data, x_label, y_label, colors, series } = args;
 
     if (!chart_type || !title || !data) {
       return {
@@ -435,14 +441,20 @@ function executeCreateChart(args: CreateChartArgs): ToolResult {
       '#ca8a04',
     ];
 
+    // For multi-series, we need colors for series not data points
+    const numSeries = series?.length || 1;
+    const chartColors = colors || defaultColors.slice(0, Math.max(numSeries, data.length));
+
     const chartResult: ChartResult = {
       type: 'chart',
       chart_type,
       title,
+      ...(subtitle && { subtitle }),
       data,
       x_label,
       y_label,
-      colors: colors || defaultColors.slice(0, data.length),
+      colors: chartColors,
+      ...(series && { series }),
     };
 
     console.log(
@@ -558,18 +570,39 @@ async function executeMathTool(
       throw new Error(data.error || 'Math calculation failed');
     }
 
+    // Extract result data, handling nested structure
+    const resultData = data.result?.data || data.result || {};
+    
+    // If backend returned calculation_steps, add them to execution logs
+    const calculationSteps = resultData.calculation_steps as Array<{
+      step: number;
+      description: string;
+      formula: string;
+      value: string | null;
+    }> | undefined;
+    
+    if (calculationSteps && Array.isArray(calculationSteps)) {
+      addLog('info', '━━━ Calculation Steps ━━━', '📐');
+      for (const step of calculationSteps) {
+        const valueStr = step.value ? ` → ${step.value}` : '';
+        addLog('debug', `Step ${step.step}: ${step.description}`, '•');
+        addLog('info', `   ${step.formula}${valueStr}`, '📝');
+      }
+      addLog('info', '━━━━━━━━━━━━━━━━━━━━━━━', '✓');
+    }
+
     // Build the math result with embedded execution logs
     const mathResult: MathResult & { executionLogs?: typeof executionLogs } = {
       type: 'math',
       success: true, // Required for MathResultDisplay to render correctly
       display_type: data.result?.display_type || 'stat_cards',
-      data: data.result?.data || data.result || {},
+      data: resultData,
       error: data.result?.error,
       executionLogs, // Embed logs in result for display
     };
 
     // Log success with result summary
-    const dataKeys = Object.keys(mathResult.data);
+    const dataKeys = Object.keys(mathResult.data).filter(k => k !== 'calculation_steps');
     addLog('info', `Display type: ${mathResult.display_type}`, '🎨');
     addLog(
       'debug',
@@ -677,6 +710,7 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
     case 'math_probability':
     case 'math_conversion':
     case 'math_fraud_analysis':
+    case 'python_execute':
       result = await executeMathTool(toolCall.name, toolCall.arguments);
       break;
 

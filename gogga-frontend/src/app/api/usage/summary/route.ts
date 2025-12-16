@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         // Get user's subscription for tier info
         const user = await prisma.user.findUnique({
             where: { id: userId },
-            include: { subscription: true },
+            include: { Subscription: true },
         })
 
         if (!user) {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
         })
 
         // Get tier limits
-        const tier = user.subscription?.tier || 'FREE'
+        const tier = user.Subscription?.tier || 'FREE'
         const imageLimits: Record<string, number> = {
             FREE: 50,
             JIVE: 200,

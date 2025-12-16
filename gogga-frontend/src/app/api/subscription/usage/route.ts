@@ -26,17 +26,17 @@ export async function POST(request: NextRequest) {
     // Get user with subscription
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: { subscription: true },
+      include: { Subscription: true },
     })
 
-    if (!user || !user.subscription) {
+    if (!user || !user.Subscription) {
       return NextResponse.json(
         { error: 'No subscription found' },
         { status: 404 }
       )
     }
 
-    const subscription = user.subscription
+    const subscription = user.Subscription
 
     // FREE tier doesn't track usage
     if (subscription.tier === 'FREE') {

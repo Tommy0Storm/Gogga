@@ -1,13 +1,14 @@
 # GOGGA Long-Term Memory System
 
 ## Last Updated
-December 6, 2025
+December 15, 2025 (RxDB migration complete)
 
 ## Overview
 User-controlled memory persistence with source tracking. Distinguishes between user-created and AI-created memories.
 
 ## Key Files
-- `gogga-frontend/src/lib/db.ts` - Database schema and memory functions
+- `gogga-frontend/src/lib/db.ts` - RxDB shim with memory functions (Dec 2025 migration)
+- `gogga-frontend/src/lib/rxdb/schemas.ts` - MemoryContextDoc schema
 - `gogga-frontend/src/components/dashboard/MemoryManager.tsx` - UI component
 
 ## Schema (Version 7)

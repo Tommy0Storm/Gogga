@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { existsSync, statSync, readdirSync } from 'fs';
+import path from 'path';
 
 const execAsync = promisify(exec);
+
+// Detect if running inside Docker
+const isRunningInDocker = existsSync('/.dockerenv');
+
+// Local database path (relative to project root)
+const LOCAL_DB_PATH = path.resolve(process.cwd(), '../gogga-frontend/prisma');
 
 // Docker container names for each service
 const SERVICE_CONFIG: Record<string, {
@@ -59,11 +67,31 @@ export async function GET(
     if (config.isDatabase) {
       status = 'running';
       try {
-        // Get database info from the filesystem
-        const { stdout: fileInfo } = await execAsync(
-          `docker exec ${config.containerName} sh -c "ls -la /app/prisma/*.db* 2>/dev/null"`,
-          { timeout: 5000 }
-        );
+        // Get database info - support both local and Docker modes
+        let fileInfo = '';
+        
+        if (isRunningInDocker) {
+          // Docker mode: use docker exec
+          const { stdout } = await execAsync(
+            `docker exec ${config.containerName} sh -c "ls -la /app/prisma/*.db* 2>/dev/null"`,
+            { timeout: 5000 }
+          );
+          fileInfo = stdout;
+        } else {
+          // Local mode: read from filesystem directly
+          try {
+            const files = readdirSync(LOCAL_DB_PATH).filter(f => f.endsWith('.db') || f.includes('.db-'));
+            fileInfo = files.map(f => {
+              const fullPath = path.join(LOCAL_DB_PATH, f);
+              const stats = statSync(fullPath);
+              const sizeKB = (stats.size / 1024).toFixed(1);
+              const mtime = stats.mtime.toISOString().replace('T', ' ').slice(0, 19);
+              return `${stats.mode.toString(8).slice(-3)} ${sizeKB}KB ${mtime} ${f}`;
+            }).join('\n') || '[No database files found]';
+          } catch {
+            fileInfo = `[Local path: ${LOCAL_DB_PATH}]`;
+          }
+        }
         
         // Get database stats via our tools API (uses Prisma, no sqlite3 binary needed)
         let statsInfo = '';
@@ -109,8 +137,14 @@ ${new Date().toISOString()}`;
       } catch (err) {
         content = `[SQLite Info Error: ${err instanceof Error ? err.message : 'Unknown error'}]\n`;
         try {
-          const { stdout } = await execAsync(`docker exec ${config.containerName} ls -la /app/prisma/ 2>&1`, { timeout: 5000 });
-          content += `\n=== Files ===\n${stdout}`;
+          if (isRunningInDocker) {
+            const { stdout } = await execAsync(`docker exec ${config.containerName} ls -la /app/prisma/ 2>&1`, { timeout: 5000 });
+            content += `\n=== Files ===\n${stdout}`;
+          } else {
+            // Local mode fallback
+            const files = readdirSync(LOCAL_DB_PATH);
+            content += `\n=== Files in ${LOCAL_DB_PATH} ===\n${files.join('\n')}`;
+          }
         } catch {
           content += '[Unable to access database files]';
         }

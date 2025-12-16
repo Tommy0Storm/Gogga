@@ -1,8 +1,35 @@
 # RxDB Implementation for GOGGA
 
+> **Last Updated:** December 15, 2025
+> **Status:** ✅ COMPLETE - db.ts shim switchover done
+
 ## Overview
 Complete RxDB 16.21.1 implementation replacing/augmenting Dexie for client-side storage.
 Uses Distance-to-Samples vector indexing for efficient similarity search without external dependencies.
+
+## DB Switchover (December 15-16, 2025)
+
+**db.ts is the PRIMARY database file using RxDB. Dexie is DEPRECATED.**
+
+| File | Purpose |
+|------|---------|
+| `lib/db.ts` | **PRIMARY** - Full RxDB implementation (NOT Dexie) |
+| `lib/db-dexie-legacy.ts` | DEPRECATED - Legacy Dexie backup (do not use) |
+| `lib/rxdb/` | RxDB schemas, vector search, pipelines |
+
+**Key Architecture:**
+- `db.ts` exports `db` object with `RxDBProxy` class for collection access
+- All collections use RxDB schemas from `lib/rxdb/schemas.ts`
+- `generateId()` exported for unique primary key generation
+- ISO strings used for all date fields (not Date objects - RxDB requires JSON-serializable data)
+
+**GoggaSmart Integration (December 16, 2025):**
+- `goggaSmart.ts` imports `generateId` from `db.ts`
+- Skills require `id` field (RxDB primary key) before insertion
+- Date fields converted to `.toISOString()` for RxDB compatibility
+- `skillId` now includes timestamp for uniqueness: `output-m5x7k2j-001`
+
+**Tests:** 25 tests passing (11 integration + 14 shim)
 
 ## Files Created
 

@@ -24,5 +24,7 @@ apscheduler>=3.11.0
 # Math tools - NumPy 2.x required for Python 3.14
 scipy>=1.16.0
 numpy>=2.3.0
+sympy>=1.14.0
 # GoggaTalk - Google AI Live API for voice chat
 # (not Vertex AI - Live API not available in Vertex SDK)
+beautifulsoup4

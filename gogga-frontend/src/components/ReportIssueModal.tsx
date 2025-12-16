@@ -170,7 +170,7 @@ function ReportIssueModalContent({ isOpen, onClose, userEmail, getCapture }: Rep
 
 export function ReportIssueModal(props: ReportIssueModalProps) {
     return (
-        <ErrorBoundary fallback={
+        <ErrorBoundary fallback={() => (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
                 <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
                     <p className="text-red-500 font-medium">Error loading report modal</p>
@@ -182,7 +182,7 @@ export function ReportIssueModal(props: ReportIssueModalProps) {
                     </button>
                 </div>
             </div>
-        }>
+        )}>
             <ReportIssueModalContent {...props} />
         </ErrorBoundary>
     );

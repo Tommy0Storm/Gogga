@@ -1,17 +1,19 @@
 """
 GOGGA Tier-Based Cognitive Router
 
-Routes requests based on user subscription tier:
-- FREE: OpenRouter Llama 3.3 70B (text) + Pollinations.ai (images)
-- JIVE: Cerebras Qwen 3 32B (text) + FLUX 1.1 Pro (images, capped)
-- JIGGA: Cerebras Qwen 3 32B/235B (text) + FLUX 1.1 Pro (images, higher cap)
+All tiers use Qwen models - only token limits differ:
+- FREE: Qwen 3 235B via OpenRouter (free) + Pollinations.ai (images)
+- JIVE: Qwen 3 32B/235B via Cerebras + FLUX 1.1 Pro (images, capped)
+- JIGGA: Qwen 3 32B/235B via Cerebras + FLUX 1.1 Pro (images, higher cap)
 
-Universal across all tiers:
-- Prompt Enhancement: OpenRouter Llama 3.3 70B FREE
+Feature parity:
+- All tiers get 235B for complex queries
+- All tiers get math tools
+- Only difference: monthly token/image limits
 
 SIMPLIFIED ARCHITECTURE (2025-01):
-- Removed CePO/OptiLLM sidecar (optillm enhancements handled differently)
-- JIVE and JIGGA both use Qwen models (unified streaming path)
+- Unified Qwen model across all tiers
+- JIVE and JIGGA have identical features (just different limits)
 - FREE tier uses OpenRouter only
 """
 from enum import Enum
@@ -28,6 +30,23 @@ if sys.version_info >= (3, 14) and hasattr(sys, '_experimental_jit'):
     sys._experimental_jit = 1  # Enable tier 1 JIT for routing hot paths
 
 
+# -----------------------------------------------------------------------------
+# OPENROUTER FALLBACK TOGGLE (Admin controlled)
+# When enabled, JIVE/JIGGA tiers route to OpenRouter instead of Cerebras
+# Useful for testing or when Cerebras is rate-limited
+# -----------------------------------------------------------------------------
+_use_openrouter_fallback: bool = False
+
+def set_openrouter_fallback(enabled: bool) -> None:
+    """Toggle OpenRouter fallback for JIVE/JIGGA tiers."""
+    global _use_openrouter_fallback
+    _use_openrouter_fallback = enabled
+
+def get_openrouter_fallback() -> bool:
+    """Check if OpenRouter fallback is enabled."""
+    return _use_openrouter_fallback
+
+
 class UserTier(str, Enum):
     """User subscription tiers."""
     FREE = "free"      # OpenRouter FREE models only
@@ -38,20 +57,21 @@ class UserTier(str, Enum):
 class CognitiveLayer(str, Enum):
     """Enumeration of available cognitive layers."""
     # FREE tier layers (OpenRouter)
-    FREE_TEXT = "free_text"              # Llama 3.3 70B FREE (OpenRouter)
+    FREE_TEXT = "free_text"              # Qwen 3 235B FREE (OpenRouter)
     FREE_IMAGE = "free_image"            # Pollinations.ai (FREE)
     
-    # JIVE tier layers (Cerebras Qwen 32B)
-    JIVE_TEXT = "jive_text"              # Qwen 3 32B (general chat)
+    # JIVE tier layers (Cerebras Qwen 32B/235B) - IDENTICAL to JIGGA
+    JIVE_TEXT = "jive_text"              # Qwen 3 32B (general chat, thinking mode)
+    JIVE_COMPLEX = "jive_complex"        # Qwen 3 235B for complex/legal/extended (thinking mode)
     JIVE_IMAGE = "jive_image"            # FLUX 1.1 Pro (capped)
     
-    # JIGGA tier layers (Cerebras Qwen 32B/235B)
+    # JIGGA tier layers (Cerebras Qwen 32B/235B) - IDENTICAL to JIVE
     JIGGA_THINK = "jigga_think"          # Qwen 3 32B with thinking (temp=0.6, top_p=0.95)
-    JIGGA_COMPLEX = "jigga_complex"      # Qwen 3 235B for complex/legal (thinking mode)
+    JIGGA_COMPLEX = "jigga_complex"      # Qwen 3 235B for complex/legal/extended (thinking mode)
     JIGGA_IMAGE = "jigga_image"          # FLUX 1.1 Pro (higher cap)
     
     # Universal layers
-    ENHANCE_PROMPT = "enhance_prompt"    # Llama 3.3 70B FREE (all tiers)
+    ENHANCE_PROMPT = "enhance_prompt"    # Qwen 3 235B FREE (all tiers)
     MULTIMODAL = "multimodal"            # Google Live API (TODO)
 
 
@@ -77,7 +97,7 @@ IMAGE_LIMITS: Final[dict[UserTier, int]] = {
 # Token limits - unified for JIVE and JIGGA
 # NOTE: Qwen 32B supports up to 8,000 output tokens, Qwen 235B supports up to 40,000
 QWEN_MAX_TOKENS: Final[int] = 8000  # Qwen 32B max output
-QWEN_DEFAULT_TOKENS: Final[int] = 4096  # Default for normal requests
+QWEN_DEFAULT_TOKENS: Final[int] = 8000  # Default for normal requests (thinking mode needs more)
 
 # JIGGA 235B Token limits (complex/legal)
 JIGGA_235B_MAX_TOKENS: Final[int] = 32000  # Qwen 235B extended output (max: 40,000)
@@ -390,11 +410,22 @@ def get_default_config(tier: str) -> RouteConfig:
     if tier_upper == "FREE":
         return RouteConfig(
             service="openrouter",
-            model=settings.OPENROUTER_MODEL_LLAMA,
+            model=settings.OPENROUTER_MODEL_QWEN,
             reasoning=False,
             think_mode=False,
             no_think=False,
         )
+    
+    # Check if OpenRouter fallback is enabled for JIVE/JIGGA
+    if _use_openrouter_fallback and tier_upper in ("JIVE", "JIGGA"):
+        return RouteConfig(
+            service="openrouter",
+            model=settings.OPENROUTER_MODEL_QWEN,  # Use Qwen 235B via OpenRouter
+            reasoning=False,
+            think_mode=False,  # OpenRouter doesn't support think mode
+            no_think=True,  # Force no_think for OpenRouter
+        )
+    
     if tier_upper == "JIVE":
         return RouteConfig(
             service="cerebras",
@@ -419,22 +450,39 @@ def route_request(request: ChatRequest, user_tier: str) -> RouteConfig:
     """Structural pattern matching router for tier-based model selection.
     
     SIMPLIFIED (2025-01):
-    - FREE: OpenRouter Llama 3.3 70B
-    - JIVE: Cerebras Qwen 32B (thinking mode)
-    - JIGGA: Cerebras Qwen 32B (default) or 235B (complex/legal keywords)
+    - All tiers use Qwen models
+    - FREE: Qwen 235B via OpenRouter (free)
+    - JIVE/JIGGA: Cerebras Qwen 32B (general/chat/math) or 235B (complex/legal/extended)
+    
+    Both JIVE and JIGGA have identical features - only token limits differ.
+    
+    235B triggers:
+    - Complex keywords (legal, constitutional, compliance, etc.)
+    - Extended output requests (comprehensive report, detailed analysis, etc.)
+    - African language content (multilingual support)
     """
 
     normalized_tier = user_tier.upper()
 
-    # JIGGA tier with complex/legal keywords -> 235B model
-    if normalized_tier == "JIGGA" and _matches_complex_keywords(request.message):
-        return RouteConfig(
-            service="cerebras",
-            model=settings.MODEL_JIGGA_235B,
-            reasoning=False,
-            think_mode=True,  # 235B uses thinking for deep analysis
-            no_think=False,
-        )
+    # JIVE or JIGGA tier with complex/legal/extended keywords -> 235B model
+    if normalized_tier in ("JIVE", "JIGGA"):
+        if _matches_complex_keywords(request.message) or is_extended_output_request(request.message):
+            # Check if OpenRouter fallback is enabled
+            if _use_openrouter_fallback:
+                return RouteConfig(
+                    service="openrouter",
+                    model=settings.OPENROUTER_MODEL_QWEN,  # 235B via OpenRouter
+                    reasoning=False,
+                    think_mode=False,
+                    no_think=True,
+                )
+            return RouteConfig(
+                service="cerebras",
+                model=settings.MODEL_JIGGA_235B,
+                reasoning=False,
+                think_mode=True,  # 235B uses thinking for deep analysis
+                no_think=False,
+            )
 
     # Default routing by tier (FREE/JIVE/JIGGA default)
     return get_default_config(normalized_tier)
@@ -448,20 +496,18 @@ class TierRouter:
     SIMPLIFIED ARCHITECTURE (2025-01):
     
     FREE Tier:
-        Text → OpenRouter Llama 3.3 70B FREE
+        Text → OpenRouter Qwen 3 235B FREE
         Image → Pollinations.ai FREE
         
-    JIVE Tier (Pro):
-        Text → Cerebras Qwen 3 32B (thinking mode)
-        Image → FLUX 1.1 Pro (capped at 200/month)
+    JIVE & JIGGA Tiers (IDENTICAL features, different limits):
+        Text (general/chat/math) → Cerebras Qwen 3 32B (thinking mode)
+        Text (complex/legal/extended) → Cerebras Qwen 3 235B (deep reasoning)
+        Image → FLUX 1.1 Pro (JIVE: 200/month, JIGGA: 1000/month)
         
-    JIGGA Tier (Advanced):
-        Text (general) → Cerebras Qwen 3 32B (thinking mode)
-        Text (complex/legal) → Cerebras Qwen 3 235B (deep reasoning)
-        Image → FLUX 1.1 Pro (capped at 1000/month)
+    Only difference between JIVE and JIGGA: monthly token/image limits.
         
     Universal (all tiers):
-        Prompt Enhancement → OpenRouter Llama 3.3 70B FREE
+        Prompt Enhancement → OpenRouter Qwen 3 235B FREE
     """
     
     @staticmethod
@@ -474,9 +520,10 @@ class TierRouter:
         Route request to appropriate layer based on tier and intent.
         
         SIMPLIFIED (2025-01):
-        - FREE: OpenRouter Llama 3.3 70B
-        - JIVE: Cerebras Qwen 32B (unified - no speed/reasoning split)
-        - JIGGA: Cerebras Qwen 32B (default) or 235B (complex/legal/multilingual)
+        - FREE: OpenRouter Qwen 3 235B
+        - JIVE/JIGGA: IDENTICAL features, different limits
+          - General/chat/math → Cerebras Qwen 32B (thinking mode)
+          - Complex/legal/extended → Cerebras Qwen 235B (deep reasoning)
         
         Args:
             message: User's input message
@@ -499,15 +546,25 @@ class TierRouter:
             return CognitiveLayer.FREE_TEXT
         
         elif user_tier == UserTier.JIVE:
-            # JIVE tier: All text goes to Qwen 32B with thinking mode
+            # JIVE tier: IDENTICAL to JIGGA (32B general, 235B complex/legal/extended)
+            if _matches_complex_keywords(message):
+                return CognitiveLayer.JIVE_COMPLEX
+            if contains_african_language(message):
+                return CognitiveLayer.JIVE_COMPLEX  # 235B for multilingual
+            if is_extended_output_request(message):
+                return CognitiveLayer.JIVE_COMPLEX  # 235B for long outputs
+            
+            # Default: 32B with thinking mode for general chat
             return CognitiveLayer.JIVE_TEXT
         
         else:  # JIGGA
-            # Check for complex/legal keywords OR African language → 235B model
+            # JIGGA tier: IDENTICAL to JIVE (32B general, 235B complex/legal/extended)
             if _matches_complex_keywords(message):
                 return CognitiveLayer.JIGGA_COMPLEX
             if contains_african_language(message):
                 return CognitiveLayer.JIGGA_COMPLEX  # 235B for multilingual
+            if is_extended_output_request(message):
+                return CognitiveLayer.JIGGA_COMPLEX  # 235B for long outputs
             
             # Default: 32B with thinking mode for general chat
             return CognitiveLayer.JIGGA_THINK
@@ -526,7 +583,7 @@ class TierRouter:
             # FREE tier
             CognitiveLayer.FREE_TEXT: {
                 "provider": "openrouter",
-                "model": settings.OPENROUTER_MODEL_LLAMA,
+                "model": settings.OPENROUTER_MODEL_QWEN,
                 "settings": {"temperature": 0.7, "max_tokens": 2048},
             },
             CognitiveLayer.FREE_IMAGE: {
@@ -535,11 +592,17 @@ class TierRouter:
                 "settings": {},
             },
             
-            # JIVE tier (Qwen 32B)
+            # JIVE tier (Qwen 32B default, 235B for complex) - IDENTICAL to JIGGA
             CognitiveLayer.JIVE_TEXT: {
                 "provider": "cerebras",
                 "model": settings.MODEL_JIVE,  # Qwen 3 32B
                 "settings": QWEN_THINKING_SETTINGS,  # temp=0.6, top_p=0.95
+            },
+            CognitiveLayer.JIVE_COMPLEX: {
+                "provider": "cerebras",
+                "model": settings.MODEL_JIGGA_235B,  # Qwen 3 235B for complex/legal/extended
+                "settings": QWEN_THINKING_SETTINGS,  # Thinking mode for deep reasoning
+                "max_tokens": JIGGA_235B_MAX_TOKENS,  # 235B supports up to 40k output tokens
             },
             CognitiveLayer.JIVE_IMAGE: {
                 "provider": "deepinfra",
@@ -547,7 +610,7 @@ class TierRouter:
                 "settings": {},
             },
             
-            # JIGGA tier (Qwen 32B default, 235B for complex)
+            # JIGGA tier (Qwen 32B default, 235B for complex) - IDENTICAL to JIVE
             CognitiveLayer.JIGGA_THINK: {
                 "provider": "cerebras",
                 "model": settings.MODEL_JIGGA,  # Qwen 3 32B
@@ -568,7 +631,7 @@ class TierRouter:
             # Universal
             CognitiveLayer.ENHANCE_PROMPT: {
                 "provider": "openrouter",
-                "model": settings.OPENROUTER_MODEL_LLAMA,  # Llama 3.3 70B FREE
+                "model": settings.OPENROUTER_MODEL_QWEN,  # Qwen 3 235B FREE
                 "settings": {"temperature": 0.7, "max_tokens": 500},
             },
         }

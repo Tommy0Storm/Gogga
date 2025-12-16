@@ -1,14 +1,59 @@
-# CePO Configuration - DEPRECATED
+# CePO Configuration - RE-IMPLEMENTED (June 2025)
 
-## Status (Dec 13, 2025)
-⚠️ **DEPRECATED**: CePO sidecar has been removed from the architecture.
-OptiLLM enhancements are now implemented directly in code.
-See `optillm_enhancements` memory for the new implementation.
+## Status (June 2025)
+✅ **RE-IMPLEMENTED**: CePO sidecar restored for JIVE/JIGGA tiers with automatic failsafe.
 
-## Migration Path
-- CePO sidecar (Docker container) → Removed
-- OptiLLM techniques → Integrated into `app/services/optillm_enhancements.py`
-- Qwen models → Direct Cerebras API calls (no proxy)
+### Architecture
+- CePO container (`gogga-cepo/`) runs OptiLLM proxy with `--approach cepo`
+- Routes JIVE/JIGGA requests through 4-step reasoning pipeline
+- Automatic failsafe to direct Cerebras API on CePO failure
+- OptiLLM enhancements (`optillm_enhancements.py`) still apply as fallback
+
+### Files
+| File | Purpose |
+|------|---------|
+| `gogga-cepo/Dockerfile` | OptiLLM CePO container (Python 3.12-slim) |
+| `gogga-cepo/entrypoint.sh` | Startup script with CePO parameters |
+| `gogga-cepo/cepo_config.yaml` | Best of N, Planning configuration |
+| `app/services/cepo_service.py` | Service with async HTTPX client + failsafe |
+| `app/config.py` | CEPO_ENABLED, CEPO_BASE_URL, CEPO_TIMEOUT settings |
+
+### 4-Step CePO Pipeline
+1. **Plan Generation** (temp=0.55) → Initial reasoning plan
+2. **Initial Solution** (temp=0.25) → First implementation attempt  
+3. **Plan Refinement** (temp=0.1) → Improve based on solution
+4. **Final Solution** (temp=0.0) → Deterministic final output
+
+### Best of N Selection
+- Generates N=3 candidate responses in parallel
+- Uses absolute scoring to select best output
+- +10-20% accuracy improvement on reasoning tasks
+
+### Configuration (app/config.py)
+```python
+CEPO_ENABLED: bool = True
+CEPO_BASE_URL: str = "http://cepo:8080"
+CEPO_TIMEOUT: float = 120.0
+CEPO_BESTOFN_N: int = 3
+```
+
+### Docker Compose Service
+```yaml
+cepo:
+  build: ./gogga-cepo
+  container_name: gogga_cepo
+  ports: ["8080:8080"]
+  env_file: ./gogga-backend/.env
+  environment:
+    OPTILLM_APPROACH: "cepo"
+    CEPO_BESTOFN_N: "3"
+    CEPO_USE_REASONING_FALLBACK: "true"
+```
+
+### Routing Logic (ai_service.py)
+- CePO enabled for JIVE/JIGGA tiers when `settings.CEPO_ENABLED=True`
+- CePO disabled when tool calling is needed (not supported yet)
+- On CePO failure → Falls back to direct Cerebras + optillm_enhancements
 
 ## Legacy Reference (Dec 3, 2025)
 

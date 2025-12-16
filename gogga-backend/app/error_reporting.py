@@ -39,7 +39,7 @@ class ErrorType(str, Enum):
 
 # Python 3.14: Type aliases with PEP 695 syntax (cleaner than TypeAlias)
 type UserTier = Literal["free", "jive", "jigga"]
-type AIProvider = Literal["cerebras", "openrouter", "groq", "deepinfra", "cerebras+cepo", "pollinations", "flux"]
+type AIProvider = Literal["cerebras", "openrouter", "groq", "deepinfra", "pollinations", "flux"]
 
 
 # ============================================================================

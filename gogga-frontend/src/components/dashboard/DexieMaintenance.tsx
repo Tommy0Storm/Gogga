@@ -291,13 +291,14 @@ export const DexieMaintenance: React.FC = () => {
     setIsRunningAction(true);
     try {
       // Find chunks without parent documents
-      const allChunks = await db.chunks.toArray();
-      const allDocIds = new Set((await db.documents.toArray()).map(d => d.id));
+      const allChunks = await db.chunks.toArray() as Array<{ id?: number; documentId: number }>;
+      const allDocs = await db.documents.toArray() as Array<{ id: number }>;
+      const allDocIds = new Set(allDocs.map((d) => d.id));
       
-      const orphanedChunks = allChunks.filter(c => !allDocIds.has(c.documentId));
+      const orphanedChunks = allChunks.filter((c) => !allDocIds.has(c.documentId));
       
       if (orphanedChunks.length > 0) {
-        const orphanIds = orphanedChunks.map(c => c.id).filter((id): id is number => id !== undefined);
+        const orphanIds = orphanedChunks.map((c) => c.id).filter((id): id is number => id !== undefined);
         await db.chunks.bulkDelete(orphanIds);
         addLog('Compact Orphans', 'success', `Removed ${orphanedChunks.length} orphaned chunks`);
       } else {

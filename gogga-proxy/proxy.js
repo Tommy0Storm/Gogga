@@ -7,11 +7,17 @@
  */
 
 const net = require('net');
+const tls = require('tls');
+const fs = require('fs');
+const path = require('path');
 
 const LISTEN_PORT = 3001;
 const TARGET_PORT = 3000;
-const TARGET_HOST = 'frontend';  // Docker service name
+// Use host.docker.internal to reach the host machine from Docker container
+// Falls back to localhost for non-Docker environments
+const TARGET_HOST = process.env.TARGET_HOST || 'host.docker.internal';
 const LISTEN_HOST = '0.0.0.0';
+const USE_TLS = process.env.USE_TLS === 'true';
 
 let connectionCount = 0;
 
@@ -19,11 +25,27 @@ const server = net.createServer((clientSocket) => {
   connectionCount++;
   const connId = connectionCount;
   
-  const targetSocket = net.createConnection(TARGET_PORT, TARGET_HOST, () => {
-    console.log(`[${connId}] Connected to frontend:${TARGET_PORT}`);
-    clientSocket.pipe(targetSocket);
-    targetSocket.pipe(clientSocket);
-  });
+  let targetSocket;
+  
+  if (USE_TLS) {
+    // Connect via TLS (for HTTPS dev server)
+    targetSocket = tls.connect({
+      port: TARGET_PORT,
+      host: TARGET_HOST,
+      rejectUnauthorized: false, // Accept self-signed certs
+    }, () => {
+      console.log(`[${connId}] TLS connected to ${TARGET_HOST}:${TARGET_PORT}`);
+      clientSocket.pipe(targetSocket);
+      targetSocket.pipe(clientSocket);
+    });
+  } else {
+    // Plain TCP connection
+    targetSocket = net.createConnection(TARGET_PORT, TARGET_HOST, () => {
+      console.log(`[${connId}] Connected to ${TARGET_HOST}:${TARGET_PORT}`);
+      clientSocket.pipe(targetSocket);
+      targetSocket.pipe(clientSocket);
+    });
+  }
 
   targetSocket.on('error', (err) => {
     console.error(`[${connId}] Target error: ${err.message}`);

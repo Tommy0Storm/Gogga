@@ -110,7 +110,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             update: { updatedAt: new Date() },
             create: {
               email: tokenRecord.email,
-              subscription: {
+              Subscription: {
                 create: {
                   tier: 'FREE',
                   status: 'active',
@@ -118,11 +118,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 },
               },
             },
-            include: { subscription: true },
+            include: { Subscription: true },
           });
 
           // Ensure existing users have a subscription (backfill)
-          if (!user.subscription) {
+          if (!user.Subscription) {
             await prisma.subscription.create({
               data: {
                 userId: user.id,
@@ -135,7 +135,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           // Get the user's current subscription tier
           const subscription =
-            user.subscription ||
+            user.Subscription ||
             (await prisma.subscription.findUnique({
               where: { userId: user.id },
             }));
@@ -149,7 +149,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               meta: JSON.stringify({
                 method: 'email_token',
                 tier: subscription?.tier || 'FREE',
-                isNewUser: !user.subscription,
+                isNewUser: !user.Subscription,
               }),
             },
           });
@@ -199,9 +199,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const user = await prisma.user.findUnique({
             where: { id: token.id as string },
-            include: { subscription: true },
+            include: { Subscription: true },
           });
-          session.user.tier = (user?.subscription?.tier || 'FREE') as
+          session.user.tier = (user?.Subscription?.tier || 'FREE') as
             | 'FREE'
             | 'JIVE'
             | 'JIGGA';

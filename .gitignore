@@ -159,3 +159,4 @@ gogga-frontend/public/assets/.models/
 # SSL certificates
 gogga-frontend/certs/
 .pnpm-store
+vertex-ai-key.json

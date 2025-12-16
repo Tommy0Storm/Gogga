@@ -2,11 +2,11 @@
 GOGGA AI Service - Tier-Based Text Routing.
 
 SIMPLIFIED ARCHITECTURE (2025-01):
-- FREE: OpenRouter Llama 3.3 70B FREE
+- FREE: OpenRouter Qwen 3 235B FREE
 - JIVE: Cerebras Qwen 3 32B (thinking mode)
 - JIGGA: Cerebras Qwen 3 32B (general) or 235B (complex/legal)
 
-Universal prompt enhancement: OpenRouter Llama 3.3 70B FREE (all tiers)
+Universal prompt enhancement: OpenRouter Qwen 3 235B FREE (all tiers)
 
 Rate Limit Handling:
 - Retry with exponential backoff (3 attempts)
@@ -15,6 +15,11 @@ Rate Limit Handling:
 Plugin System:
 - Language Detection: Runs on EVERY request (cannot be disabled)
 - Enriches context with language intelligence before LLM processing
+
+CePO Integration:
+- JIVE/JIGGA tiers route through CePO sidecar for enhanced reasoning
+- 4-step pipeline: Plan → Solution → Refine → Final + Best of N selection
+- Automatic failsafe to direct Cerebras API on CePO failure
 """
 import logging
 import time
@@ -35,6 +40,7 @@ from app.core.router import (
     COMPLEX_235B_KEYWORDS,
 )
 from app.services.cost_tracker import track_usage
+from app.services.cepo_service import get_cepo_service, CePoConfig
 from app.services.optillm_enhancements import (
     get_enhancement_config,
     enhance_system_prompt,
@@ -46,6 +52,53 @@ from app.services.optillm_enhancements import (
 from app.core.exceptions import InferenceError
 from app.tools.definitions import GOGGA_TOOLS, get_tools_for_tier, ToolCall
 from app.plugins import LanguageDetectorPlugin, Plugin
+
+
+def build_language_context(language_intel: dict | None) -> str | None:
+    """
+    Build language context injection for system prompts.
+    
+    Only returns context for non-English languages with confidence > 35%.
+    
+    Args:
+        language_intel: Language detection results from plugin
+        
+    Returns:
+        Language context string to append to system prompt, or None
+    """
+    if not language_intel:
+        return None
+    
+    if language_intel.get("code") == "en":
+        return None
+    
+    if language_intel.get("confidence", 0) <= 0.35:
+        return None
+    
+    lang_name = language_intel.get("name", "Unknown")
+    lang_code = language_intel.get("code", "en")
+    confidence = language_intel.get("confidence", 0)
+    is_hybrid = language_intel.get("is_hybrid", False)
+    family = language_intel.get("family", "Unknown")
+    
+    if is_hybrid:
+        return (
+            f"\n\n[LANGUAGE INTELLIGENCE - MANDATORY]\n"
+            f"Detected: {lang_name} ({lang_code}) with code-switching (confidence: {confidence:.0%})\n"
+            f"Family: {family}\n"
+            f"Strategy: Mirror the user's bilingual style. Use {lang_name} for greetings, "
+            f"cultural expressions, and emphasis. Use English for technical terms.\n"
+            f"[END LANGUAGE INTELLIGENCE]\n"
+        )
+    else:
+        return (
+            f"\n\n[LANGUAGE INTELLIGENCE - MANDATORY]\n"
+            f"Detected: {lang_name} ({lang_code}) with {confidence:.0%} confidence\n"
+            f"Family: {family}\n"
+            f"Strategy: Respond primarily in {lang_name}. Use appropriate honorifics "
+            f"and cultural markers. English technical terms are acceptable when no equivalent exists.\n"
+            f"[END LANGUAGE INTELLIGENCE]\n"
+        )
 
 
 logger = logging.getLogger(__name__)
@@ -187,7 +240,7 @@ class AIService:
     SIMPLIFIED ARCHITECTURE (2025-01):
     
     FREE Tier:
-        → OpenRouter Llama 3.3 70B FREE
+        → OpenRouter Qwen 3 235B FREE
         
     JIVE Tier:
         → Cerebras Qwen 3 32B (thinking mode)
@@ -262,11 +315,14 @@ class AIService:
         else:
             layer = tier_router.classify_intent(last_user_msg, user_tier, context_tokens)
         
+        # Extract language intelligence from plugin metadata for system prompt injection
+        lang_intel = request.get("metadata", {}).get("language_intelligence", None)
+        
         # SIMPLIFIED ROUTING (2025-01):
         # - FREE: OpenRouter
         # - JIVE/JIGGA: Cerebras Qwen (unified path)
         if layer == CognitiveLayer.FREE_TEXT:
-            response = await AIService._generate_free(user_id, last_user_msg, modified_history or history)
+            response = await AIService._generate_free(user_id, last_user_msg, modified_history or history, lang_intel)
         
         elif layer == CognitiveLayer.JIVE_TEXT:
             # JIVE tier: Qwen 32B with thinking mode
@@ -274,7 +330,19 @@ class AIService:
                 user_id, last_user_msg, modified_history or history, layer,
                 thinking_mode=True,
                 enable_tools=True,
-                tier="jive"
+                tier="jive",
+                language_intel=lang_intel
+            )
+        
+        elif layer == CognitiveLayer.JIVE_COMPLEX:
+            # JIVE tier (complex/legal/extended): Qwen 235B with thinking mode
+            response = await AIService._generate_cerebras(
+                user_id, last_user_msg, modified_history or history, layer,
+                thinking_mode=True,
+                enable_tools=True,
+                tier="jive",
+                use_235b=True,  # Use 235B model for complex queries
+                language_intel=lang_intel
             )
         
         elif layer == CognitiveLayer.JIGGA_THINK:
@@ -283,7 +351,8 @@ class AIService:
                 user_id, last_user_msg, modified_history or history, layer,
                 thinking_mode=True,
                 enable_tools=True,
-                tier="jigga"
+                tier="jigga",
+                language_intel=lang_intel
             )
         
         elif layer == CognitiveLayer.JIGGA_COMPLEX:
@@ -293,11 +362,12 @@ class AIService:
                 thinking_mode=True,
                 enable_tools=True,
                 tier="jigga",
-                use_235b=True  # Use 235B model for complex queries
+                use_235b=True,  # Use 235B model for complex queries
+                language_intel=lang_intel
             )
         else:
             # Default fallback
-            response = await AIService._generate_free(user_id, last_user_msg, modified_history or history)
+            response = await AIService._generate_free(user_id, last_user_msg, modified_history or history, lang_intel)
         
         # Merge plugin metadata into response
         if "metadata" in request:
@@ -325,17 +395,27 @@ class AIService:
     async def _generate_free(
         user_id: str,
         message: str,
-        history: list[MessageDict] | None
+        history: list[MessageDict] | None,
+        language_intel: dict | None = None
     ) -> ResponseDict:
         """
-        FREE tier: OpenRouter Llama 3.3 70B with OptiLLM enhancements.
+        FREE tier: OpenRouter Qwen 3 235B (free) with OptiLLM enhancements.
         
-        Applies light enhancements (re-read technique) to improve accuracy
-        without significant token overhead.
+        Uses the same Qwen model family as paid tiers, just via OpenRouter.
+        Applies light enhancements (re-read technique) to improve accuracy.
+        
+        Args:
+            language_intel: Language detection results from plugin
         """
         from app.services.openrouter_service import openrouter_service
         
         system_prompt = tier_router.get_system_prompt(CognitiveLayer.FREE_TEXT)
+        
+        # INJECT LANGUAGE INTELLIGENCE into system prompt
+        lang_context = build_language_context(language_intel)
+        if lang_context:
+            system_prompt = system_prompt + lang_context
+            logger.info(f"FREE tier: Injected {language_intel.get('name')} language context into system prompt")
         
         # OPTILLM ENHANCEMENTS: Apply light enhancements for FREE tier
         enhancement_config = get_enhancement_config(tier="free", is_complex=False)
@@ -370,7 +450,8 @@ class AIService:
         thinking_mode: bool = True,
         enable_tools: bool = False,
         tier: str = "jive",
-        use_235b: bool = False
+        use_235b: bool = False,
+        language_intel: dict | None = None
     ) -> ResponseDict:
         """
         JIVE/JIGGA tier: Cerebras Qwen models.
@@ -383,7 +464,8 @@ class AIService:
             thinking_mode: Use Qwen thinking settings (always True now)
             enable_tools: Enable tool calling (JIVE: image+chart, JIGGA: all)
             tier: User tier for tool selection
-            use_235b: Use Qwen 235B model for complex/legal queries (JIGGA only)
+            use_235b: Use Qwen 235B model for complex/legal queries
+            language_intel: Language detection results from plugin (dict with code, name, confidence, etc.)
 
         Returns:
             ResponseDict with 'response', 'thinking' (if applicable), 'tool_calls', and 'meta'
@@ -391,6 +473,12 @@ class AIService:
         config = tier_router.get_model_config(layer)
         model_id = config["model"]
         system_prompt = tier_router.get_system_prompt(layer)
+        
+        # INJECT LANGUAGE INTELLIGENCE into system prompt
+        lang_context = build_language_context(language_intel)
+        if lang_context:
+            system_prompt = system_prompt + lang_context
+            logger.info(f"Injected {language_intel.get('name')} language context into system prompt")
 
         # Override model for 235B queries
         if use_235b:
@@ -460,10 +548,68 @@ class AIService:
         logger.info(f"{tier.upper()} thinking mode - model={model_id}, temp=0.6, top_p=0.95, max_tokens={max_tokens}")
 
         try:
+            # === CEPO ROUTING (if enabled) ===
+            # Route through CePO sidecar for enhanced 4-step reasoning + Best of N
+            # Falls back to direct Cerebras API on failure
+            if settings.CEPO_ENABLED and not enable_tools:  # CePO doesn't support tool calling yet
+                try:
+                    cepo_service = get_cepo_service()
+                    cepo_config = CePoConfig(
+                        bestofn_n=settings.CEPO_BESTOFN_N,
+                        max_tokens=max_tokens,
+                        timeout_seconds=settings.CEPO_TIMEOUT,
+                    )
+                    
+                    logger.info(f"Routing {tier.upper()} request through CePO sidecar")
+                    cepo_response = await cepo_service.generate_with_cepo(
+                        model=model_id,
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        config=cepo_config,
+                    )
+                    
+                    # Parse CePO response (OpenAI format)
+                    choice = cepo_response.get("choices", [{}])[0]
+                    content = choice.get("message", {}).get("content", "")
+                    usage = cepo_response.get("usage", {})
+                    
+                    elapsed = time.perf_counter() - start_time
+                    logger.info(f"CePO response received in {elapsed:.2f}s")
+                    
+                    # Track usage and return response
+                    await track_usage(
+                        user_id=user_id,
+                        tier=tier,
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                        model=model_id,
+                    )
+                    
+                    return {
+                        "response": content,
+                        "thinking": None,  # CePO handles thinking internally
+                        "tool_calls": [],
+                        "meta": {
+                            "model": model_id,
+                            "layer": layer.value,
+                            "provider": "cepo",
+                            "latency_ms": int(elapsed * 1000),
+                            "input_tokens": usage.get("prompt_tokens", 0),
+                            "output_tokens": usage.get("completion_tokens", 0),
+                            "cepo_metrics": cepo_service.get_metrics(),
+                        }
+                    }
+                    
+                except Exception as cepo_error:
+                    # CePO failed - continue to standard Cerebras path (failsafe)
+                    logger.warning(f"CePO routing failed, falling back to direct: {cepo_error}")
+            
+            # === STANDARD CEREBRAS PATH ===
             client = get_client()
             
-            # Get tools for this tier (JIVE gets basic, JIGGA gets all)
-            tools = get_tools_for_tier(tier) if enable_tools else None
+            # Get tools for this tier (JIVE gets basic, JIGGA gets all, 235B gets delegate)
+            tools = get_tools_for_tier(tier, model=model_id) if enable_tools else None
 
             # Retry loop with exponential backoff for rate limits
             last_error = None
@@ -629,7 +775,7 @@ class AIService:
         """
         Fallback to OpenRouter when primary service is rate-limited.
         
-        Uses the same Llama 3.3 70B as FREE tier but tracks separately.
+        Uses the same Qwen 3 235B as FREE tier but tracks separately.
         User sees seamless response without knowing about the fallback.
         """
         from app.services.openrouter_service import openrouter_service
@@ -741,7 +887,7 @@ class AIService:
                 temperature = QWEN_FAST_SETTINGS["temperature"]
                 top_p = QWEN_FAST_SETTINGS["top_p"]
         else:
-            # JIVE tier (Llama 3.3 70B)
+            # JIVE tier (Qwen 3 235B)
             temperature = DEFAULT_TEMPERATURE
             top_p = DEFAULT_TOP_P
             if is_extended_request or is_doc_request:
@@ -877,24 +1023,52 @@ class AIService:
         - tool_log: Execution progress log
         - tool_complete: Tool finished
         - content: Response text chunks
-        - done: Final metadata
+        - done: Final metadata (includes detected_language)
         """
         import json
         import time
         from app.tools.executor import execute_math_tool
         from app.tools.definitions import get_tools_for_tier
+        from app.tools.math_definitions import ALL_MATH_TOOL_NAMES
+        from app.tools.search_executor import execute_search_tool, ALL_SEARCH_TOOL_NAMES
         
         config = tier_router.get_model_config(layer)
         model_id = config["model"]
         system_prompt = tier_router.get_system_prompt(layer)
+        
+        # RUN LANGUAGE DETECTION PLUGIN (streaming path)
+        # Build request dict for plugin processing
+        request = {"messages": [], "metadata": {}}
+        if history:
+            request["messages"].extend(history[-MAX_HISTORY_TURNS:])
+        request["messages"].append({"role": "user", "content": message})
+        
+        # Run language detection
+        request = await run_plugins_before_request(request)
+        lang_intel = request.get("metadata", {}).get("language_intelligence", None)
+        
+        # Inject language context into system prompt
+        lang_context = build_language_context(lang_intel)
+        if lang_context:
+            system_prompt = system_prompt + lang_context
+            logger.info(f"Streaming: Injected {lang_intel.get('name')} language context into system prompt")
         
         # ToolShed: Add force tool instruction if specified
         if force_tool:
             system_prompt += f"\n\n**USER HAS REQUESTED SPECIFIC TOOL**\nThe user wants you to use the `{force_tool}` tool for this request. You MUST call this tool with appropriate parameters based on their message. Do not skip the tool call."
             logger.info(f"[ToolShed] Forcing tool: {force_tool}")
         
-        # Send initial metadata
-        yield f"data: {json.dumps({'type': 'meta', 'tier': tier, 'layer': layer.value, 'model': model_id, 'force_tool': force_tool})}\n\n"
+        # Send initial metadata (include detected_language)
+        initial_meta = {'type': 'meta', 'tier': tier, 'layer': layer.value, 'model': model_id, 'force_tool': force_tool}
+        if lang_intel:
+            initial_meta['detected_language'] = {
+                "code": lang_intel.get("code", "en"),
+                "name": lang_intel.get("name", "English"),
+                "confidence": lang_intel.get("confidence", 0.0),
+                "is_hybrid": lang_intel.get("is_hybrid", False),
+                "family": lang_intel.get("family", "Germanic"),
+            }
+        yield f"data: {json.dumps(initial_meta)}\n\n"
         
         start_time = time.perf_counter()
         
@@ -906,7 +1080,18 @@ class AIService:
         
         # First LLM call - check for tool calls
         client = get_client()
-        tools = get_tools_for_tier(tier)
+        tools = get_tools_for_tier(tier, model=model_id)  # Pass model for 235B detection
+        
+        # Store lang_intel for done event
+        detected_language_for_done = None
+        if lang_intel:
+            detected_language_for_done = {
+                "code": lang_intel.get("code", "en"),
+                "name": lang_intel.get("name", "English"),
+                "confidence": lang_intel.get("confidence", 0.0),
+                "is_hybrid": lang_intel.get("is_hybrid", False),
+                "family": lang_intel.get("family", "Germanic"),
+            }
         
         try:
             response = await asyncio.to_thread(
@@ -922,8 +1107,9 @@ class AIService:
             choice = response.choices[0].message
             assistant_content = choice.content or ""
             
-            # Check for math tool calls
+            # Check for server-side tool calls (math + search)
             math_tool_calls = []
+            search_tool_calls = []
             other_tool_calls = []
             
             if hasattr(choice, 'tool_calls') and choice.tool_calls:
@@ -937,10 +1123,112 @@ class AIService:
                         "name": tc.function.name,
                         "arguments": args
                     }
-                    if tc.function.name.startswith("math_"):
+                    if tc.function.name in ALL_MATH_TOOL_NAMES:
                         math_tool_calls.append(tool_data)
+                    elif tc.function.name in ALL_SEARCH_TOOL_NAMES:
+                        search_tool_calls.append(tool_data)
                     else:
                         other_tool_calls.append(tool_data)
+            
+            # Process search tools first (AI should pause and wait for results)
+            search_results = []
+            if search_tool_calls:
+                yield f"data: {json.dumps({'type': 'tool_start', 'tools': [tc['name'] for tc in search_tool_calls], 'tool_type': 'search'})}\n\n"
+                
+                for tc in search_tool_calls:
+                    tool_name = tc["name"]
+                    args = tc["arguments"]
+                    
+                    query_preview = args.get("query", "")[:50]
+                    search_log = {'type': 'tool_log', 'level': 'info', 'message': f'[>] Searching: {query_preview}...', 'icon': 'search'}
+                    yield f"data: {json.dumps(search_log)}\n\n"
+                    
+                    try:
+                        result = await execute_search_tool(tool_name, args)
+                        
+                        if result.get("success"):
+                            count = result.get("results_count", result.get("places_count", 0))
+                            time_ms = result.get("search_time_ms", 0)
+                            success_log = {'type': 'tool_log', 'level': 'success', 'message': f'[+] Found {count} results in {time_ms}ms', 'icon': 'check'}
+                            yield f"data: {json.dumps(success_log)}\n\n"
+                        else:
+                            error_msg = result.get("error", "Unknown error")
+                            warn_log = {'type': 'tool_log', 'level': 'warning', 'message': f'[!] Search partial: {error_msg}', 'icon': 'warning'}
+                            yield f"data: {json.dumps(warn_log)}\n\n"
+                        
+                        search_results.append({
+                            "tool_call_id": tc["id"],
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": result.get("context", json.dumps(result))
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"Search tool {tool_name} failed: {e}")
+                        error_log = {'type': 'tool_log', 'level': 'error', 'message': f'[!] Search failed: {str(e)}', 'icon': 'error'}
+                        yield f"data: {json.dumps(error_log)}\n\n"
+                        search_results.append({
+                            "tool_call_id": tc["id"],
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": f"[Search failed: {str(e)}]"
+                        })
+                
+                yield f"data: {json.dumps({'type': 'tool_complete', 'count': len(search_tool_calls), 'tool_type': 'search'})}\n\n"
+            
+            # If we have search results, continue with a second LLM call
+            if search_results:
+                # Build continuation messages with search context
+                extended_messages = list(messages)
+                
+                # Add assistant message with tool calls
+                assistant_msg = {"role": "assistant", "content": assistant_content or ""}
+                assistant_msg["tool_calls"] = [
+                    {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"])}}
+                    for tc in search_tool_calls
+                ]
+                extended_messages.append(assistant_msg)
+                
+                # Add tool results
+                for sr in search_results:
+                    extended_messages.append(sr)
+                
+                yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Processing search results...', 'icon': 'ai'})}\n\n"
+                
+                # Second LLM call with search context
+                second_response = await asyncio.to_thread(
+                    client.chat.completions.create,
+                    model=model_id,
+                    messages=extended_messages,
+                    tools=tools if tools else None,
+                    temperature=config.get("temperature", 0.6),
+                    top_p=config.get("top_p", 0.95),
+                    max_completion_tokens=config.get("max_tokens", 4096)
+                )
+                
+                # Update for next phase
+                choice = second_response.choices[0].message
+                assistant_content = choice.content or ""
+                response = second_response  # Update for usage tracking
+                
+                # Check for additional tool calls (math, charts, etc.)
+                math_tool_calls = []
+                other_tool_calls = []
+                if hasattr(choice, 'tool_calls') and choice.tool_calls:
+                    for tc in choice.tool_calls:
+                        try:
+                            args = json.loads(tc.function.arguments)
+                        except json.JSONDecodeError:
+                            args = {}
+                        tool_data = {
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": args
+                        }
+                        if tc.function.name in ALL_MATH_TOOL_NAMES:
+                            math_tool_calls.append(tool_data)
+                        elif tc.function.name not in ALL_SEARCH_TOOL_NAMES:
+                            other_tool_calls.append(tool_data)
             
             # If no math tools, just stream the content
             if not math_tool_calls:
@@ -970,6 +1258,9 @@ class AIService:
                         'function': {'name': tc['name'], 'arguments': tc['arguments']},
                         'id': tc['id']
                     } for tc in other_tool_calls]
+                # Include detected language for frontend display
+                if detected_language_for_done:
+                    done_data['detected_language'] = detected_language_for_done
                 yield f"data: {json.dumps(done_data)}\n\n"
                 return
             
@@ -1044,7 +1335,7 @@ class AIService:
             
             # Second LLM call - get final response (streaming)
             # Include non-math tools (charts, images) so AI can call them after processing results
-            non_math_tools = [t for t in (tools or []) if not t.get("function", {}).get("name", "").startswith("math_")]
+            non_math_tools = [t for t in (tools or []) if t.get("function", {}).get("name", "") not in ALL_MATH_TOOL_NAMES]
             final_messages = [{"role": "system", "content": system_prompt}] + extended_history
             
             def create_stream():
@@ -1133,6 +1424,9 @@ class AIService:
                     'id': tc['id']
                 } for tc in all_frontend_tools]
                 logger.info(f"Returning {len(all_frontend_tools)} tool calls to frontend: {[tc['name'] for tc in all_frontend_tools]}")
+            # Include detected language for frontend display
+            if detected_language_for_done:
+                done_data['detected_language'] = detected_language_for_done
             yield f"data: {json.dumps(done_data)}\n\n"
             
         except Exception as e:
@@ -1141,25 +1435,24 @@ class AIService:
 
     @staticmethod
     async def health_check() -> ResponseDict:
-        """Check Cerebras connection health."""
+        """Check Cerebras connection health (lightweight - no API call)."""
         try:
-            start_time = time.perf_counter()
-            
+            # Just verify client can be created - don't waste API calls
+            # Actual health is verified on real requests
             client = get_client()
-            await asyncio.to_thread(
-                client.chat.completions.create,
-                messages=[{"role": "user", "content": "Hi"}],
-                model=settings.MODEL_SPEED,
-                max_tokens=5
-            )
             
-            latency = time.perf_counter() - start_time
-            
-            return {
-                "status": "healthy",
-                "provider": "cerebras",
-                "latency_ms": round(latency * 1000, 2)
-            }
+            # Check client is configured correctly
+            if client is not None:
+                return {
+                    "status": "healthy",
+                    "provider": "cerebras",
+                    "note": "Client initialized (no test call to preserve rate limit)"
+                }
+            else:
+                return {
+                    "status": "unhealthy",
+                    "error": "Client not initialized"
+                }
         except Exception as e:
             logger.error("Health check failed: %s", e)
             return {

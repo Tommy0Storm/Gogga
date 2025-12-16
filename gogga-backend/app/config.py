@@ -30,11 +30,28 @@ class Settings(BaseSettings):
     # Cerebras Configuration (Text only)
     CEREBRAS_API_KEY: str = Field(..., description="Cerebras Cloud API Key")
     
+    # Serper.dev Configuration (Web Search)
+    SERPER_API_KEY: str = Field(
+        default="c43da6c8076b9cd7bb1020ca49cb92b895090372",
+        description="Serper.dev API Key for Google Search"
+    )
+    SERPER_RATE_LIMIT: int = Field(default=100, ge=1, le=1000, description="Serper requests per minute")
+    
+    # CePO Configuration (Cerebras Planning and Optimization)
+    # Routes JIVE/JIGGA requests through 4-step planning pipeline + Best of N selection
+    CEPO_ENABLED: bool = Field(default=True, description="Enable CePO for JIVE/JIGGA tiers")
+    CEPO_BASE_URL: str = Field(default="http://cepo:8080", description="CePO sidecar URL")
+    CEPO_TIMEOUT: float = Field(default=120.0, ge=30.0, le=300.0, description="CePO request timeout (seconds)")
+    CEPO_BESTOFN_N: int = Field(default=3, ge=1, le=5, description="Best of N sample count")
+    
     # SIMPLIFIED MODEL ARCHITECTURE (2025-01):
-    # - Removed CePO/OptiLLM, Llama models
-    # - JIVE tier: Qwen 3 32B (same model as JIGGA general)
-    # - JIGGA tier: Qwen 3 32B (general) + Qwen 3 235B (complex/legal)
-    # - FREE tier: OpenRouter Llama 3.3 70B (unchanged)
+    # - All tiers use Qwen models (removed Llama)
+    # - FREE tier: Qwen 3 235B via OpenRouter (free)
+    # - JIVE/JIGGA: Qwen 3 32B (default) + Qwen 3 235B (complex queries)
+    # - Only difference between tiers: token limits (subscription)
+    
+    # FREE tier: Qwen 3 235B via OpenRouter (free tier)
+    MODEL_FREE: str = "qwen/qwen3-235b-a22b:free"
     
     # JIVE tier: Qwen 3 32B (general chat, thinking mode)
     MODEL_JIVE: str = "qwen-3-32b"
@@ -95,9 +112,9 @@ class Settings(BaseSettings):
     DEEPINFRA_API_KEY: str = Field(default="", description="DeepInfra API Key for image generation")
     DEEPINFRA_IMAGE_MODEL: str = Field(default="black-forest-labs/FLUX-1.1-pro")
     
-    # OpenRouter - Free Image Prompt Enhancement (Llama 3.3 70B + LongCat)
-    OPENROUTER_API_KEY: str = Field(default="", description="OpenRouter API Key for prompt enhancement")
-    OPENROUTER_MODEL_LLAMA: str = Field(default="meta-llama/llama-3.3-70b-instruct:free")
+    # OpenRouter - Free tier text + Image Prompt Enhancement
+    OPENROUTER_API_KEY: str = Field(default="", description="OpenRouter API Key for FREE tier and prompt enhancement")
+    OPENROUTER_MODEL_QWEN: str = Field(default="qwen/qwen3-235b-a22b:free")  # FREE tier text
     OPENROUTER_MODEL_LONGCAT: str = Field(default="meituan/longcat-flash-chat:free")
     
     # PostHog Analytics (EU region)

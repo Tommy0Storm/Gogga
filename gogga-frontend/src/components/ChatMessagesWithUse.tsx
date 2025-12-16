@@ -60,7 +60,7 @@ export function ChatMessages({ sessionId, tier }: { sessionId: string; tier: str
       <div className="space-y-4">
         {messages.map((msg, idx) => (
           <div
-            key={msg.id || idx}
+            key={(msg as { id?: string }).id || idx}
             className={`flex gap-3 ${
               msg.role === 'user' ? 'justify-end' : 'justify-start'
             }`}

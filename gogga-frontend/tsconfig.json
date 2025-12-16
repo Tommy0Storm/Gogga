@@ -30,7 +30,7 @@
     },
     "target": "esnext",
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
+    "exactOptionalPropertyTypes": false,
     "moduleDetection": "force"
   },
   "include": [

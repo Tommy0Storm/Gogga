@@ -163,7 +163,7 @@ function ImageModalContent({
 
 export default function ImageModal(props: ImageModalProps) {
   return (
-    <ErrorBoundary fallback={
+    <ErrorBoundary fallback={() => (
       <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
           <p className="text-red-500 font-medium">Error loading image modal</p>
@@ -175,7 +175,7 @@ export default function ImageModal(props: ImageModalProps) {
           </button>
         </div>
       </div>
-    }>
+    )}>
       <ImageModalContent {...props} />
     </ErrorBoundary>
   );

@@ -15,6 +15,7 @@ export interface UserLocation {
   country?: string;
   displayName?: string;
   isManual: boolean;
+  isApproximate?: boolean; // True when using IP-based location (less accurate)
   timestamp: number;
 }
 
@@ -109,6 +110,7 @@ async function getLocationFromIP(): Promise<UserLocation | null> {
           ? `${data.city}, ${data.country_name}`
           : data.country_name,
         isManual: false,
+        isApproximate: true, // IP-based location is less accurate
         timestamp: Date.now(),
       };
     }

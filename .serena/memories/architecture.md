@@ -15,168 +15,99 @@ GOGGA uses **two separate databases** that never connect directly:
 - Auth logs (connection audit)
 - Subscriptions (tier, status, PayFast token)
 
-### Dexie (Client-Side, Per-User-Per-Device)
+### RxDB (Client-Side, Per-User-Per-Device) - Dec 2025 Migration
+**Primary:** `lib/db.ts` - RxDB shim with Dexie API compatibility
+**Backup:** `lib/db-dexie-legacy.ts` - Original Dexie implementation
+
+Collections:
 - Chat sessions & messages
-- RAG documents & chunks
+- RAG documents & chunks (with session-scoped activeSessions[])
 - Generated images
 - User preferences
-- Long-term memories
+- Memory contexts (authoritative facts)
+- GoggaSmart skills
 - Token usage tracking
-
-### Data Isolation
-Each user's Dexie database is **automatically isolated** by the browser:
-- Same-origin policy: Only `gogga.app` can access its IndexedDB
-- Per-browser: Chrome, Firefox, Safari each have separate databases
-- Per-device: Desktop and mobile are completely isolated
-- No sharing: Multiple users on shared device = separate browser profiles
-
-### The Bridge: `session.user`
-The only connection between SQLite and Dexie is the session:
-- `session.user.id` - Identifies user
-- `session.user.tier` - Gates features (FREE/JIVE/JIGGA)
+- RAG metrics & system logs
 
 ---
 
-# GOGGA Architecture Details
+## Tier-Based Cognitive Routing (Dec 2025 - UNIFIED QWEN)
 
-## Tier-Based Cognitive Routing
+### CRITICAL: JIVE and JIGGA are IDENTICAL in features
+Only difference: monthly token/image limits
 
-GOGGA uses a 3-tier subscription model with distinct routing logic and pricing.
+| Tier | General/Chat/Math | Complex/Legal/Extended | Images |
+|------|-------------------|------------------------|--------|
+| FREE | OpenRouter Qwen 235B FREE | OpenRouter Qwen 235B FREE | Pollinations (50/mo) |
+| JIVE | Cerebras Qwen 32B | Cerebras Qwen 235B | FLUX 1.1 Pro (200/mo) |
+| JIGGA | Cerebras Qwen 32B | Cerebras Qwen 235B | FLUX 1.1 Pro (1000/mo) |
 
-### Tier Overview
+### 235B Triggers (JIVE and JIGGA)
+- **Complex keywords**: constitutional, legal, compliance, statutory, litigation, etc.
+- **Extended output**: comprehensive analysis, detailed report, thorough review, etc.
+- **African languages**: Zulu, Xhosa, Sotho, Tswana, Venda, Tsonga, etc.
 
-| Tier | Text Model | Image Generator | Prompt Enhancement | Cost (Text) | Cost (Image) |
-|------|------------|-----------------|-------------------|-------------|--------------|
-| FREE | OpenRouter Llama 3.3 70B FREE | OpenRouter LongCat Flash FREE | Llama 3.3 70B FREE | $0.00 | $0.00 |
-| JIVE | Cerebras Llama 3.3 70B (+CePO) | DeepInfra FLUX 1.1 Pro (200/mo) | Llama 3.3 70B FREE | $0.10/$0.10 per M | $0.04/image |
-| JIGGA | Cerebras Qwen 3 32B (think/no_think) | DeepInfra FLUX 1.1 Pro (1000/mo) | Llama 3.3 70B FREE | $0.40/$0.80 per M | $0.04/image |
+### CePO/OptiLLM Status
+- **CePO sidecar**: REMOVED (Dec 2025)
+- **OptiLLM enhancements**: Implemented directly in code (`optillm_enhancements.py`)
+- **Techniques**: SPL, Re-Read (re2), CoT Reflection, Planning Mode
 
-### Pricing Summary (USD)
+### Pricing (USD per Million Tokens)
 
-**Text (per Million Tokens):**
-- FREE: $0.00 input, $0.00 output
-- JIVE (Llama 3.3 70B): $0.10 input, $0.10 output
-- JIGGA (Qwen 3 32B): $0.40 input, $0.80 output
+| Tier | Input | Output | Image |
+|------|-------|--------|-------|
+| FREE | $0.00 | $0.00 | $0.00 |
+| JIVE (32B) | $0.40 | $0.80 | $0.04 |
+| JIVE (235B) | $0.60 | $1.20 | $0.04 |
+| JIGGA (32B) | $0.40 | $0.80 | $0.04 |
+| JIGGA (235B) | $0.60 | $1.20 | $0.04 |
 
-**Images (per image):**
-- FREE (LongCat): $0.00
-- JIVE/JIGGA (FLUX 1.1 Pro): $0.04
+### Files
+- `app/core/router.py`: `route_request()`, `TierRouter.classify_intent()`, `JIVE_COMPLEX`, `JIGGA_COMPLEX`
+- `app/services/ai_service.py`: Handles `JIVE_TEXT`, `JIVE_COMPLEX`, `JIGGA_THINK`, `JIGGA_COMPLEX`
+- `app/config.py`: `MODEL_JIVE`, `MODEL_JIGGA`, `MODEL_JIGGA_235B`
+- `app/services/optillm_enhancements.py`: SPL, Re-Read, CoT Reflection, Planning
 
-### FREE Tier Pipeline
-```
-TEXT:  User → Llama 3.3 70B FREE → Response
-IMAGE: User → Llama 3.3 (enhance) → LongCat Flash → Image
-```
-
-### JIVE Tier Pipeline
-```
-TEXT (simple):  User → Llama 3.3 70B → Response
-TEXT (complex): User → Llama 3.3 70B + CePO → Response
-IMAGE:          User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
-```
-
-### JIGGA Tier Pipeline
-```
-TEXT (default): User → Qwen 3 32B (temp=0.6, top_p=0.95, top_k=20) → Deep reasoning
-TEXT (African): User → Qwen 3 235B Instruct (auto-detected) → Multilingual output
-TEXT (manual):  User → 32B/235B (frontend toggle) → User's choice
-IMAGE:          User → Llama 3.3 (enhance) → FLUX 1.1 Pro → Image
-```
-
-### Frontend Model Toggle (JIGGA Only)
-- **Location**: Input area, left side (near RAG mode toggle)
-- **State**: `forceModel: 'auto' | '32b' | '235b'`
-- **API field**: `force_layer` in request payload
-- **Values**: `'32b'` → `JIGGA_THINK`, `'235b'` → `JIGGA_MULTILINGUAL`
-- **Layer badges**: "32B Think", "32B Fast", "235B" shown in message metadata
-
-### Model Comparison (JIGGA)
-| Model | Speed | Max Output | Mode | Cost (per M tokens) |
-|-------|-------|------------|------|---------------------|
-| Qwen 3 32B | ~2600 t/s | 8k tokens | Thinking | $0.40 / $0.80 |
-| Qwen 3 235B | ~1400 t/s | 40k tokens | Non-thinking | $0.60 / $1.20 |
-
-### African Language Detection
-- **Function**: `contains_african_language(text)` in router.py
-- **Languages**: isiZulu, isiXhosa, Sesotho, Setswana, Sepedi, isiNdebele, siSwati, Tshivenda, Xitsonga
-- **Pattern**: Detects SA Bantu language patterns (e.g., "umuntu", "abantu", "ke", "ba")
-- **Behavior**: Auto-routes to 235B when detected (unless `force_layer` overrides)
-
-### Qwen Thinking Mode (JIGGA)
-- **Thinking ON** (default): temp=0.6, top_p=0.95, top_k=20, min_p=0, max_tokens=8000
-- **Long context (100k+ tokens)**: Auto-appends `/no_think` for accuracy per Cerebras recommendation
-- **Thinking block**: Output wrapped in `<think>...</think>` tags, parsed and returned separately
-- **UI display**: Thinking block shown collapsed, main response shown expanded
-- **NEVER use greedy decoding (temp=0)** - causes performance degradation and endless repetitions
-- **Language rule**: Model MUST respond in same language as user prompt
-- **NOTE**: Fast mode (`/no_think`) was removed for normal requests (caused poor quality for analysis/docs)
-
-### Token Tracking
-- ALL tiers track token usage (tied to user email)
-- FREE tier: No cost but still counted for usage limits
-- JIVE/JIGGA: Costs calculated and tracked per-request
-
-### Streaming Responses (JIVE/JIGGA Only)
-- **Endpoint**: `POST /api/v1/chat/stream`
-- **Transport**: Server-Sent Events (SSE)
-- **Implementation**: `AIService.generate_stream()` async generator
-- **Headers**: `Cache-Control: no-cache`, `X-Accel-Buffering: no`
-
-**SSE Event Types:**
-| Type | Description |
-|------|-------------|
-| `meta` | Initial metadata (tier, layer, model, thinking_mode) |
-| `content` | Main response text chunks |
-| `thinking_start` | Start of JIGGA thinking block |
-| `thinking` | Thinking block content (JIGGA only) |
-| `thinking_end` | End of JIGGA thinking block |
-| `done` | Final metadata with tokens, costs |
-| `error` | Error message |
-
-**Frontend Integration:**
-```javascript
-const response = await fetch('/api/v1/chat/stream', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ message, user_id, user_tier })
-});
-
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  
-  const chunk = decoder.decode(value);
-  // Parse SSE: "data: {...}\n\n"
+### Qwen Thinking Mode Settings (NEVER use temp=0)
+```python
+QWEN_THINKING_SETTINGS = {
+    "temperature": 0.6,  # REQUIRED - greedy (0) causes infinite loops
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
 }
 ```
 
-### Universal Prompt Enhancement
-- Available to ALL tiers via "Enhance" button
-- Uses OpenRouter Llama 3.3 70B FREE
-- Works for both text and image prompts
-- Cost: FREE
+---
 
-### Image Generation Limits
-| Tier | Limit | Generator | Cost |
-|------|-------|-----------|------|
-| FREE | 50/month | LongCat Flash | $0.00 |
-| JIVE | 200/month | FLUX 1.1 Pro | $0.04/image |
-| JIGGA | 1000/month | FLUX 1.1 Pro | $0.04/image |
+## Math Tool Delegation
 
-### Separation Rule
-- TEXT → Cerebras (JIVE/JIGGA) or OpenRouter (FREE)
-- IMAGE → OpenRouter (prompt) + LongCat/FLUX (generation)
-- ENHANCEMENT → OpenRouter Llama 3.3 FREE (universal)
+### Architecture: 235B → 32B Delegation
+When 235B receives a complex math query:
+1. 235B calls `math_delegate` tool with task description
+2. `math_delegate` internally calls 32B + SymPy via `python_execute`
+3. 32B generates SymPy code → executor runs it → result returns to 235B
+4. 235B interprets and explains the mathematical result
 
-### JIGGA-Exclusive Features
+### Math Tools
+- `math_statistics`: Mean, median, mode, std, variance, percentiles
+- `math_financial`: NPV, IRR, loan payments, compound interest
+- `python_execute`: SymPy symbolic math execution
+- `math_delegate`: 235B → 32B task delegation
+- `sequential_think`: Multi-step reasoning chains
+
+### Files
+- `app/tools/math_definitions.py`: Tool definitions, `ALL_MATH_TOOL_NAMES`
+- `app/tools/executor.py`: `_execute_math_delegation()`, `_execute_python()`
+- `app/services/ai_service.py`: Tool filtering, `get_tools_for_tier()`
+
+---
+
+## JIGGA-Exclusive Features
+
 | Feature | Description |
 |---------|-------------|
-| Semantic RAG | Vector similarity ranking for context retrieval |
+| Semantic RAG | E5 embeddings for vector similarity ranking |
 | RAG Authoritative | Quotes directly from documents only |
 | RAG Analytics Dashboard | Document usage, query patterns, retrieval stats |
-| Live RAG Performance Graph | Real-time visualization of RAG operations |
-| Vector Similarity Scoring | Relevance scores for retrieved chunks |
-| Monitoring / Performance Stats | Query latency, cache hits, retrieval accuracy |
+| Cross-Session Selection | Select docs from other sessions |

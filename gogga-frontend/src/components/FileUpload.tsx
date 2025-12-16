@@ -214,8 +214,9 @@ export function FileUpload({
       if (!isUploadEnabled || disabled) return;
 
       const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
-        handleUpload(files[0]);
+      const firstFile = files[0];
+      if (files.length > 0 && firstFile) {
+        handleUpload(firstFile);
       }
     },
     [isUploadEnabled, disabled, handleUpload]
@@ -238,8 +239,9 @@ export function FileUpload({
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if (files && files.length > 0) {
-        handleUpload(files[0]);
+      const firstFile = files?.[0];
+      if (files && files.length > 0 && firstFile) {
+        handleUpload(firstFile);
       }
       // Reset input
       if (fileInputRef.current) {

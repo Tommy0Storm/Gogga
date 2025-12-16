@@ -167,13 +167,17 @@ export function useRAG(tier: Tier): UseRAGReturn {
   const onUpdateStorageUsage = useEffectEvent(async () => {
     try {
       const usage = await getStorageUsageBreakdown();
+      const STORAGE_LIMIT_MB = 100;
+      const totalMB = usage.total.estimatedSizeMB;
+      const usedPercent = (totalMB / STORAGE_LIMIT_MB) * 100;
+      const remainingMB = STORAGE_LIMIT_MB - totalMB;
       setState((prev) => ({
         ...prev,
         storageUsage: {
-          totalMB: usage.totalMB,
+          totalMB,
           maxMB: RAG_LIMITS.MAX_TOTAL_STORAGE_MB,
-          usedPercent: usage.usedPercent,
-          remainingMB: usage.remainingMB,
+          usedPercent,
+          remainingMB,
         },
       }));
     } catch (err) {
@@ -228,6 +232,13 @@ export function useRAG(tier: Tier): UseRAGReturn {
     if (isRAGEnabled) {
       onLoadDocuments();
     }
+    
+    // Always load all documents for RightSidePanel visibility (regardless of tier)
+    // This allows users to see their document pool even on FREE/JIVE tiers
+    getAllDocuments().then(docs => {
+      const validDocs = docs.filter(isValidDocument);
+      setState(prev => ({ ...prev, allDocuments: validDocs }));
+    }).catch(console.error);
 
     // Cleanup: unload session index when unmounting
     return () => {
@@ -236,8 +247,8 @@ export function useRAG(tier: Tier): UseRAGReturn {
   }, [isRAGEnabled]); // Stable handlers, only re-run when RAG enabled/disabled
 
   const loadAllDocuments = useCallback(async () => {
-    if (!canSelectFromAllSessions) return;
-
+    // Always load all documents for visibility in RightSidePanel
+    // Cross-session SELECTION is tier-gated, but VIEWING all docs is allowed
     setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
@@ -255,7 +266,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
           err instanceof Error ? err.message : 'Failed to load all documents',
       }));
     }
-  }, [canSelectFromAllSessions]);
+  }, []);
 
   const selectDocuments = useCallback(
     async (docIds: number[]) => {
@@ -757,6 +768,11 @@ export function useRAG(tier: Tier): UseRAGReturn {
     [canUseSemanticRAG, state.documents.length, state.selectedDocIds]
   );
 
+  // Wrap getMaxDocsPerSession to bind the current tier
+  const getMaxDocsPerSessionBound = useCallback(() => {
+    return getMaxDocsPerSession(tier);
+  }, [tier]);
+
   return {
     ...state,
     uploadDocument,
@@ -770,7 +786,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
     canSelectFromAllSessions,
     selectDocuments,
     loadAllDocuments,
-    getMaxDocsPerSession,
+    getMaxDocsPerSession: getMaxDocsPerSessionBound,
     getRemainingDocsSlots,
     // Semantic RAG (JIGGA only)
     canUseSemanticRAG,

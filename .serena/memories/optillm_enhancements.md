@@ -132,3 +132,22 @@ Use `parse_enhanced_response(content)` to extract sections.
 
 These would require significant token budget and are better suited
 for batch processing or critical decisions, not real-time chat.
+
+## OptiLLM Benchmark Results (Reference)
+
+From OptiLLM docs (Dec 2024), CePO on Qwen3 models:
+
+| Model | AIME 2024 | LiveCodeBench |
+|-------|-----------|---------------|
+| Qwen3 32B (baseline) | 81.4 | 65.7 |
+| **CePO + Qwen3 32B** | **90.7** | **71.9** |
+| Qwen3 235B (baseline) | 85.7 | 70.7 |
+
+Gogga implements the core CePO techniques (CoT, Planning, Re-Read, SPL)
+directly in code via `optillm_enhancements.py`, without the proxy overhead.
+
+## Potential Future Enhancements
+
+1. **LEAP** - Learn task-specific principles from examples (+generalization)
+2. **PlanSearch** - Search over candidate plans for code generation (+20% pass@5)
+3. **LongCePO** - Divide-and-conquer for long documents (enables 128K+ context with 8K model)

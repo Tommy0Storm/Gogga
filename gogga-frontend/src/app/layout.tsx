@@ -49,9 +49,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <GlobalErrorBoundary>
-          {/* AuthProvider disabled until NextAuth route issues resolved */}
-          {/* <AuthProvider>{children}</AuthProvider> */}
-          {children}
+          <AuthProvider>{children}</AuthProvider>
         </GlobalErrorBoundary>
       </body>
     </html>

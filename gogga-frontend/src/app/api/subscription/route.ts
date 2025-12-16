@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: userEmail },
       include: {
-        subscription: true,
+        Subscription: true,
       },
     });
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Extract subscription data with proper null handling
-    const sub = user.subscription;
+    const sub = user.Subscription;
 
     // Build response with proper defaults
     const credits = sub?.credits ?? 0;

@@ -70,7 +70,8 @@ stackedBar, stackedLine, multiArea
 ### Display View Components (10)
 | Component | Purpose | File |
 |-----------|---------|------|
-| TerminalView | **IMPLEMENTED** Live verbose execution logs | `display/TerminalView.tsx` |
+| TerminalView | **ENHANCED** Live verbose execution logs WITH full calculation steps | `display/TerminalView.tsx` |
+| PythonTerminalView | **IMPLEMENTED** Python 3.14 code execution display with syntax highlighting | `display/PythonTerminalView.tsx` |
 | DataTable | CSV data, query results | `display/DataTable.tsx` |
 | StatCards | KPIs, summary stats | `display/StatCards.tsx` |
 | FormulaView | LaTeX equations, proofs | `display/FormulaView.tsx` |
@@ -103,14 +104,43 @@ stackedBar, stackedLine, multiArea
 ### Implementation Status
 - **Phase 1: Charts** ✅ COMPLETE (13 tasks)
   - ChartRenderer enhanced, 13+ chart types, stacked variants, exports
-- **Phase 2: Math Tools** ✅ COMPLETE (All Phases)
+- **Phase 2: Math Tools** ✅ COMPLETE (All Phases + December 2025 Enhancement)
   - `math_router.py` - Intent classification (7 categories)
   - `math_definitions.py` - 4 tool schemas (statistics, financial, tax, fraud)
-  - `math_service.py` - Full calculation engine (~400 lines)
+  - `math_service.py` - Full calculation engine (~1300 lines)
   - Display components: StatCards, AlertCards, DataTable, FormulaView, MathResultDisplay
   - Router integration: tools added to `definitions.py` and `executor.py`
   - Unit tests: 36 tests passing in `test_math_service.py`
   - Documentation: `docs/MathTooling.md`
+  
+  **December 2025 Enhancement: Step-by-Step Calculation Display**
+  - Added `calculation_steps` to all major math operations:
+    - `_compound_interest()` - 8 steps showing formula breakdown
+    - `_simple_interest()` - 5 steps
+    - `_pmt()` (loan payment) - 10 steps with intermediate values
+    - `_summary_stats()` - 11 steps for statistical analysis
+    - `_npv()` - Dynamic steps showing each period's present value
+    - `calculate_sa_tax()` - 11+ steps for full tax calculation breakdown
+  - Frontend `toolHandler.ts` updated to parse `calculation_steps` and add to execution logs
+  - `MathResultDisplay` now shows logs expanded by default when calculation_steps present
+  - Uses Python 3.14 `Decimal.from_number()` for precision in calculations
+  - Added `to_decimal()` and `to_fraction()` helper functions for Python 3.14 compatibility
+  - Imports: `from decimal import Decimal, ROUND_HALF_UP` and `from fractions import Fraction`
+
+  **December 2025: SymPy Integration for Sophisticated Formulas**
+  - Added SymPy 1.14+ to `python_executor.py` ALLOWED_MODULES
+  - Pre-imported in sandbox: Symbol, symbols, solve, simplify, expand, factor, diff, integrate, limit, series, summation, product, Eq, Matrix, det, latex, pretty, sin, cos, tan, exp, log, sqrt, pi, E, I, oo
+  - Capabilities: Algebraic solving, system of equations, calculus, differential equations, matrix operations, LaTeX output
+  - Example: `solve(x**2 - 5*x + 6, x)` → `[2, 3]`
+  - Example: `dsolve(y''-2y'+y=0)` → `y = (C1 + C2*x)*exp(x)`
+
+  **December 2025: Sequential Thinking Tool**
+  - Added `sequential_think` tool for multi-step reasoning
+  - Schema: step_number, thought, calculation, intermediate_result, needs_more_steps, next_step_plan
+  - Returns calculation_steps for frontend display
+  - Available on JIVE and JIGGA tiers
+  - Enables LLM to break complex problems into visible reasoning steps
+
 - **Phase 3: Display Views** - PENDING
 - **Phase 4: Documentation** - COMPLETE (TIERS.md updated)
 

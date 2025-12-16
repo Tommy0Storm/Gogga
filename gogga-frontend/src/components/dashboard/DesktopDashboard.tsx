@@ -859,6 +859,9 @@ const EmbeddingsTab: React.FC<EmbeddingsTabProps> = ({
       return { magnitude: 0, sparsity: 0, dimension: 384 };
     }
     const firstVec = vectors[0];
+    if (!firstVec) {
+      return { magnitude: 0, sparsity: 0, dimension: 384 };
+    }
     const magnitude = Math.sqrt(firstVec.reduce((sum, v) => sum + v * v, 0));
     const nearZero = firstVec.filter((v) => Math.abs(v) < 0.01).length;
     const sparsity = nearZero / firstVec.length;

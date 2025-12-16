@@ -97,7 +97,10 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
     loading: { icon: 'autorenew', color: '#6B7280' },
   };
   
-  const config = statusConfig[status] || statusConfig.info;
+  const config = statusConfig[status] ?? statusConfig.info;
+  if (!config) {
+    return null;
+  }
   const animationClass = status === 'loading' && animate ? 'animate-spin' : '';
   
   return (

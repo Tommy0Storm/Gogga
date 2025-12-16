@@ -832,7 +832,7 @@ class LanguageDetectorPlugin:
         self._logger.info(
             f"Detected language: {result.name} ({result.code}) "
             f"confidence={result.confidence:.2f} method={result.method} "
-            f"hybrid={result.is_hybrid}"
+            f"hybrid={result.is_hybrid} | text='{user_input[:80]}'"
         )
         
         # Inject metadata (always, even for low confidence)

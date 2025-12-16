@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         const submissions = await prisma.debugSubmission.findMany({
             where: status === 'all' ? {} : { status },
             include: {
-                user: {
+                User: {
                     select: { email: true },
                 },
             },

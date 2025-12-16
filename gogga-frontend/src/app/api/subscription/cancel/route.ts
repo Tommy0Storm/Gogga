@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: {
-        subscription: true,
+        Subscription: true,
       },
     })
 
@@ -42,14 +42,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!user.subscription) {
+    if (!user.Subscription) {
       return NextResponse.json(
         { error: 'No subscription found' },
         { status: 404 }
       )
     }
 
-    const { subscription } = user
+    const subscription = user.Subscription
 
     // Check if already cancelled
     if (subscription.status === 'cancelled' || subscription.status === 'expired') {

@@ -173,10 +173,18 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           chunks.push(content.slice(i, i + chunkSize));
         }
 
-        // Save to database
+        // Save to database with session-scoped fields (v8)
         const now = new Date();
         const docId = await db.documents.add({
+          // Session-Scoped RAG fields
+          userId: 'current_user', // TODO: Get from auth context
+          originSessionId: sessionId,
+          activeSessions: [sessionId], // Initially active only in upload session
+          accessCount: 0,
+          lastAccessedAt: now,
+          // Legacy field (frozen at upload time)
           sessionId,
+          // Document content
           filename: file.name,
           content,
           chunks,
@@ -190,7 +198,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         // Save chunks
         await db.chunks.bulkAdd(
           chunks.map((text, index) => ({
-            documentId: docId as number,
+            documentId: docId,
             sessionId,
             chunkIndex: index,
             text,

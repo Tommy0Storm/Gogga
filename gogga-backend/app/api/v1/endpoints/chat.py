@@ -1,11 +1,11 @@
 """
 GOGGA Chat Endpoints - Tier-Based Routing.
 
-FREE Tier: OpenRouter Llama 3.3 70B FREE
-JIVE Tier: Cerebras Llama 3.1 8B (direct or + CePO)
+FREE Tier: OpenRouter Qwen 3 235B FREE
+JIVE Tier: Cerebras Qwen 3 32B (direct or + OptiLLM)
 JIGGA Tier: Cerebras Qwen 3 235B (thinking or /no_think)
 
-Universal: Prompt enhancement via Llama 3.3 70B FREE (all tiers)
+Universal: Prompt enhancement via Qwen 3 235B FREE (all tiers)
 """
 import logging
 from typing import Any
@@ -44,11 +44,11 @@ async def chat(request: TieredChatRequest) -> ChatResponse:
     Send a message to Gogga with tier-based routing.
     
     FREE Tier:
-        → OpenRouter Llama 3.3 70B FREE
+        → OpenRouter Qwen 3 235B FREE
         
     JIVE Tier:
-        Simple → Cerebras Llama 3.1 8B direct
-        Complex → Cerebras Llama 3.1 8B + CePO
+        Simple → Cerebras Qwen 3 32B direct
+        Complex → Cerebras Qwen 3 32B + OptiLLM
         
     JIGGA Tier:
         All → Cerebras Qwen 3 32B with thinking (temp=0.6, top_p=0.95)
@@ -189,7 +189,7 @@ def _resolve_force_layer(
     
     # JIVE tier layers
     if user_tier == UserTier.JIVE:
-        if "reasoning" in force_lower or "cepo" in force_lower:
+        if "reasoning" in force_lower or "complex" in force_lower:
             return CognitiveLayer.JIVE_REASONING
         return CognitiveLayer.JIVE_SPEED
     
@@ -223,7 +223,7 @@ class EnhanceRequest(BaseModel):
 @router.post("/enhance")
 async def enhance_prompt(request: EnhanceRequest) -> dict[str, Any]:
     """
-    Enhance a prompt using Llama 3.3 70B FREE.
+    Enhance a prompt using Qwen 3 235B FREE.
     
     Available to ALL tiers - this is the universal "Enhance" button.
     Works for both text and image prompts.
@@ -411,7 +411,7 @@ async def list_tiers():
                 "id": "free",
                 "name": "Free Tier",
                 "text": {
-                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "model": settings.OPENROUTER_MODEL_QWEN,
                     "provider": "OpenRouter",
                     "cost": "FREE"
                 },
@@ -422,7 +422,7 @@ async def list_tiers():
                     "cost": "FREE"
                 },
                 "prompt_enhancement": {
-                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "model": settings.OPENROUTER_MODEL_QWEN,
                     "cost": "FREE"
                 }
             },
@@ -442,7 +442,7 @@ async def list_tiers():
                     "limit": IMAGE_LIMITS[UserTier.JIVE]
                 },
                 "prompt_enhancement": {
-                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "model": settings.OPENROUTER_MODEL_QWEN,
                     "cost": "FREE (included)"
                 }
             },
@@ -470,7 +470,7 @@ async def list_tiers():
                     "limit": IMAGE_LIMITS[UserTier.JIGGA]
                 },
                 "prompt_enhancement": {
-                    "model": settings.OPENROUTER_MODEL_LLAMA,
+                    "model": settings.OPENROUTER_MODEL_QWEN,
                     "cost": "FREE (included)"
                 }
             }

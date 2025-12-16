@@ -71,7 +71,7 @@ async function handleDailyCheck() {
       status: 'active',
       nextBilling: { lte: now },
     },
-    include: { user: true },
+    include: { User: true },
   })
 
   for (const sub of activeSubscriptions) {
@@ -96,7 +96,7 @@ async function handleDailyCheck() {
         },
       })
 
-      console.log(`[Reset] ${sub.user.email}: ${sub.tier} → ${tierCredits} credits, ${tierImages} images`)
+      console.log(`[Reset] ${sub.User.email}: ${sub.tier} → ${tierCredits} credits, ${tierImages} images`)
       results.reset++
     } catch (err) {
       console.error(`[Reset Error] ${sub.id}:`, err)
@@ -110,7 +110,7 @@ async function handleDailyCheck() {
       status: 'cancelled',
       nextBilling: { lte: now },
     },
-    include: { user: true },
+    include: { User: true },
   })
 
   for (const sub of cancelledSubscriptions) {
@@ -128,7 +128,7 @@ async function handleDailyCheck() {
         },
       })
 
-      console.log(`[Expired] ${sub.user.email}: ${sub.tier} → FREE (grace period over)`)
+      console.log(`[Expired] ${sub.User.email}: ${sub.tier} → FREE (grace period over)`)
       results.expired++
       
       // TODO: Send subscription_expired email
@@ -144,7 +144,7 @@ async function handleDailyCheck() {
       status: 'past_due',
       retryCount: { gte: 3 },
     },
-    include: { user: true },
+    include: { User: true },
   })
 
   for (const sub of pastDueSubscriptions) {
@@ -157,7 +157,7 @@ async function handleDailyCheck() {
         },
       })
 
-      console.log(`[Cancelled] ${sub.user.email}: Payment failed 3+ times`)
+      console.log(`[Cancelled] ${sub.User.email}: Payment failed 3+ times`)
       results.cancelled++
       
       // TODO: Send subscription_cancelled email
@@ -175,7 +175,7 @@ async function handleDailyCheck() {
 async function handleManualReset(userId: string) {
   const subscription = await prisma.subscription.findUnique({
     where: { userId },
-    include: { user: true },
+    include: { User: true },
   })
 
   if (!subscription) {
@@ -203,11 +203,11 @@ async function handleManualReset(userId: string) {
     },
   })
 
-  console.log(`[Manual Reset] ${subscription.user.email}: ${subscription.tier} → ${tierCredits} credits`)
+  console.log(`[Manual Reset] ${subscription.User.email}: ${subscription.tier} → ${tierCredits} credits`)
 
   return NextResponse.json({
     success: true,
-    user: subscription.user.email,
+    user: subscription.User.email,
     tier: subscription.tier,
     credits: tierCredits,
     images: tierImages,

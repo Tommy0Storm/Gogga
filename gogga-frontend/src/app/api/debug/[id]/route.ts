@@ -30,7 +30,7 @@ export async function GET(
         const submission = await prisma.debugSubmission.findUnique({
             where: { id },
             include: {
-                user: { select: { email: true } },
+                User: { select: { email: true } },
             },
         });
 

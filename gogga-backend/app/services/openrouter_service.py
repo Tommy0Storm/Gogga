@@ -2,8 +2,8 @@
 OpenRouter Service for FREE Tier Operations.
 
 Handles:
-1. Text Chat (FREE tier) - Llama 3.3 70B FREE
-2. Prompt Enhancement (ALL tiers) - Llama 3.3 70B FREE  
+1. Text Chat (FREE tier) - Qwen 3 235B FREE (same model family as paid tiers)
+2. Prompt Enhancement (ALL tiers) - Qwen 3 235B FREE  
 3. Image Generation (FREE tier) - LongCat Flash FREE
 
 This is completely separate from Cerebras (JIVE/JIGGA text) and DeepInfra (JIVE/JIGGA images).
@@ -28,18 +28,18 @@ class OpenRouterService:
     OpenRouter integration for FREE tier and universal prompt enhancement.
     
     Text (FREE tier):
-        User → Llama 3.3 70B FREE → Response
+        User → Qwen 3 235B FREE → Response
         
     Prompt Enhancement (ALL tiers):
-        User prompt → Llama 3.3 70B FREE → Enhanced prompt
+        User prompt → Qwen 3 235B FREE → Enhanced prompt
         
     Image (FREE tier):
-        User → Llama 3.3 70B (enhance) → LongCat Flash → Image
+        User → Qwen 3 235B (enhance) → LongCat Flash → Image
     """
     
     def __init__(self):
         self.api_key = settings.OPENROUTER_API_KEY
-        self.model_llama = settings.OPENROUTER_MODEL_LLAMA
+        self.model_qwen = settings.OPENROUTER_MODEL_QWEN  # Qwen 3 235B FREE
         self.model_longcat = settings.OPENROUTER_MODEL_LONGCAT
         self._client: httpx.AsyncClient | None = None
     
@@ -114,7 +114,7 @@ class OpenRouterService:
         user_id: str | None = None
     ) -> dict[str, Any]:
         """
-        FREE tier text chat using Llama 3.3 70B.
+        FREE tier text chat using Qwen 3 235B.
         
         Args:
             message: User's input message
@@ -139,7 +139,7 @@ class OpenRouterService:
         )
         
         result = await self._chat_completion(
-            model=self.model_llama,
+            model=self.model_qwen,
             messages=messages,
             max_tokens=2048,
             temperature=0.7
@@ -157,7 +157,7 @@ class OpenRouterService:
             "meta": {
                 "tier": "free",
                 "layer": "free_text",
-                "model": self.model_llama,
+                "model": self.model_qwen,
                 "provider": "openrouter",
                 "latency_seconds": result["latency_seconds"],
                 "tokens": {
@@ -174,7 +174,7 @@ class OpenRouterService:
     
     async def enhance_prompt(self, user_prompt: str) -> dict[str, Any]:
         """
-        Universal prompt enhancement using Llama 3.3 70B FREE.
+        Universal prompt enhancement using Qwen 3 235B FREE.
         
         Available to ALL tiers via the "Enhance" button.
         Works for both image and text prompts.
@@ -213,7 +213,7 @@ Output ONLY the enhanced prompt, no explanations."""
         ]
         
         result = await self._chat_completion(
-            model=self.model_llama,
+            model=self.model_qwen,
             messages=messages,
             max_tokens=500,
             temperature=0.7
@@ -230,7 +230,7 @@ Output ONLY the enhanced prompt, no explanations."""
             "original_prompt": user_prompt,
             "enhanced_prompt": result["content"].strip(),
             "meta": {
-                "model": self.model_llama,
+                "model": self.model_qwen,
                 "provider": "openrouter",
                 "latency_seconds": round(total_latency, 3),
                 "cost": 0.0  # FREE
@@ -248,10 +248,10 @@ Output ONLY the enhanced prompt, no explanations."""
         enhance: bool = True
     ) -> dict[str, Any]:
         """
-        FREE tier image generation: Llama 3.3 → LongCat Flash.
+        FREE tier image generation: Qwen 235B → LongCat Flash.
         
         Pipeline:
-        1. Enhance prompt with Llama 3.3 70B (if enabled)
+        1. Enhance prompt with Qwen 3 235B (if enabled)
         2. Generate image with LongCat Flash
         
         Args:
@@ -317,7 +317,7 @@ Output ONLY the enhanced prompt, no explanations."""
             "content": content,  # LongCat returns image description/data
             "meta": {
                 "tier": "free",
-                "pipeline": "llama-longcat",
+                "pipeline": "qwen-longcat",
                 "enhancement": enhancement_meta,
                 "generation_model": self.model_longcat,
                 "latency_seconds": round(total_latency, 3),
@@ -344,7 +344,7 @@ Output ONLY the enhanced prompt, no explanations."""
                     "provider": "openrouter",
                     "latency_ms": round(latency * 1000, 2),
                     "models": {
-                        "text": self.model_llama,
+                        "text": self.model_qwen,
                         "image": self.model_longcat
                     }
                 }

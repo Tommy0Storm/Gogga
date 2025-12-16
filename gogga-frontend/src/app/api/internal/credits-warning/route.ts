@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         status: 'active',
         tier: { in: ['JIVE', 'JIGGA'] },
       },
-      include: { user: true },
+      include: { User: true },
     })
 
     let warningsSent = 0
@@ -54,10 +54,10 @@ export async function POST(request: NextRequest) {
 
       if (percentRemaining <= thresholdPercent && percentRemaining > 0) {
         // TODO: Send credits_low email via EmailJS
-        console.log(`[Credits Warning] ${sub.user.email}: ${Math.round(percentRemaining)}% remaining`)
+        console.log(`[Credits Warning] ${sub.User.email}: ${Math.round(percentRemaining)}% remaining`)
         
         warnings.push({
-          email: sub.user.email,
+          email: sub.User.email,
           tier: sub.tier,
           percent: Math.round(percentRemaining),
         })

@@ -69,7 +69,7 @@ async function createThumbnail(
       const thumbnail = canvas.toDataURL('image/jpeg', 0.85);
       
       resolve({
-        thumbnail: thumbnail.split(',')[1], // Remove data: prefix
+        thumbnail: thumbnail.split(',')[1] ?? '', // Remove data: prefix
         width: img.width,
         height: img.height,
       });
@@ -106,7 +106,7 @@ export function useImageStorage(): UseImageStorageReturn {
     // Clean image data (remove data: prefix if present)
     let cleanData = imageData;
     if (imageData.startsWith('data:')) {
-      cleanData = imageData.split(',')[1];
+      cleanData = imageData.split(',')[1] ?? '';
     }
     
     const mimeType = detectMimeType(cleanData);

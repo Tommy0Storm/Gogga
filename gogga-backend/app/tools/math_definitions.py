@@ -356,11 +356,12 @@ PYTHON_EXECUTOR_TOOL: ToolDefinition = {
             "Execute Python code for complex mathematical calculations, data analysis, "
             "or any computation that requires precision. Uses Python 3.14 with features like "
             "Decimal.from_number(), Fraction.from_number(), template strings, and improved formatting. "
+            "Available: math, decimal, fractions, statistics, numpy, scipy, AND SYMPY for symbolic math. "
+            "SymPy provides: solve(), diff(), integrate(), limit(), series(), Matrix operations, "
+            "Symbol, Eq, simplify, expand, factor, latex() for equation rendering. "
             "Returns formatted terminal-style output with syntax highlighting. "
-            "Use this for: algebraic expressions, symbolic math, custom formulas, "
-            "iterative calculations, or when other math tools don't fit the use case. "
-            "Code runs in a sandboxed environment with math, decimal, fractions, statistics, "
-            "numpy, and scipy available."
+            "Use this for: algebraic expressions, symbolic math, solving equations, calculus, "
+            "matrix operations, custom formulas, iterative calculations, or when other math tools don't fit."
         ),
         "parameters": {
             "type": "object",
@@ -369,9 +370,12 @@ PYTHON_EXECUTOR_TOOL: ToolDefinition = {
                     "type": "string",
                     "description": (
                         "Python code to execute. Must print results to stdout. "
-                        "Available imports: math, decimal (Decimal), fractions (Fraction), "
-                        "statistics, numpy (np), scipy. Use f-strings or print() for output. "
-                        "Example: 'from decimal import Decimal; result = Decimal.from_number(22) / Decimal.from_number(7); print(f\"Pi approx: {result:.50f}\")'"
+                        "Available pre-imported: math, Decimal, Fraction, statistics, numpy (np), scipy, "
+                        "and all SymPy functions (Symbol, symbols, solve, diff, integrate, limit, "
+                        "series, Eq, simplify, expand, factor, Matrix, det, inv, latex, pretty, "
+                        "sin, cos, tan, exp, log, sqrt, pi, E, I, oo). "
+                        "Example symbolic: 'x = Symbol(\"x\"); eq = x**2 - 4; print(f\"Solutions: {solve(eq, x)}\")' "
+                        "Example calculus: 'x = Symbol(\"x\"); f = x**3; print(f\"Derivative: {diff(f, x)}, Integral: {integrate(f, x)}\")'"
                     )
                 },
                 "description": {
@@ -391,6 +395,107 @@ PYTHON_EXECUTOR_TOOL: ToolDefinition = {
 
 
 # =============================================================================
+# Sequential Thinking Tool - Multi-step reasoning for complex problems
+# =============================================================================
+
+SEQUENTIAL_THINKING_TOOL: ToolDefinition = {
+    "type": "function",
+    "function": {
+        "name": "sequential_think",
+        "strict": True,
+        "description": (
+            "Think through a complex problem step by step, recording intermediate results. "
+            "Use this when a problem requires multiple calculation steps, and you want to: "
+            "1) Break down the problem into logical steps, 2) Store intermediate results for later steps, "
+            "3) Build up to a final answer incrementally, 4) Show the user your reasoning process. "
+            "IMPORTANT: You can call this tool multiple times in sequence to work through complex problems. "
+            "Each call represents ONE step in your reasoning chain. Set 'needs_more_steps' to true if "
+            "there are additional steps to perform, or false when you reach the final answer. "
+            "The LLM can choose to perform calculations in the 'calculation' field (optional) "
+            "or use other tools like python_execute between sequential_think calls for complex math."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "step_number": {
+                    "type": "integer",
+                    "description": "Current step number (start from 1, increment each call)"
+                },
+                "thought": {
+                    "type": "string",
+                    "description": "Explanation of what you're doing in this step and why"
+                },
+                "calculation": {
+                    "type": "string",
+                    "description": "Optional: Simple calculation performed in this step (e.g., '5 * 12 = 60')"
+                },
+                "intermediate_result": {
+                    "type": "string",
+                    "description": "The result or output from this step that will be used in subsequent steps"
+                },
+                "needs_more_steps": {
+                    "type": "boolean",
+                    "description": "Set to true if more steps are needed, false if this is the final step"
+                },
+                "next_step_plan": {
+                    "type": "string",
+                    "description": "If needs_more_steps is true, briefly describe what the next step will do"
+                }
+            },
+            "required": ["step_number", "thought", "intermediate_result", "needs_more_steps"],
+            "additionalProperties": False
+        }
+    }
+}
+
+
+# =============================================================================
+# Math Delegate Tool - 235B delegates computation to 32B
+# =============================================================================
+
+MATH_DELEGATE_TOOL: ToolDefinition = {
+    "type": "function",
+    "function": {
+        "name": "math_delegate",
+        "strict": True,
+        "description": (
+            "Delegate a mathematical computation to the fast math processor (Qwen 32B + SymPy). "
+            "Use this when you need to compute something mathematically but want to focus on "
+            "understanding and explaining the results. Describe WHAT to calculate in natural language, "
+            "not HOW to code it. The fast processor will write and execute the SymPy code, "
+            "then return the computed result for you to interpret and explain to the user. "
+            "This is ideal for: solving equations, calculus operations, matrix computations, "
+            "differential equations, symbolic manipulation, or any computation where you want "
+            "to focus on the explanation rather than the implementation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": (
+                        "Natural language description of the math task. Be specific about: "
+                        "1) What mathematical operation to perform, "
+                        "2) The exact values/expressions involved, "
+                        "3) What format you want the result in. "
+                        "Example: 'Find the eigenvalues and eigenvectors of the matrix [[1,2],[3,4]]' "
+                        "Example: 'Solve the differential equation dy/dx = x*y with y(0) = 1' "
+                        "Example: 'Calculate the integral of x^2 * sin(x) from 0 to pi'"
+                    )
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Optional context about why this calculation is needed or how it fits into the larger problem"
+                }
+            },
+            "required": ["task"],
+            "additionalProperties": False
+        }
+    }
+}
+
+
+# =============================================================================
 # Tool Registry
 # =============================================================================
 
@@ -402,7 +507,24 @@ MATH_TOOLS = [
     MATH_PROBABILITY_TOOL,
     MATH_CONVERSION_TOOL,
     PYTHON_EXECUTOR_TOOL,
+    SEQUENTIAL_THINKING_TOOL,
 ]
+
+# Tools available for 235B model (includes delegation to 32B)
+MATH_TOOLS_235B = MATH_TOOLS + [MATH_DELEGATE_TOOL]
+
+# Set of all math tool names for filtering (used to identify math tools in ai_service)
+ALL_MATH_TOOL_NAMES: set[str] = {
+    "math_statistics",
+    "math_financial",
+    "math_sa_tax",
+    "math_fraud_analysis",
+    "math_probability",
+    "math_conversion",
+    "python_execute",
+    "sequential_think",
+    "math_delegate",
+}
 
 
 def get_math_tools_for_tier(tier: str) -> list[ToolDefinition]:
@@ -446,6 +568,11 @@ JIVE_MATH_TOOLS: list[ToolDefinition] = [
     MATH_PROBABILITY_TOOL,
     MATH_CONVERSION_TOOL,
     PYTHON_EXECUTOR_TOOL,
+    SEQUENTIAL_THINKING_TOOL,  # For multi-step reasoning
 ]
 
-JIGGA_MATH_TOOLS: list[ToolDefinition] = MATH_TOOLS  # All tools including fraud + python
+# JIGGA 32B default: All tools including fraud + python + thinking
+JIGGA_MATH_TOOLS: list[ToolDefinition] = MATH_TOOLS
+
+# JIGGA 235B: All tools + math_delegate for delegating to 32B
+JIGGA_235B_MATH_TOOLS: list[ToolDefinition] = MATH_TOOLS_235B

@@ -198,10 +198,10 @@ export type UserWhereInput = {
   isTester?: Prisma.BoolFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
-  subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
-  usage?: Prisma.UsageListRelationFilter
-  usageSummary?: Prisma.UsageSummaryListRelationFilter
-  debugSubmissions?: Prisma.DebugSubmissionListRelationFilter
+  DebugSubmission?: Prisma.DebugSubmissionListRelationFilter
+  Subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
+  Usage?: Prisma.UsageListRelationFilter
+  UsageSummary?: Prisma.UsageSummaryListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -212,10 +212,10 @@ export type UserOrderByWithRelationInput = {
   isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  subscription?: Prisma.SubscriptionOrderByWithRelationInput
-  usage?: Prisma.UsageOrderByRelationAggregateInput
-  usageSummary?: Prisma.UsageSummaryOrderByRelationAggregateInput
-  debugSubmissions?: Prisma.DebugSubmissionOrderByRelationAggregateInput
+  DebugSubmission?: Prisma.DebugSubmissionOrderByRelationAggregateInput
+  Subscription?: Prisma.SubscriptionOrderByWithRelationInput
+  Usage?: Prisma.UsageOrderByRelationAggregateInput
+  UsageSummary?: Prisma.UsageSummaryOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -229,10 +229,10 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   isTester?: Prisma.BoolFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
-  subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
-  usage?: Prisma.UsageListRelationFilter
-  usageSummary?: Prisma.UsageSummaryListRelationFilter
-  debugSubmissions?: Prisma.DebugSubmissionListRelationFilter
+  DebugSubmission?: Prisma.DebugSubmissionListRelationFilter
+  Subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
+  Usage?: Prisma.UsageListRelationFilter
+  UsageSummary?: Prisma.UsageSummaryListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -269,10 +269,10 @@ export type UserCreateInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
-  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -283,10 +283,10 @@ export type UserUncheckedCreateInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
-  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -297,10 +297,10 @@ export type UserUpdateInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
-  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -311,10 +311,10 @@ export type UserUncheckedUpdateInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
-  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -347,6 +347,16 @@ export type UserUncheckedUpdateManyInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
+export type UserNullableScalarRelationFilter = {
+  is?: Prisma.UserWhereInput | null
+  isNot?: Prisma.UserWhereInput | null
+}
+
+export type UserScalarRelationFilter = {
+  is?: Prisma.UserWhereInput
+  isNot?: Prisma.UserWhereInput
+}
+
 export type UserCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
@@ -377,26 +387,20 @@ export type UserMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
-export type UserScalarRelationFilter = {
-  is?: Prisma.UserWhereInput
-  isNot?: Prisma.UserWhereInput
+export type UserCreateNestedOneWithoutDebugSubmissionInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutDebugSubmissionInput
+  connect?: Prisma.UserWhereUniqueInput
 }
 
-export type UserNullableScalarRelationFilter = {
-  is?: Prisma.UserWhereInput | null
-  isNot?: Prisma.UserWhereInput | null
-}
-
-export type StringFieldUpdateOperationsInput = {
-  set?: string
-}
-
-export type BoolFieldUpdateOperationsInput = {
-  set?: boolean
-}
-
-export type DateTimeFieldUpdateOperationsInput = {
-  set?: Date | string
+export type UserUpdateOneWithoutDebugSubmissionNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutDebugSubmissionInput
+  upsert?: Prisma.UserUpsertWithoutDebugSubmissionInput
+  disconnect?: Prisma.UserWhereInput | boolean
+  delete?: Prisma.UserWhereInput | boolean
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutDebugSubmissionInput, Prisma.UserUpdateWithoutDebugSubmissionInput>, Prisma.UserUncheckedUpdateWithoutDebugSubmissionInput>
 }
 
 export type UserCreateNestedOneWithoutSubscriptionInput = {
@@ -441,20 +445,72 @@ export type UserUpdateOneRequiredWithoutUsageSummaryNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUsageSummaryInput, Prisma.UserUpdateWithoutUsageSummaryInput>, Prisma.UserUncheckedUpdateWithoutUsageSummaryInput>
 }
 
-export type UserCreateNestedOneWithoutDebugSubmissionsInput = {
-  create?: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
-  connectOrCreate?: Prisma.UserCreateOrConnectWithoutDebugSubmissionsInput
-  connect?: Prisma.UserWhereUniqueInput
+export type UserCreateWithoutDebugSubmissionInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
 }
 
-export type UserUpdateOneWithoutDebugSubmissionsNestedInput = {
-  create?: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
-  connectOrCreate?: Prisma.UserCreateOrConnectWithoutDebugSubmissionsInput
-  upsert?: Prisma.UserUpsertWithoutDebugSubmissionsInput
-  disconnect?: Prisma.UserWhereInput | boolean
-  delete?: Prisma.UserWhereInput | boolean
-  connect?: Prisma.UserWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutDebugSubmissionsInput, Prisma.UserUpdateWithoutDebugSubmissionsInput>, Prisma.UserUncheckedUpdateWithoutDebugSubmissionsInput>
+export type UserUncheckedCreateWithoutDebugSubmissionInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutDebugSubmissionInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionInput>
+}
+
+export type UserUpsertWithoutDebugSubmissionInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutDebugSubmissionInput, Prisma.UserUncheckedUpdateWithoutDebugSubmissionInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutDebugSubmissionInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutDebugSubmissionInput, Prisma.UserUncheckedUpdateWithoutDebugSubmissionInput>
+}
+
+export type UserUpdateWithoutDebugSubmissionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutDebugSubmissionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSubscriptionInput = {
@@ -465,9 +521,9 @@ export type UserCreateWithoutSubscriptionInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSubscriptionInput = {
@@ -478,9 +534,9 @@ export type UserUncheckedCreateWithoutSubscriptionInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSubscriptionInput = {
@@ -507,9 +563,9 @@ export type UserUpdateWithoutSubscriptionInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSubscriptionInput = {
@@ -520,9 +576,9 @@ export type UserUncheckedUpdateWithoutSubscriptionInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUsageInput = {
@@ -533,9 +589,9 @@ export type UserCreateWithoutUsageInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUsageInput = {
@@ -546,9 +602,9 @@ export type UserUncheckedCreateWithoutUsageInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUsageInput = {
@@ -575,9 +631,9 @@ export type UserUpdateWithoutUsageInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUsageInput = {
@@ -588,9 +644,9 @@ export type UserUncheckedUpdateWithoutUsageInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUsageSummaryInput = {
@@ -601,9 +657,9 @@ export type UserCreateWithoutUsageSummaryInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
-  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUsageSummaryInput = {
@@ -614,9 +670,9 @@ export type UserUncheckedCreateWithoutUsageSummaryInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
-  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUsageSummaryInput = {
@@ -643,9 +699,9 @@ export type UserUpdateWithoutUsageSummaryInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
-  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUsageSummaryInput = {
@@ -656,77 +712,9 @@ export type UserUncheckedUpdateWithoutUsageSummaryInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
-  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
-  debugSubmissions?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
-}
-
-export type UserCreateWithoutDebugSubmissionsInput = {
-  id?: string
-  email: string
-  isAdmin?: boolean
-  isServiceAdmin?: boolean
-  isTester?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
-  usage?: Prisma.UsageCreateNestedManyWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
-}
-
-export type UserUncheckedCreateWithoutDebugSubmissionsInput = {
-  id?: string
-  email: string
-  isAdmin?: boolean
-  isServiceAdmin?: boolean
-  isTester?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
-  usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
-  usageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
-}
-
-export type UserCreateOrConnectWithoutDebugSubmissionsInput = {
-  where: Prisma.UserWhereUniqueInput
-  create: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
-}
-
-export type UserUpsertWithoutDebugSubmissionsInput = {
-  update: Prisma.XOR<Prisma.UserUpdateWithoutDebugSubmissionsInput, Prisma.UserUncheckedUpdateWithoutDebugSubmissionsInput>
-  create: Prisma.XOR<Prisma.UserCreateWithoutDebugSubmissionsInput, Prisma.UserUncheckedCreateWithoutDebugSubmissionsInput>
-  where?: Prisma.UserWhereInput
-}
-
-export type UserUpdateToOneWithWhereWithoutDebugSubmissionsInput = {
-  where?: Prisma.UserWhereInput
-  data: Prisma.XOR<Prisma.UserUpdateWithoutDebugSubmissionsInput, Prisma.UserUncheckedUpdateWithoutDebugSubmissionsInput>
-}
-
-export type UserUpdateWithoutDebugSubmissionsInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  email?: Prisma.StringFieldUpdateOperationsInput | string
-  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
-  usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
-}
-
-export type UserUncheckedUpdateWithoutDebugSubmissionsInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  email?: Prisma.StringFieldUpdateOperationsInput | string
-  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
-  usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
-  usageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -735,15 +723,15 @@ export type UserUncheckedUpdateWithoutDebugSubmissionsInput = {
  */
 
 export type UserCountOutputType = {
-  usage: number
-  usageSummary: number
-  debugSubmissions: number
+  DebugSubmission: number
+  Usage: number
+  UsageSummary: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  usage?: boolean | UserCountOutputTypeCountUsageArgs
-  usageSummary?: boolean | UserCountOutputTypeCountUsageSummaryArgs
-  debugSubmissions?: boolean | UserCountOutputTypeCountDebugSubmissionsArgs
+  DebugSubmission?: boolean | UserCountOutputTypeCountDebugSubmissionArgs
+  Usage?: boolean | UserCountOutputTypeCountUsageArgs
+  UsageSummary?: boolean | UserCountOutputTypeCountUsageSummaryArgs
 }
 
 /**
@@ -754,6 +742,13 @@ export type UserCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensi
    * Select specific fields to fetch from the UserCountOutputType
    */
   select?: Prisma.UserCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountDebugSubmissionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.DebugSubmissionWhereInput
 }
 
 /**
@@ -770,13 +765,6 @@ export type UserCountOutputTypeCountUsageSummaryArgs<ExtArgs extends runtime.Typ
   where?: Prisma.UsageSummaryWhereInput
 }
 
-/**
- * UserCountOutputType without action
- */
-export type UserCountOutputTypeCountDebugSubmissionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.DebugSubmissionWhereInput
-}
-
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -786,10 +774,10 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  subscription?: boolean | Prisma.User$subscriptionArgs<ExtArgs>
-  usage?: boolean | Prisma.User$usageArgs<ExtArgs>
-  usageSummary?: boolean | Prisma.User$usageSummaryArgs<ExtArgs>
-  debugSubmissions?: boolean | Prisma.User$debugSubmissionsArgs<ExtArgs>
+  DebugSubmission?: boolean | Prisma.User$DebugSubmissionArgs<ExtArgs>
+  Subscription?: boolean | Prisma.User$SubscriptionArgs<ExtArgs>
+  Usage?: boolean | Prisma.User$UsageArgs<ExtArgs>
+  UsageSummary?: boolean | Prisma.User$UsageSummaryArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -825,10 +813,10 @@ export type UserSelectScalar = {
 
 export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "isAdmin" | "isServiceAdmin" | "isTester" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  subscription?: boolean | Prisma.User$subscriptionArgs<ExtArgs>
-  usage?: boolean | Prisma.User$usageArgs<ExtArgs>
-  usageSummary?: boolean | Prisma.User$usageSummaryArgs<ExtArgs>
-  debugSubmissions?: boolean | Prisma.User$debugSubmissionsArgs<ExtArgs>
+  DebugSubmission?: boolean | Prisma.User$DebugSubmissionArgs<ExtArgs>
+  Subscription?: boolean | Prisma.User$SubscriptionArgs<ExtArgs>
+  Usage?: boolean | Prisma.User$UsageArgs<ExtArgs>
+  UsageSummary?: boolean | Prisma.User$UsageSummaryArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -837,10 +825,10 @@ export type UserIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
 export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "User"
   objects: {
-    subscription: Prisma.$SubscriptionPayload<ExtArgs> | null
-    usage: Prisma.$UsagePayload<ExtArgs>[]
-    usageSummary: Prisma.$UsageSummaryPayload<ExtArgs>[]
-    debugSubmissions: Prisma.$DebugSubmissionPayload<ExtArgs>[]
+    DebugSubmission: Prisma.$DebugSubmissionPayload<ExtArgs>[]
+    Subscription: Prisma.$SubscriptionPayload<ExtArgs> | null
+    Usage: Prisma.$UsagePayload<ExtArgs>[]
+    UsageSummary: Prisma.$UsageSummaryPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1244,10 +1232,10 @@ readonly fields: UserFieldRefs;
  */
 export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  subscription<T extends Prisma.User$subscriptionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$subscriptionArgs<ExtArgs>>): Prisma.Prisma__SubscriptionClient<runtime.Types.Result.GetResult<Prisma.$SubscriptionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-  usage<T extends Prisma.User$usageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$usageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  usageSummary<T extends Prisma.User$usageSummaryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$usageSummaryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsageSummaryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  debugSubmissions<T extends Prisma.User$debugSubmissionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$debugSubmissionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DebugSubmissionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  DebugSubmission<T extends Prisma.User$DebugSubmissionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$DebugSubmissionArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DebugSubmissionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  Subscription<T extends Prisma.User$SubscriptionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$SubscriptionArgs<ExtArgs>>): Prisma.Prisma__SubscriptionClient<runtime.Types.Result.GetResult<Prisma.$SubscriptionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  Usage<T extends Prisma.User$UsageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$UsageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  UsageSummary<T extends Prisma.User$UsageSummaryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$UsageSummaryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsageSummaryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1670,9 +1658,33 @@ export type UserDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Internal
 }
 
 /**
- * User.subscription
+ * User.DebugSubmission
  */
-export type User$subscriptionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type User$DebugSubmissionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DebugSubmission
+   */
+  select?: Prisma.DebugSubmissionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the DebugSubmission
+   */
+  omit?: Prisma.DebugSubmissionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DebugSubmissionInclude<ExtArgs> | null
+  where?: Prisma.DebugSubmissionWhereInput
+  orderBy?: Prisma.DebugSubmissionOrderByWithRelationInput | Prisma.DebugSubmissionOrderByWithRelationInput[]
+  cursor?: Prisma.DebugSubmissionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.DebugSubmissionScalarFieldEnum | Prisma.DebugSubmissionScalarFieldEnum[]
+}
+
+/**
+ * User.Subscription
+ */
+export type User$SubscriptionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
    * Select specific fields to fetch from the Subscription
    */
@@ -1689,9 +1701,9 @@ export type User$subscriptionArgs<ExtArgs extends runtime.Types.Extensions.Inter
 }
 
 /**
- * User.usage
+ * User.Usage
  */
-export type User$usageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type User$UsageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
    * Select specific fields to fetch from the Usage
    */
@@ -1713,9 +1725,9 @@ export type User$usageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs
 }
 
 /**
- * User.usageSummary
+ * User.UsageSummary
  */
-export type User$usageSummaryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type User$UsageSummaryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
    * Select specific fields to fetch from the UsageSummary
    */
@@ -1734,30 +1746,6 @@ export type User$usageSummaryArgs<ExtArgs extends runtime.Types.Extensions.Inter
   take?: number
   skip?: number
   distinct?: Prisma.UsageSummaryScalarFieldEnum | Prisma.UsageSummaryScalarFieldEnum[]
-}
-
-/**
- * User.debugSubmissions
- */
-export type User$debugSubmissionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the DebugSubmission
-   */
-  select?: Prisma.DebugSubmissionSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the DebugSubmission
-   */
-  omit?: Prisma.DebugSubmissionOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.DebugSubmissionInclude<ExtArgs> | null
-  where?: Prisma.DebugSubmissionWhereInput
-  orderBy?: Prisma.DebugSubmissionOrderByWithRelationInput | Prisma.DebugSubmissionOrderByWithRelationInput[]
-  cursor?: Prisma.DebugSubmissionWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.DebugSubmissionScalarFieldEnum | Prisma.DebugSubmissionScalarFieldEnum[]
 }
 
 /**

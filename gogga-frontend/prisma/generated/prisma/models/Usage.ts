@@ -304,7 +304,7 @@ export type UsageWhereInput = {
   requestId?: Prisma.StringNullableFilter<"Usage"> | string | null
   durationMs?: Prisma.IntNullableFilter<"Usage"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Usage"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  User?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }
 
 export type UsageOrderByWithRelationInput = {
@@ -322,7 +322,7 @@ export type UsageOrderByWithRelationInput = {
   requestId?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
-  user?: Prisma.UserOrderByWithRelationInput
+  User?: Prisma.UserOrderByWithRelationInput
 }
 
 export type UsageWhereUniqueInput = Prisma.AtLeast<{
@@ -343,7 +343,7 @@ export type UsageWhereUniqueInput = Prisma.AtLeast<{
   requestId?: Prisma.StringNullableFilter<"Usage"> | string | null
   durationMs?: Prisma.IntNullableFilter<"Usage"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Usage"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  User?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }, "id">
 
 export type UsageOrderByWithAggregationInput = {
@@ -402,7 +402,7 @@ export type UsageCreateInput = {
   requestId?: string | null
   durationMs?: number | null
   createdAt?: Date | string
-  user: Prisma.UserCreateNestedOneWithoutUsageInput
+  User: Prisma.UserCreateNestedOneWithoutUsageInput
 }
 
 export type UsageUncheckedCreateInput = {
@@ -436,7 +436,7 @@ export type UsageUpdateInput = {
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneRequiredWithoutUsageNestedInput
+  User?: Prisma.UserUpdateOneRequiredWithoutUsageNestedInput
 }
 
 export type UsageUncheckedUpdateInput = {
@@ -506,16 +506,6 @@ export type UsageUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
-export type UsageListRelationFilter = {
-  every?: Prisma.UsageWhereInput
-  some?: Prisma.UsageWhereInput
-  none?: Prisma.UsageWhereInput
-}
-
-export type UsageOrderByRelationAggregateInput = {
-  _count?: Prisma.SortOrder
-}
-
 export type UsageCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -583,6 +573,24 @@ export type UsageSumOrderByAggregateInput = {
   durationMs?: Prisma.SortOrder
 }
 
+export type UsageListRelationFilter = {
+  every?: Prisma.UsageWhereInput
+  some?: Prisma.UsageWhereInput
+  none?: Prisma.UsageWhereInput
+}
+
+export type UsageOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
+}
+
+export type NullableIntFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
+}
+
 export type UsageCreateNestedManyWithoutUserInput = {
   create?: Prisma.XOR<Prisma.UsageCreateWithoutUserInput, Prisma.UsageUncheckedCreateWithoutUserInput> | Prisma.UsageCreateWithoutUserInput[] | Prisma.UsageUncheckedCreateWithoutUserInput[]
   connectOrCreate?: Prisma.UsageCreateOrConnectWithoutUserInput | Prisma.UsageCreateOrConnectWithoutUserInput[]
@@ -623,14 +631,6 @@ export type UsageUncheckedUpdateManyWithoutUserNestedInput = {
   update?: Prisma.UsageUpdateWithWhereUniqueWithoutUserInput | Prisma.UsageUpdateWithWhereUniqueWithoutUserInput[]
   updateMany?: Prisma.UsageUpdateManyWithWhereWithoutUserInput | Prisma.UsageUpdateManyWithWhereWithoutUserInput[]
   deleteMany?: Prisma.UsageScalarWhereInput | Prisma.UsageScalarWhereInput[]
-}
-
-export type NullableIntFieldUpdateOperationsInput = {
-  set?: number | null
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
 }
 
 export type UsageCreateWithoutUserInput = {
@@ -791,7 +791,7 @@ export type UsageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usage"]>
 
 export type UsageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -809,7 +809,7 @@ export type UsageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usage"]>
 
 export type UsageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -827,7 +827,7 @@ export type UsageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usage"]>
 
 export type UsageSelectScalar = {
@@ -849,19 +849,19 @@ export type UsageSelectScalar = {
 
 export type UsageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "promptTokens" | "completionTokens" | "totalTokens" | "costCents" | "model" | "provider" | "endpoint" | "tier" | "conversationId" | "requestId" | "durationMs" | "createdAt", ExtArgs["result"]["usage"]>
 export type UsageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 export type UsageIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 export type UsageIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 
 export type $UsagePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Usage"
   objects: {
-    user: Prisma.$UserPayload<ExtArgs>
+    User: Prisma.$UserPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1272,7 +1272,7 @@ readonly fields: UsageFieldRefs;
  */
 export interface Prisma__UsageClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  User<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.

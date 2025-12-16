@@ -3,6 +3,11 @@ GOGGA Math Service
 
 Core calculation engine for statistics, financial formulas, 
 SA tax calculations, and fraud analysis.
+
+Python 3.14 Enhanced Features:
+- Decimal.from_number() for precise financial calculations (PEP 757)
+- Fraction.from_number() for exact ratio representations
+- Template strings (t-strings) for structured output (PEP 750)
 """
 
 import math
@@ -10,12 +15,42 @@ import logging
 from typing import Any, Optional
 from collections import Counter
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+from fractions import Fraction
 import numpy as np
 from scipy import stats
 
 # Configure verbose logging for math operations
 logger = logging.getLogger("gogga.math")
 logger.setLevel(logging.DEBUG)
+
+
+# Python 3.14 helper: Convert to precise Decimal
+def to_decimal(value: float | int) -> Decimal:
+    """
+    Convert numeric value to Decimal using Python 3.14's from_number().
+    Falls back to string conversion for older Python versions.
+    """
+    try:
+        # Python 3.14+: Use from_number() for precise conversion
+        return Decimal.from_number(value)
+    except AttributeError:
+        # Fallback for older Python versions
+        return Decimal(str(value))
+
+
+# Python 3.14 helper: Convert to precise Fraction  
+def to_fraction(value: float | int) -> Fraction:
+    """
+    Convert numeric value to Fraction using Python 3.14's from_number().
+    Falls back to direct conversion for older Python versions.
+    """
+    try:
+        # Python 3.14+: Use from_number() for precise conversion
+        return Fraction.from_number(value)
+    except AttributeError:
+        # Fallback for older Python versions
+        return Fraction(value).limit_denominator(1000000)
 
 
 @dataclass
@@ -127,23 +162,54 @@ class MathService:
     
     def _summary_stats(self, data: list[float]) -> dict[str, Any]:
         """Generate comprehensive summary statistics."""
+        n = len(data)
+        mean_val = float(np.mean(data))
+        median_val = float(np.median(data))
+        mode_result = stats.mode(data, keepdims=True)
+        mode_val = float(mode_result.mode[0])
+        std_val = float(np.std(data, ddof=1))
+        var_val = float(np.var(data, ddof=1))
+        min_val = float(min(data))
+        max_val = float(max(data))
+        range_val = max_val - min_val
         q1, q2, q3 = np.percentile(data, [25, 50, 75])
+        iqr_val = float(q3 - q1)
+        skew_val = float(stats.skew(data))
+        kurt_val = float(stats.kurtosis(data))
+        
+        # Build calculation steps for display
+        data_preview = str(data[:5])[:-1] + ", ...]" if len(data) > 5 else str(data)
+        calculation_steps = [
+            {"step": 1, "description": "Input data", "formula": f"n = {n} values: {data_preview}", "value": None},
+            {"step": 2, "description": "Calculate mean (average)", "formula": f"Σx / n = {sum(data):.2f} / {n}", "value": f"{mean_val:.4f}"},
+            {"step": 3, "description": "Calculate median (middle)", "formula": f"Middle value of sorted data", "value": f"{median_val:.4f}"},
+            {"step": 4, "description": "Calculate mode (most frequent)", "formula": f"Most common value", "value": f"{mode_val:.4f}"},
+            {"step": 5, "description": "Calculate variance", "formula": f"Σ(x - μ)² / (n-1)", "value": f"{var_val:.4f}"},
+            {"step": 6, "description": "Calculate standard deviation", "formula": f"√variance = √{var_val:.4f}", "value": f"{std_val:.4f}"},
+            {"step": 7, "description": "Calculate range", "formula": f"max - min = {max_val:.2f} - {min_val:.2f}", "value": f"{range_val:.4f}"},
+            {"step": 8, "description": "Calculate quartiles", "formula": f"Q1, Q2, Q3 at 25%, 50%, 75%", "value": f"Q1={q1:.2f}, Q2={q2:.2f}, Q3={q3:.2f}"},
+            {"step": 9, "description": "Calculate IQR", "formula": f"Q3 - Q1 = {q3:.2f} - {q1:.2f}", "value": f"{iqr_val:.4f}"},
+            {"step": 10, "description": "Calculate skewness", "formula": f"Measure of asymmetry", "value": f"{skew_val:.4f}"},
+            {"step": 11, "description": "Calculate kurtosis", "formula": f"Measure of tail heaviness", "value": f"{kurt_val:.4f}"},
+        ]
+        
         return {
-            "count": len(data),
-            "mean": round(float(np.mean(data)), 4),
-            "median": round(float(np.median(data)), 4),
-            "mode": round(float(stats.mode(data, keepdims=True).mode[0]), 4),
-            "std_dev": round(float(np.std(data, ddof=1)), 4),
-            "variance": round(float(np.var(data, ddof=1)), 4),
-            "min": round(float(min(data)), 4),
-            "max": round(float(max(data)), 4),
-            "range": round(float(max(data) - min(data)), 4),
+            "count": n,
+            "mean": round(mean_val, 4),
+            "median": round(median_val, 4),
+            "mode": round(mode_val, 4),
+            "std_dev": round(std_val, 4),
+            "variance": round(var_val, 4),
+            "min": round(min_val, 4),
+            "max": round(max_val, 4),
+            "range": round(range_val, 4),
             "q1": round(float(q1), 4),
             "q2": round(float(q2), 4),
             "q3": round(float(q3), 4),
-            "iqr": round(float(q3 - q1), 4),
-            "skewness": round(float(stats.skew(data)), 4),
-            "kurtosis": round(float(stats.kurtosis(data)), 4),
+            "iqr": round(iqr_val, 4),
+            "skewness": round(skew_val, 4),
+            "kurtosis": round(kurt_val, 4),
+            "calculation_steps": calculation_steps,
             "display_type": "stat_cards"
         }
     
@@ -272,9 +338,27 @@ class MathService:
         self, p: float, r: float, t: int, n: int
     ) -> dict[str, Any]:
         """A = P(1 + r/n)^(nt)"""
-        amount = p * (1 + r/n) ** (n * t)
+        # Step-by-step calculation with detailed breakdown
+        rate_per_period = r / n
+        total_periods = n * t
+        growth_factor = (1 + rate_per_period)
+        compound_factor = growth_factor ** total_periods
+        amount = p * compound_factor
         interest = amount - p
         effective_rate = (1 + r/n) ** n - 1
+        
+        # Build calculation steps for display
+        calculation_steps = [
+            {"step": 1, "description": "Identify the formula", "formula": "A = P(1 + r/n)^(nt)", "value": None},
+            {"step": 2, "description": "Input values", "formula": f"P = R{p:,.2f}, r = {r*100:.2f}%, t = {t} years, n = {n}/year", "value": None},
+            {"step": 3, "description": "Calculate rate per period", "formula": f"r/n = {r:.4f}/{n}", "value": f"{rate_per_period:.6f}"},
+            {"step": 4, "description": "Calculate total periods", "formula": f"n × t = {n} × {t}", "value": f"{total_periods}"},
+            {"step": 5, "description": "Calculate growth factor", "formula": f"1 + {rate_per_period:.6f}", "value": f"{growth_factor:.6f}"},
+            {"step": 6, "description": "Calculate compound factor", "formula": f"{growth_factor:.6f}^{total_periods}", "value": f"{compound_factor:.6f}"},
+            {"step": 7, "description": "Calculate final amount", "formula": f"R{p:,.2f} × {compound_factor:.6f}", "value": f"R{amount:,.2f}"},
+            {"step": 8, "description": "Calculate interest earned", "formula": f"R{amount:,.2f} - R{p:,.2f}", "value": f"R{interest:,.2f}"},
+        ]
+        
         return {
             "principal": p,
             "annual_rate": f"{r*100:.2f}%",
@@ -284,6 +368,7 @@ class MathService:
             "total_interest": round(interest, 2),
             "effective_annual_rate": f"{effective_rate*100:.2f}%",
             "formula": f"A = R{p:,.2f} × (1 + {r:.4f}/{n})^({n} × {t})",
+            "calculation_steps": calculation_steps,
             "display_type": "stat_cards"
         }
     
@@ -291,6 +376,16 @@ class MathService:
         """I = PRT"""
         interest = p * r * t
         amount = p + interest
+        
+        # Build calculation steps for display
+        calculation_steps = [
+            {"step": 1, "description": "Identify the formula", "formula": "I = P × R × T", "value": None},
+            {"step": 2, "description": "Input values", "formula": f"P = R{p:,.2f}, R = {r*100:.2f}%, T = {t} years", "value": None},
+            {"step": 3, "description": "Convert rate to decimal", "formula": f"{r*100:.2f}% ÷ 100", "value": f"{r:.4f}"},
+            {"step": 4, "description": "Calculate interest", "formula": f"R{p:,.2f} × {r:.4f} × {t}", "value": f"R{interest:,.2f}"},
+            {"step": 5, "description": "Calculate final amount", "formula": f"R{p:,.2f} + R{interest:,.2f}", "value": f"R{amount:,.2f}"},
+        ]
+        
         return {
             "principal": p,
             "annual_rate": f"{r*100:.2f}%",
@@ -298,6 +393,7 @@ class MathService:
             "interest": round(interest, 2),
             "final_amount": round(amount, 2),
             "formula": f"I = R{p:,.2f} × {r:.4f} × {t}",
+            "calculation_steps": calculation_steps,
             "display_type": "stat_cards"
         }
     
@@ -308,11 +404,34 @@ class MathService:
         
         if r_per == 0:
             pmt = pv / n_total
+            calculation_steps = [
+                {"step": 1, "description": "Zero interest rate", "formula": f"PMT = R{pv:,.2f} ÷ {n_total}", "value": f"R{pmt:,.2f}"},
+            ]
         else:
-            pmt = pv * (r_per * (1 + r_per) ** n_total) / ((1 + r_per) ** n_total - 1)
+            growth_factor = (1 + r_per) ** n_total
+            numerator = r_per * growth_factor
+            denominator = growth_factor - 1
+            pmt = pv * numerator / denominator
+            
+            # Build calculation steps for display
+            calculation_steps = [
+                {"step": 1, "description": "Identify the formula", "formula": "PMT = PV × [r(1+r)^n] / [(1+r)^n - 1]", "value": None},
+                {"step": 2, "description": "Input values", "formula": f"PV = R{pv:,.2f}, r = {r*100:.2f}%, years = {years}, freq = {freq}/year", "value": None},
+                {"step": 3, "description": "Calculate rate per period", "formula": f"r/freq = {r:.4f}/{freq}", "value": f"{r_per:.6f}"},
+                {"step": 4, "description": "Calculate total periods", "formula": f"years × freq = {years} × {freq}", "value": f"{n_total}"},
+                {"step": 5, "description": "Calculate growth factor", "formula": f"(1 + {r_per:.6f})^{n_total}", "value": f"{growth_factor:.6f}"},
+                {"step": 6, "description": "Calculate numerator", "formula": f"{r_per:.6f} × {growth_factor:.6f}", "value": f"{numerator:.6f}"},
+                {"step": 7, "description": "Calculate denominator", "formula": f"{growth_factor:.6f} - 1", "value": f"{denominator:.6f}"},
+                {"step": 8, "description": "Calculate payment", "formula": f"R{pv:,.2f} × {numerator:.6f} ÷ {denominator:.6f}", "value": f"R{pmt:,.2f}"},
+            ]
         
         total_paid = pmt * n_total
         total_interest = total_paid - pv
+        
+        calculation_steps.extend([
+            {"step": len(calculation_steps) + 1, "description": "Calculate total paid", "formula": f"R{pmt:,.2f} × {n_total}", "value": f"R{total_paid:,.2f}"},
+            {"step": len(calculation_steps) + 2, "description": "Calculate total interest", "formula": f"R{total_paid:,.2f} - R{pv:,.2f}", "value": f"R{total_interest:,.2f}"},
+        ])
         
         return {
             "loan_amount": f"R{pv:,.2f}",
@@ -323,6 +442,7 @@ class MathService:
             "total_paid": f"R{total_paid:,.2f}",
             "total_interest": f"R{total_interest:,.2f}",
             "formula": f"PMT = R{pv:,.2f} at {r*100:.1f}% over {years} years",
+            "calculation_steps": calculation_steps,
             "display_type": "stat_cards"
         }
     
@@ -370,7 +490,44 @@ class MathService:
         if not cash_flows:
             raise ValueError("Cash flows required for NPV calculation")
         
-        npv = sum(cf / (1 + rate) ** i for i, cf in enumerate(cash_flows))
+        # Calculate NPV with step-by-step breakdown
+        pv_components = []
+        for i, cf in enumerate(cash_flows):
+            pv = cf / (1 + rate) ** i
+            pv_components.append({"period": i, "cash_flow": cf, "pv": pv})
+        
+        npv = sum(pvc["pv"] for pvc in pv_components)
+        
+        # Build calculation steps
+        calculation_steps = [
+            {"step": 1, "description": "Identify the formula", "formula": "NPV = Σ CF_t / (1 + r)^t", "value": None},
+            {"step": 2, "description": "Input values", "formula": f"r = {rate*100:.2f}%, {len(cash_flows)} cash flows", "value": None},
+        ]
+        
+        for i, pvc in enumerate(pv_components[:6]):  # Show first 6 periods
+            cf = pvc["cash_flow"]
+            pv = pvc["pv"]
+            calculation_steps.append({
+                "step": len(calculation_steps) + 1,
+                "description": f"Period {i} present value",
+                "formula": f"R{cf:,.2f} / (1 + {rate:.4f})^{i}",
+                "value": f"R{pv:,.2f}"
+            })
+        
+        if len(cash_flows) > 6:
+            calculation_steps.append({
+                "step": len(calculation_steps) + 1,
+                "description": f"... and {len(cash_flows) - 6} more periods",
+                "formula": "Continuing calculation...",
+                "value": None
+            })
+        
+        calculation_steps.append({
+            "step": len(calculation_steps) + 1,
+            "description": "Sum all present values",
+            "formula": "Σ PV_t",
+            "value": f"R{npv:,.2f}"
+        })
         
         return {
             "npv": round(npv, 2),
@@ -378,6 +535,7 @@ class MathService:
             "num_periods": len(cash_flows),
             "initial_investment": f"R{abs(cash_flows[0]):,.2f}",
             "decision": "Accept (NPV > 0)" if npv > 0 else "Reject (NPV ≤ 0)",
+            "calculation_steps": calculation_steps,
             "display_type": "stat_cards"
         }
     
@@ -585,6 +743,31 @@ class MathService:
             
             logger.info(f"🧾 SA TAX SUCCESS: tax_payable=R{tax_after_rebates:,.2f}, effective_rate={effective_rate:.2f}%, monthly=R{tax_after_rebates/12:,.2f}")
             
+            # Build calculation steps for display
+            calculation_steps = [
+                {"step": 1, "description": "Gross annual income", "formula": f"Input income", "value": f"R{annual_income:,.2f}"},
+                {"step": 2, "description": "Retirement fund deduction", "formula": f"min(contributions, 27.5% of income, R350k)", "value": f"R{retirement_deduction:,.2f}"},
+                {"step": 3, "description": "Calculate taxable income", "formula": f"R{annual_income:,.2f} - R{retirement_deduction:,.2f}", "value": f"R{taxable_income:,.2f}"},
+                {"step": 4, "description": "Identify tax bracket", "formula": f"2024/25 tax tables", "value": bracket_info},
+                {"step": 5, "description": "Calculate tax before rebates", "formula": f"Progressive calculation at {marginal_rate*100:.0f}%", "value": f"R{tax:,.2f}"},
+                {"step": 6, "description": "Apply primary rebate", "formula": f"Standard rebate for all taxpayers", "value": f"- R{primary_rebate:,.2f}"},
+            ]
+            
+            if age >= 65:
+                calculation_steps.append({"step": len(calculation_steps) + 1, "description": "Apply secondary rebate (65+)", "formula": f"Additional rebate for 65+", "value": f"- R{secondary_rebate:,.2f}"})
+            if age >= 75:
+                calculation_steps.append({"step": len(calculation_steps) + 1, "description": "Apply tertiary rebate (75+)", "formula": f"Additional rebate for 75+", "value": f"- R{tertiary_rebate:,.2f}"})
+            
+            if medical_credits > 0:
+                calculation_steps.append({"step": len(calculation_steps) + 1, "description": "Apply medical tax credits", "formula": f"{medical_scheme_members} member(s) × monthly credits × 12", "value": f"- R{medical_credits:,.2f}"})
+            
+            calculation_steps.extend([
+                {"step": len(calculation_steps) + 1, "description": "Total rebates and credits", "formula": f"Sum of all deductions", "value": f"R{total_rebate + medical_credits:,.2f}"},
+                {"step": len(calculation_steps) + 2, "description": "Final tax payable", "formula": f"R{tax:,.2f} - R{total_rebate + medical_credits:,.2f}", "value": f"R{tax_after_rebates:,.2f}"},
+                {"step": len(calculation_steps) + 3, "description": "Effective tax rate", "formula": f"R{tax_after_rebates:,.2f} ÷ R{annual_income:,.2f} × 100", "value": f"{effective_rate:.2f}%"},
+                {"step": len(calculation_steps) + 4, "description": "Monthly take-home", "formula": f"(R{annual_income:,.2f} - R{tax_after_rebates:,.2f}) ÷ 12", "value": f"R{(annual_income - tax_after_rebates) / 12:,.2f}"},
+            ])
+            
             result = {
                 "gross_income": f"R{annual_income:,.2f}",
                 "retirement_deduction": f"R{retirement_deduction:,.2f}",
@@ -602,7 +785,8 @@ class MathService:
                 "monthly_tax": f"R{tax_after_rebates / 12:,.2f}",
                 "take_home_annual": f"R{annual_income - tax_after_rebates:,.2f}",
                 "take_home_monthly": f"R{(annual_income - tax_after_rebates) / 12:,.2f}",
-                "tax_year": "2024/25"
+                "tax_year": "2024/25",
+                "calculation_steps": calculation_steps
             }
             
             return MathResult(success=True, data=result, display_type="stat_cards")

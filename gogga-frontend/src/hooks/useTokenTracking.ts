@@ -17,11 +17,10 @@ interface TokenStats {
     costZar: number;
     requestCount: number;
     byTier: Record<string, {
-      totalTokens: number;
-      inputTokens: number;
-      outputTokens: number;
-      costZar: number;
-      requestCount: number;
+      input: number;
+      output: number;
+      cost: number;
+      requests: number;
     }>;
   };
   allTime: {
@@ -82,7 +81,7 @@ export function useTokenTracking() {
     outputTokens: number,
     costZar: number = 0
   ) => {
-    await trackTokenUsage(tier, inputTokens, outputTokens, costZar);
+    await trackTokenUsage({ tier, inputTokens, outputTokens, costZar });
     await refreshStats();
   }, [refreshStats]);
 

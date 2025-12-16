@@ -78,7 +78,7 @@ export function useGoggaTalk(options: UseGoggaTalkOptions = {}) {
   const float32ToInt16 = useCallback((float32Array: Float32Array): Int16Array => {
     const int16Array = new Int16Array(float32Array.length);
     for (let i = 0; i < float32Array.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32Array[i]));
+      const s = Math.max(-1, Math.min(1, float32Array[i] ?? 0));
       int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
     }
     return int16Array;
@@ -106,7 +106,7 @@ export function useGoggaTalk(options: UseGoggaTalkOptions = {}) {
       const int16Array = new Int16Array(audioData);
       const float32Array = new Float32Array(int16Array.length);
       for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768;
+        float32Array[i] = (int16Array[i] ?? 0) / 32768;
       }
       
       const audioBuffer = playContext.createBuffer(1, float32Array.length, RECEIVE_SAMPLE_RATE);

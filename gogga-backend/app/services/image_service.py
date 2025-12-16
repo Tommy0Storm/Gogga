@@ -2,15 +2,15 @@
 Image Generation Service - Tier-Based Pipeline.
 
 FREE Tier (via /api/v1/images endpoint):
-    User → Llama 3.3 FREE (enhance) → Pollinations.ai → Image
+    User → Qwen 235B FREE (enhance) → Pollinations.ai → Image
     
 JIVE/JIGGA Tier (via tool calling):
     AI calls generate_image tool → Pollinations.ai → Image
     
 GOGGA PRO (Image Button - Paid Subscribers):
-    User → Llama 3.3 FREE (enhance) → FLUX 1.1 Pro → Premium Image
+    User → Qwen 235B FREE (enhance) → FLUX 1.1 Pro → Premium Image
 
-Prompt enhancement is ALWAYS via OpenRouter Llama 3.3 70B FREE.
+Prompt enhancement is ALWAYS via OpenRouter Qwen 3 235B FREE.
 
 Named after Irma Stern, pioneering South African expressionist painter (1894-1966).
 """
@@ -71,7 +71,7 @@ class ImageService:
     JIVE: DeepInfra FLUX 1.1 Pro (capped at 200/month)
     JIGGA: DeepInfra FLUX 1.1 Pro (capped at 1000/month)
     
-    Prompt enhancement is ALWAYS via Llama 3.3 70B FREE.
+    Prompt enhancement is ALWAYS via Qwen 3 235B FREE.
     """
     
     def __init__(self) -> None:
@@ -118,7 +118,7 @@ class ImageService:
         """
         Generate an image based on user tier.
         
-        FREE: Llama → Pollinations.ai (free)
+        FREE: Qwen 235B → Pollinations.ai (free)
         JIVE/JIGGA (tool call): Pollinations.ai (free)
         JIVE/JIGGA (button, use_premium=True): GOGGA Pro (FLUX 1.1)
         

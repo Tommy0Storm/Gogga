@@ -28,6 +28,7 @@ logger = logging.getLogger("gogga.python_executor")
 ALLOWED_MODULES = {
     'math', 'decimal', 'fractions', 'statistics', 'cmath',
     'numpy', 'scipy', 'scipy.stats', 'scipy.special',
+    'sympy',  # Symbolic math: algebra, calculus, equation solving
     'itertools', 'functools', 'operator', 'collections',
     'datetime', 'random', 'string', 're'
 }
@@ -129,6 +130,17 @@ def _execute_in_sandbox(code: str, result_queue: Queue, timeout: int = 10):
         import cmath
         import numpy as np
         from scipy import stats as scipy_stats
+        import sympy
+        from sympy import (
+            Symbol, symbols, solve, simplify, expand, factor,
+            diff, integrate, limit, series, summation, product,
+            sin, cos, tan, exp, log, sqrt, Abs, pi, E, I, oo,
+            Eq, Ne, Lt, Gt, Le, Ge, Rational, Float, Integer,
+            Matrix, det, transpose, eye, zeros, ones,
+            Derivative, Integral, Sum, Product, Function,
+            latex, pretty, pprint
+        )
+        # Note: Matrix.inv() is a method, not a standalone function
         import itertools
         import functools
         import operator
@@ -148,6 +160,56 @@ def _execute_in_sandbox(code: str, result_queue: Queue, timeout: int = 10):
             'numpy': np,
             'scipy': __import__('scipy'),
             'scipy_stats': scipy_stats,
+            # SymPy symbolic math (Python 3.14 sophisticated formulas)
+            'sympy': sympy,
+            'Symbol': Symbol,
+            'symbols': symbols,
+            'solve': solve,
+            'simplify': simplify,
+            'expand': expand,
+            'factor': factor,
+            'diff': diff,
+            'integrate': integrate,
+            'limit': limit,
+            'series': series,
+            'summation': summation,
+            'product': product,
+            'Eq': Eq,
+            'Ne': Ne,
+            'Lt': Lt,
+            'Gt': Gt,
+            'Le': Le,
+            'Ge': Ge,
+            'Rational': Rational,
+            'Float': Float,
+            'Integer': Integer,
+            'Matrix': Matrix,
+            'det': det,
+            # Note: Matrix.inv() is a method - use m.inv() on a Matrix object
+            'transpose': transpose,
+            'eye': eye,
+            'zeros': zeros,
+            'ones': ones,
+            'Derivative': Derivative,
+            'Integral': Integral,
+            'Sum': Sum,
+            'Product': Product,
+            'Function': Function,
+            'latex': latex,
+            'pretty': pretty,
+            'pprint': pprint,
+            # SymPy common functions and constants
+            'sin': sin,
+            'cos': cos,
+            'tan': tan,
+            'exp': exp,
+            'log': log,
+            'sqrt': sqrt,
+            'Abs': Abs,
+            'pi': pi,
+            'E': E,
+            'I': I,
+            'oo': oo,  # infinity
             'itertools': itertools,
             'functools': functools,
             'operator': operator,

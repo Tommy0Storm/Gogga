@@ -11,7 +11,6 @@ from app.prompts import (
     PROMPT_METADATA,
     PROMPT_REGISTRY,
     GOGGA_BASE_PROMPT,
-    CEPO_IDENTITY_PROMPT,
     QWEN_IDENTITY_PROMPT,
     get_prompt_for_layer,
 )
@@ -67,7 +66,6 @@ async def list_prompts():
         prompts=prompts,
         base_prompts={
             "gogga_base": GOGGA_BASE_PROMPT[:500] + "...",
-            "cepo_identity": CEPO_IDENTITY_PROMPT[:300] + "...",
             "qwen_identity": QWEN_IDENTITY_PROMPT[:300] + "...",
         }
     )
@@ -97,12 +95,6 @@ async def get_prompt(prompt_key: str):
 async def get_base_prompt():
     """Get the full GOGGA base prompt."""
     return {"prompt": GOGGA_BASE_PROMPT}
-
-
-@router.get("/base/cepo")
-async def get_cepo_prompt():
-    """Get the full CePO identity prompt."""
-    return {"prompt": CEPO_IDENTITY_PROMPT}
 
 
 @router.get("/base/qwen")

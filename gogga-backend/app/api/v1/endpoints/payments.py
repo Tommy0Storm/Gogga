@@ -36,8 +36,8 @@ SUBSCRIPTION_TIERS = {
         "price_zar": 99.00,
         "tokens_per_month": 500000,
         "features": [
-            "Cerebras Llama 3.3 70B (~2,200 t/s)",
-            "CePO reasoning for complex queries",
+            "Cerebras Qwen 3 235B (~2,200 t/s)",
+            "OptiLLM reasoning for complex queries",
             "FLUX 1.1 Pro images (200/month)",
             "5 RAG documents per session",
             "Chat history persistence",

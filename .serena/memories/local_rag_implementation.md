@@ -1,18 +1,57 @@
 # Local RAG Implementation - Complete
 
-> **Last Updated:** December 13, 2025
-> **Status:** ✅ WORKING
+> **Last Updated:** December 15, 2025
+> **Status:** ✅ WORKING - RxDB Migration Complete
 
-## RxDB Migration (December 13, 2025)
+## MinerU Integration (December 14, 2025)
 
-**NEW**: RxDB 16.21.1 implementation created as an upgrade path from Dexie:
-- See `rxdb_implementation` memory for full details
-- 12 collections with TypeScript-first schemas
-- Distance-to-Samples vector indexing (no external vector DB needed)
-- Reactive subscriptions via RxJS
-- 24 passing tests
+**NEW**: Enterprise-grade PDF parsing via MinerU.net cloud API
 
-Files: `gogga-frontend/src/lib/rxdb/`
+### Backend Service
+- `app/services/mineru_service.py` - Async HTTP client with polling
+- `app/api/v1/endpoints/documents.py` - REST API endpoints
+
+### API Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/documents/parse` | POST | Parse PDF from URL (sync, waits for result) |
+| `/api/v1/documents/submit` | POST | Submit batch URLs (async, returns batch_id) |
+| `/api/v1/documents/status/{batch_id}` | GET | Check task status |
+| `/api/v1/documents/health` | GET | Check MinerU config |
+
+### Configuration (app/config.py)
+```python
+MINERU_API_KEY: str   # JWT token from mineru.net
+MINERU_API_BASE: str = "https://mineru.net"
+MINERU_ENABLED: bool = True
+MINERU_TIMEOUT: float = 120.0
+```
+
+### Features
+- **OCR support**: Scanned document text extraction
+- **Table recognition**: Structured table extraction to Markdown
+- **Formula extraction**: LaTeX math formulas
+- **Multi-language**: English, Chinese, and other languages
+
+### Usage Example
+```bash
+curl -X POST http://localhost:8000/api/v1/documents/parse \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/doc.pdf", "enable_ocr": true}'
+```
+
+## RxDB Migration Complete (December 15, 2025)
+
+**COMPLETE**: RxDB 16.21.1 is now the primary database:
+- `lib/db.ts` - RxDB shim with Dexie API compatibility
+- `lib/db-dexie-legacy.ts` - Original Dexie backup
+- Dynamic imports avoid Dexie version conflict (RxDB bundles 4.0.10, project has 4.2.1)
+- 13 collections including `goggaSmartSkills`
+- Session-scoped RAG fields: `userId`, `originSessionId`, `activeSessions[]`
+- Schema migration strategies for v0→v1 upgrades
+- 25 passing tests (11 integration + 14 shim)
+
+Files: `gogga-frontend/src/lib/rxdb/`, `gogga-frontend/src/lib/db.ts`
 
 ## Overview
 
@@ -75,7 +114,8 @@ async function configureOnnxRuntime(): Promise<void> {
 | `gogga-frontend/src/lib/ragMetrics.ts` | Analytics collection for JIGGA |
 | `gogga-frontend/src/lib/rag.ts` | FlexSearch-based keyword RAG |
 | `gogga-frontend/src/hooks/useRAG.ts` | React hook with tier-based mode selection |
-| `gogga-frontend/src/lib/db.ts` | Dexie schema (documents, chunks, memories) |
+| `gogga-frontend/src/lib/db.ts` | RxDB shim with Dexie API compatibility |
+| `gogga-frontend/src/lib/rxdb/` | RxDB schemas, database, migration |
 
 ## Tier Features
 

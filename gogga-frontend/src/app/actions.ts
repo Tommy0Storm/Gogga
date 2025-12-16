@@ -18,25 +18,58 @@ function generateSecureToken(): string {
 }
 
 /**
- * Send magic link email (placeholder - implement with your email service)
+ * Send magic link email via EmailJS API
  */
 async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
-  const magicLink = `${process.env.NEXTAUTH_URL}/api/auth/callback/email?token=${token}`
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+  const magicLink = `${baseUrl}/api/auth/verify-token?token=${token}`
   
-  // TODO: Implement actual email sending with your service (SendGrid, Resend, etc.)
-  console.log(`[Auth Action] Magic link for ${email}: ${magicLink}`)
-  
-  // In development, log the link for testing
+  // Log in development for debugging
   if (process.env.NODE_ENV === 'development') {
-    console.log(`
-╔════════════════════════════════════════════════════════════╗
-║  🔐 MAGIC LINK (Development)                              ║
-╠════════════════════════════════════════════════════════════╣
-║  Email: ${email.padEnd(48)}║
-║  Link:  ${magicLink.substring(0, 48).padEnd(48)}║
-╚════════════════════════════════════════════════════════════╝
-    `)
+    console.log(`[Auth Action] Magic link for ${email}: ${magicLink}`)
   }
+  
+  // Send via EmailJS REST API
+  const EMAILJS_SERVICE_ID = 'service_q6alymo'
+  const EMAILJS_TEMPLATE_ID = 'template_k9ugryd'
+  const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send'
+  
+  const publicKey = process.env.EMAILJS_PUBLIC_KEY
+  const privateKey = process.env.EMAILJS_PRIVATE_KEY
+  
+  if (!publicKey || !privateKey) {
+    console.error('[sendMagicLinkEmail] Missing EmailJS credentials')
+    throw new Error('Email service not configured')
+  }
+  
+  const response = await fetch(EMAILJS_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_TEMPLATE_ID,
+      user_id: publicKey,
+      accessToken: privateKey,
+      template_params: {
+        email: email,
+        token: token,
+        magic_link: magicLink,
+        expires_in: '1 hour',
+        support_email: process.env.EMAIL_FROM || 'hello@vcb-ai.online',
+        app_name: 'GOGGA AI',
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error(`[sendMagicLinkEmail] EmailJS error: ${response.status} - ${errorText}`)
+    throw new Error(`Failed to send email: ${response.status}`)
+  }
+  
+  console.log(`[sendMagicLinkEmail] Email sent successfully to: ${email}`)
 }
 
 /**

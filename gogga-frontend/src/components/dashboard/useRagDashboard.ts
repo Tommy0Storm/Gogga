@@ -126,35 +126,41 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
         getStorageUsageBreakdown(),
       ]);
 
+      const STORAGE_LIMIT_MB = 100; // 100MB IndexedDB limit
+      const totalBytes = breakdown.total.estimatedSizeBytes;
+      const totalMB = breakdown.total.estimatedSizeMB;
+      const usedPercent = (totalMB / STORAGE_LIMIT_MB) * 100;
+      const remainingMB = STORAGE_LIMIT_MB - totalMB;
+
       return {
         documents: basic.documents,
         chunks: basic.chunks,
         messages: basic.messages,
         images: basic.images,
-        totalSizeBytes: breakdown.totalBytes,
-        totalSizeMB: breakdown.totalMB,
-        usedPercent: breakdown.usedPercent,
-        remainingMB: breakdown.remainingMB,
+        totalSizeBytes: totalBytes,
+        totalSizeMB: totalMB,
+        usedPercent: usedPercent,
+        remainingMB: remainingMB,
         tables: [
           {
             name: 'Documents',
             count: basic.documents,
-            estimatedSizeBytes: breakdown.totalBytes * 0.6,
+            estimatedSizeBytes: totalBytes * 0.6,
           },
           {
             name: 'Chunks',
             count: basic.chunks,
-            estimatedSizeBytes: breakdown.totalBytes * 0.3,
+            estimatedSizeBytes: totalBytes * 0.3,
           },
           {
             name: 'Messages',
             count: basic.messages,
-            estimatedSizeBytes: breakdown.totalBytes * 0.05,
+            estimatedSizeBytes: totalBytes * 0.05,
           },
           {
             name: 'Images',
             count: basic.images,
-            estimatedSizeBytes: breakdown.totalBytes * 0.05,
+            estimatedSizeBytes: totalBytes * 0.05,
           },
         ],
       };

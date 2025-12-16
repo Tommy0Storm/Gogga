@@ -1,0 +1,47 @@
+# GOGGA CePO Configuration
+# Cerebras Planning and Optimization settings
+#
+# CePO implements a 4-step pipeline:
+# 1. Plan Generation - Generate step-by-step plan with confidence levels
+# 2. Initial Solution - Execute plan to produce initial solution
+# 3. Plan Refinement - Review all proposals, identify inconsistencies, refine
+# 4. Final Solution - Use refined plan to produce final answer
+#
+# Then Best of N selection picks the optimal response.
+
+# Best of N Configuration
+bestofn_n: 3
+bestofn_temperature: 0.1
+bestofn_max_tokens: 4096
+bestofn_rating_type: absolute
+
+# Planning Stage Configuration
+planning_n: 3
+planning_m: 6
+
+# Temperature settings per step
+planning_temperature_step1: 0.55
+planning_temperature_step2: 0.25
+planning_temperature_step3: 0.1
+planning_temperature_step4: 0.0
+planning_temperature_direct_resp: 0.1
+
+# Token limits per step
+planning_max_tokens_step1: 4096
+planning_max_tokens_step2: 4096
+planning_max_tokens_step3: 4096
+planning_max_tokens_step4: 4096
+planning_max_tokens_direct_resp: 4096
+
+# Fallback Configuration
+# NOTE: use_reasoning_fallback must be FALSE for Cerebras - they don't support reasoning_effort
+use_reasoning_fallback: false
+num_of_retries: 2
+use_plan_diversity: true
+print_output: false
+  
+# Performance Expectations
+# Based on OptiLLM benchmarks:
+# - Qwen3 32B baseline: 81.4% AIME, 65.7% LiveCodeBench
+# - CePO + Qwen3 32B:   90.7% AIME, 71.9% LiveCodeBench
+# - Expected improvement: +9-12% on reasoning tasks

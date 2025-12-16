@@ -95,7 +95,7 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
     let binary = '';
     const bytes = new Uint8Array(buffer);
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+      binary += String.fromCharCode(bytes[i] ?? 0);
     }
     return btoa(binary);
   };
@@ -104,14 +104,14 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
     const int16 = new Int16Array(data.buffer);
     const buffer = ctx.createBuffer(1, int16.length, RECEIVE_SAMPLE_RATE);
     const channelData = buffer.getChannelData(0);
-    for (let i = 0; i < int16.length; i++) channelData[i] = int16[i] / 32768.0;
+    for (let i = 0; i < int16.length; i++) channelData[i] = (int16[i] ?? 0) / 32768.0;
     return buffer;
   };
 
   const float32ToInt16 = (float32Array: Float32Array): Int16Array => {
     const int16Array = new Int16Array(float32Array.length);
     for (let i = 0; i < float32Array.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32Array[i]));
+      const s = Math.max(-1, Math.min(1, float32Array[i] ?? 0));
       int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
     }
     return int16Array;

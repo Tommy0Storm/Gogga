@@ -1,23 +1,36 @@
 /**
  * GOGGA - Main App Page (Server Component)
  * 
- * Server-side protection with Next.js 16 Partial Prerendering:
- * - Uses connection() API for dynamic boundaries
+ * Server-side protection with Next.js 16:
+ * - Uses Suspense boundary for dynamic auth
  * - If not logged in → redirect to /login
  * - If logged in → render main chat UI with Suspense boundaries
  * 
- * This is the recommended approach for NextAuth v5 with PPR:
- * Use `auth()` on the server side for route protection with connection()
+ * This is the recommended approach for NextAuth v5 with dynamic rendering
  */
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { ChatClient } from './ChatClient'
 import { ChatPageWrapper } from './ChatSuspense'
 
-export default async function HomePage() {
-  // Wait for actual request (PPR dynamic boundary)
-  await connection()
+// Loading skeleton for chat page
+function ChatSkeleton() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-neutral-900">
+      <div className="text-center animate-pulse">
+        <div className="h-12 w-32 bg-neutral-800 rounded mx-auto mb-4"></div>
+        <div className="h-4 w-48 bg-neutral-800 rounded mx-auto"></div>
+      </div>
+    </div>
+  )
+}
+
+// Dynamic content that checks auth
+async function HomeContent() {
+  // Opt into dynamic rendering for Next.js 16 with cacheComponents
+  await connection();
   
   // Server-side session check
   let session = null;
@@ -45,5 +58,13 @@ export default async function HomePage() {
     <ChatPageWrapper>
       <ChatClient userEmail={userEmail} userTier={userTier} isTester={isTester} />
     </ChatPageWrapper>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<ChatSkeleton />}>
+      <HomeContent />
+    </Suspense>
   );
 }

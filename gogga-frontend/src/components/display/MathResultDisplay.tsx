@@ -41,7 +41,11 @@ interface MathResultDisplayProps {
 }
 
 export function MathResultDisplay({ result, showTitle = true, showTerminal = true }: MathResultDisplayProps) {
-  const [showLogs, setShowLogs] = useState(false); // Default collapsed
+  // Check if there are calculation steps in the data
+  const hasCalculationSteps = Boolean(result.data?.calculation_steps);
+  
+  // Show logs by default if there are calculation steps (the user wants to see them!)
+  const [showLogs, setShowLogs] = useState(hasCalculationSteps);
 
   // Convert embedded execution logs to TerminalLine format
   const terminalLines: TerminalLine[] = useMemo(() => {

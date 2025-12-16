@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("GOGGA API Starting...")
     logger.info("Environment: %s", settings.PAYFAST_ENV)
-    logger.info("FREE Tier: OpenRouter Llama 3.3 70B")
+    logger.info("FREE Tier: OpenRouter Qwen 3 235B")
     logger.info("JIVE Tier: Cerebras %s (thinking)", settings.MODEL_JIVE)
     logger.info("JIGGA Tier: Cerebras %s (general) + %s (complex/legal)", settings.MODEL_JIGGA, settings.MODEL_JIGGA_235B)
     
@@ -75,6 +75,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3100",  # Admin panel
         "https://gogga.app",
         "https://www.gogga.app"
     ],
@@ -164,6 +165,31 @@ async def root():
     }
 
 
+# -----------------------------------------------------------------------------
+# ADMIN: OpenRouter Fallback Toggle
+# -----------------------------------------------------------------------------
+from app.core.router import set_openrouter_fallback, get_openrouter_fallback
+
+@app.get("/api/v1/admin/openrouter-fallback")
+async def get_fallback_status():
+    """Get current OpenRouter fallback status."""
+    return {
+        "enabled": get_openrouter_fallback(),
+        "description": "When enabled, JIVE/JIGGA tiers route to OpenRouter instead of Cerebras"
+    }
+
+@app.post("/api/v1/admin/openrouter-fallback")
+async def toggle_fallback(enabled: bool):
+    """Toggle OpenRouter fallback for JIVE/JIGGA tiers."""
+    set_openrouter_fallback(enabled)
+    logger.info(f"OpenRouter fallback {'ENABLED' if enabled else 'DISABLED'} by admin")
+    return {
+        "success": True,
+        "enabled": enabled,
+        "message": f"OpenRouter fallback {'enabled' if enabled else 'disabled'}. JIVE/JIGGA will use {'OpenRouter' if enabled else 'Cerebras'}."
+    }
+
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
@@ -249,7 +275,7 @@ async def health_check():
             "openrouter": {
                 **openrouter_status,
                 "models": {
-                    "text": settings.OPENROUTER_MODEL_LLAMA,
+                    "text": settings.OPENROUTER_MODEL_QWEN,
                     "image": settings.OPENROUTER_MODEL_LONGCAT
                 },
                 "tiers_affected": ["free", "all (prompt enhancement)"]
@@ -262,19 +288,20 @@ async def health_check():
         },
         
         # Tier configuration - SIMPLIFIED (2025-01)
+        # JIVE and JIGGA are IDENTICAL in features, only token/image limits differ
         "tiers": {
             "free": {
-                "text": "OpenRouter Llama 3.3 70B FREE",
+                "text": "OpenRouter Qwen 3 235B FREE",
                 "images": f"Pollinations.ai ({IMAGE_LIMITS[UserTier.FREE]}/month)",
                 "cost": "FREE"
             },
             "jive": {
-                "text": f"Cerebras {settings.MODEL_JIVE} (thinking)",
+                "text": f"Cerebras {settings.MODEL_JIVE} (general/math) + {settings.MODEL_JIGGA_235B} (complex/legal/extended)",
                 "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIVE]}/month)",
                 "cost": "Subscription"
             },
             "jigga": {
-                "text": f"Cerebras {settings.MODEL_JIGGA} (general) + {settings.MODEL_JIGGA_235B} (complex/legal)",
+                "text": f"Cerebras {settings.MODEL_JIGGA} (general/math) + {settings.MODEL_JIGGA_235B} (complex/legal/extended)",
                 "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIGGA]}/month)",
                 "cost": "Premium"
             }

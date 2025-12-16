@@ -514,12 +514,15 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       if (editingMemory) {
         await updateMemory(editingMemory.id!, data);
       } else {
-        await createMemory(
-          data.title,
-          data.content,
-          data.category,
-          data.priority
-        );
+        await createMemory({
+          title: data.title,
+          content: data.content,
+          category: data.category,
+          priority: data.priority,
+          source: 'user',
+          isActive: true,
+          tokenCount: Math.ceil(data.content.length / 4),
+        });
       }
       setShowEditor(false);
       setEditingMemory(null);
