@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
         const submissions = await prisma.debugSubmission.findMany({
             where: status === 'all' ? {} : { status },
             include: {
-                user: {
+                User: {
                     select: { email: true },
                 },
             },
@@ -21,7 +21,14 @@ export async function GET(request: NextRequest) {
             take: 100,
         });
 
-        return NextResponse.json(submissions);
+        // Transform response to use lowercase 'user' for frontend compatibility
+        const transformedSubmissions = submissions.map((s) => ({
+            ...s,
+            user: s.User,
+            User: undefined,
+        }));
+
+        return NextResponse.json(transformedSubmissions);
     } catch (error) {
         console.error('Failed to list debug submissions:', error);
         return NextResponse.json(

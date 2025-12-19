@@ -29,16 +29,22 @@ export type AggregateUsage = {
 export type UsageAvgAggregateOutputType = {
   promptTokens: number | null
   completionTokens: number | null
+  adjustedCompletionTokens: number | null
+  reasoningTokens: number | null
   totalTokens: number | null
   costCents: number | null
+  optillmMultiplier: number | null
   durationMs: number | null
 }
 
 export type UsageSumAggregateOutputType = {
   promptTokens: number | null
   completionTokens: number | null
+  adjustedCompletionTokens: number | null
+  reasoningTokens: number | null
   totalTokens: number | null
   costCents: number | null
+  optillmMultiplier: number | null
   durationMs: number | null
 }
 
@@ -47,12 +53,16 @@ export type UsageMinAggregateOutputType = {
   userId: string | null
   promptTokens: number | null
   completionTokens: number | null
+  adjustedCompletionTokens: number | null
+  reasoningTokens: number | null
   totalTokens: number | null
   costCents: number | null
   model: string | null
   provider: string | null
   endpoint: string | null
   tier: string | null
+  optillmLevel: string | null
+  optillmMultiplier: number | null
   conversationId: string | null
   requestId: string | null
   durationMs: number | null
@@ -64,12 +74,16 @@ export type UsageMaxAggregateOutputType = {
   userId: string | null
   promptTokens: number | null
   completionTokens: number | null
+  adjustedCompletionTokens: number | null
+  reasoningTokens: number | null
   totalTokens: number | null
   costCents: number | null
   model: string | null
   provider: string | null
   endpoint: string | null
   tier: string | null
+  optillmLevel: string | null
+  optillmMultiplier: number | null
   conversationId: string | null
   requestId: string | null
   durationMs: number | null
@@ -81,12 +95,16 @@ export type UsageCountAggregateOutputType = {
   userId: number
   promptTokens: number
   completionTokens: number
+  adjustedCompletionTokens: number
+  reasoningTokens: number
   totalTokens: number
   costCents: number
   model: number
   provider: number
   endpoint: number
   tier: number
+  optillmLevel: number
+  optillmMultiplier: number
   conversationId: number
   requestId: number
   durationMs: number
@@ -98,16 +116,22 @@ export type UsageCountAggregateOutputType = {
 export type UsageAvgAggregateInputType = {
   promptTokens?: true
   completionTokens?: true
+  adjustedCompletionTokens?: true
+  reasoningTokens?: true
   totalTokens?: true
   costCents?: true
+  optillmMultiplier?: true
   durationMs?: true
 }
 
 export type UsageSumAggregateInputType = {
   promptTokens?: true
   completionTokens?: true
+  adjustedCompletionTokens?: true
+  reasoningTokens?: true
   totalTokens?: true
   costCents?: true
+  optillmMultiplier?: true
   durationMs?: true
 }
 
@@ -116,12 +140,16 @@ export type UsageMinAggregateInputType = {
   userId?: true
   promptTokens?: true
   completionTokens?: true
+  adjustedCompletionTokens?: true
+  reasoningTokens?: true
   totalTokens?: true
   costCents?: true
   model?: true
   provider?: true
   endpoint?: true
   tier?: true
+  optillmLevel?: true
+  optillmMultiplier?: true
   conversationId?: true
   requestId?: true
   durationMs?: true
@@ -133,12 +161,16 @@ export type UsageMaxAggregateInputType = {
   userId?: true
   promptTokens?: true
   completionTokens?: true
+  adjustedCompletionTokens?: true
+  reasoningTokens?: true
   totalTokens?: true
   costCents?: true
   model?: true
   provider?: true
   endpoint?: true
   tier?: true
+  optillmLevel?: true
+  optillmMultiplier?: true
   conversationId?: true
   requestId?: true
   durationMs?: true
@@ -150,12 +182,16 @@ export type UsageCountAggregateInputType = {
   userId?: true
   promptTokens?: true
   completionTokens?: true
+  adjustedCompletionTokens?: true
+  reasoningTokens?: true
   totalTokens?: true
   costCents?: true
   model?: true
   provider?: true
   endpoint?: true
   tier?: true
+  optillmLevel?: true
+  optillmMultiplier?: true
   conversationId?: true
   requestId?: true
   durationMs?: true
@@ -254,12 +290,16 @@ export type UsageGroupByOutputType = {
   userId: string
   promptTokens: number
   completionTokens: number
+  adjustedCompletionTokens: number | null
+  reasoningTokens: number | null
   totalTokens: number
   costCents: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel: string | null
+  optillmMultiplier: number | null
   conversationId: string | null
   requestId: string | null
   durationMs: number | null
@@ -294,17 +334,21 @@ export type UsageWhereInput = {
   userId?: Prisma.StringFilter<"Usage"> | string
   promptTokens?: Prisma.IntFilter<"Usage"> | number
   completionTokens?: Prisma.IntFilter<"Usage"> | number
+  adjustedCompletionTokens?: Prisma.IntNullableFilter<"Usage"> | number | null
+  reasoningTokens?: Prisma.IntNullableFilter<"Usage"> | number | null
   totalTokens?: Prisma.IntFilter<"Usage"> | number
   costCents?: Prisma.IntFilter<"Usage"> | number
   model?: Prisma.StringFilter<"Usage"> | string
   provider?: Prisma.StringFilter<"Usage"> | string
   endpoint?: Prisma.StringFilter<"Usage"> | string
   tier?: Prisma.StringFilter<"Usage"> | string
+  optillmLevel?: Prisma.StringNullableFilter<"Usage"> | string | null
+  optillmMultiplier?: Prisma.FloatNullableFilter<"Usage"> | number | null
   conversationId?: Prisma.StringNullableFilter<"Usage"> | string | null
   requestId?: Prisma.StringNullableFilter<"Usage"> | string | null
   durationMs?: Prisma.IntNullableFilter<"Usage"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Usage"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  User?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }
 
 export type UsageOrderByWithRelationInput = {
@@ -312,17 +356,21 @@ export type UsageOrderByWithRelationInput = {
   userId?: Prisma.SortOrder
   promptTokens?: Prisma.SortOrder
   completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrderInput | Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   totalTokens?: Prisma.SortOrder
   costCents?: Prisma.SortOrder
   model?: Prisma.SortOrder
   provider?: Prisma.SortOrder
   endpoint?: Prisma.SortOrder
   tier?: Prisma.SortOrder
+  optillmLevel?: Prisma.SortOrderInput | Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrderInput | Prisma.SortOrder
   conversationId?: Prisma.SortOrderInput | Prisma.SortOrder
   requestId?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
-  user?: Prisma.UserOrderByWithRelationInput
+  User?: Prisma.UserOrderByWithRelationInput
 }
 
 export type UsageWhereUniqueInput = Prisma.AtLeast<{
@@ -333,17 +381,21 @@ export type UsageWhereUniqueInput = Prisma.AtLeast<{
   userId?: Prisma.StringFilter<"Usage"> | string
   promptTokens?: Prisma.IntFilter<"Usage"> | number
   completionTokens?: Prisma.IntFilter<"Usage"> | number
+  adjustedCompletionTokens?: Prisma.IntNullableFilter<"Usage"> | number | null
+  reasoningTokens?: Prisma.IntNullableFilter<"Usage"> | number | null
   totalTokens?: Prisma.IntFilter<"Usage"> | number
   costCents?: Prisma.IntFilter<"Usage"> | number
   model?: Prisma.StringFilter<"Usage"> | string
   provider?: Prisma.StringFilter<"Usage"> | string
   endpoint?: Prisma.StringFilter<"Usage"> | string
   tier?: Prisma.StringFilter<"Usage"> | string
+  optillmLevel?: Prisma.StringNullableFilter<"Usage"> | string | null
+  optillmMultiplier?: Prisma.FloatNullableFilter<"Usage"> | number | null
   conversationId?: Prisma.StringNullableFilter<"Usage"> | string | null
   requestId?: Prisma.StringNullableFilter<"Usage"> | string | null
   durationMs?: Prisma.IntNullableFilter<"Usage"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Usage"> | Date | string
-  user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  User?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
 }, "id">
 
 export type UsageOrderByWithAggregationInput = {
@@ -351,12 +403,16 @@ export type UsageOrderByWithAggregationInput = {
   userId?: Prisma.SortOrder
   promptTokens?: Prisma.SortOrder
   completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrderInput | Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   totalTokens?: Prisma.SortOrder
   costCents?: Prisma.SortOrder
   model?: Prisma.SortOrder
   provider?: Prisma.SortOrder
   endpoint?: Prisma.SortOrder
   tier?: Prisma.SortOrder
+  optillmLevel?: Prisma.SortOrderInput | Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrderInput | Prisma.SortOrder
   conversationId?: Prisma.SortOrderInput | Prisma.SortOrder
   requestId?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -376,12 +432,16 @@ export type UsageScalarWhereWithAggregatesInput = {
   userId?: Prisma.StringWithAggregatesFilter<"Usage"> | string
   promptTokens?: Prisma.IntWithAggregatesFilter<"Usage"> | number
   completionTokens?: Prisma.IntWithAggregatesFilter<"Usage"> | number
+  adjustedCompletionTokens?: Prisma.IntNullableWithAggregatesFilter<"Usage"> | number | null
+  reasoningTokens?: Prisma.IntNullableWithAggregatesFilter<"Usage"> | number | null
   totalTokens?: Prisma.IntWithAggregatesFilter<"Usage"> | number
   costCents?: Prisma.IntWithAggregatesFilter<"Usage"> | number
   model?: Prisma.StringWithAggregatesFilter<"Usage"> | string
   provider?: Prisma.StringWithAggregatesFilter<"Usage"> | string
   endpoint?: Prisma.StringWithAggregatesFilter<"Usage"> | string
   tier?: Prisma.StringWithAggregatesFilter<"Usage"> | string
+  optillmLevel?: Prisma.StringNullableWithAggregatesFilter<"Usage"> | string | null
+  optillmMultiplier?: Prisma.FloatNullableWithAggregatesFilter<"Usage"> | number | null
   conversationId?: Prisma.StringNullableWithAggregatesFilter<"Usage"> | string | null
   requestId?: Prisma.StringNullableWithAggregatesFilter<"Usage"> | string | null
   durationMs?: Prisma.IntNullableWithAggregatesFilter<"Usage"> | number | null
@@ -392,17 +452,21 @@ export type UsageCreateInput = {
   id?: string
   promptTokens?: number
   completionTokens?: number
+  adjustedCompletionTokens?: number | null
+  reasoningTokens?: number | null
   totalTokens?: number
   costCents?: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel?: string | null
+  optillmMultiplier?: number | null
   conversationId?: string | null
   requestId?: string | null
   durationMs?: number | null
   createdAt?: Date | string
-  user: Prisma.UserCreateNestedOneWithoutUsageInput
+  User: Prisma.UserCreateNestedOneWithoutUsageInput
 }
 
 export type UsageUncheckedCreateInput = {
@@ -410,12 +474,16 @@ export type UsageUncheckedCreateInput = {
   userId: string
   promptTokens?: number
   completionTokens?: number
+  adjustedCompletionTokens?: number | null
+  reasoningTokens?: number | null
   totalTokens?: number
   costCents?: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel?: string | null
+  optillmMultiplier?: number | null
   conversationId?: string | null
   requestId?: string | null
   durationMs?: number | null
@@ -426,17 +494,21 @@ export type UsageUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  user?: Prisma.UserUpdateOneRequiredWithoutUsageNestedInput
+  User?: Prisma.UserUpdateOneRequiredWithoutUsageNestedInput
 }
 
 export type UsageUncheckedUpdateInput = {
@@ -444,12 +516,16 @@ export type UsageUncheckedUpdateInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -461,12 +537,16 @@ export type UsageCreateManyInput = {
   userId: string
   promptTokens?: number
   completionTokens?: number
+  adjustedCompletionTokens?: number | null
+  reasoningTokens?: number | null
   totalTokens?: number
   costCents?: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel?: string | null
+  optillmMultiplier?: number | null
   conversationId?: string | null
   requestId?: string | null
   durationMs?: number | null
@@ -477,12 +557,16 @@ export type UsageUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -494,16 +578,105 @@ export type UsageUncheckedUpdateManyInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type UsageCountOrderByAggregateInput = {
+  id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
+  promptTokens?: Prisma.SortOrder
+  completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrder
+  totalTokens?: Prisma.SortOrder
+  costCents?: Prisma.SortOrder
+  model?: Prisma.SortOrder
+  provider?: Prisma.SortOrder
+  endpoint?: Prisma.SortOrder
+  tier?: Prisma.SortOrder
+  optillmLevel?: Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrder
+  conversationId?: Prisma.SortOrder
+  requestId?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+}
+
+export type UsageAvgOrderByAggregateInput = {
+  promptTokens?: Prisma.SortOrder
+  completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrder
+  totalTokens?: Prisma.SortOrder
+  costCents?: Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
+}
+
+export type UsageMaxOrderByAggregateInput = {
+  id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
+  promptTokens?: Prisma.SortOrder
+  completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrder
+  totalTokens?: Prisma.SortOrder
+  costCents?: Prisma.SortOrder
+  model?: Prisma.SortOrder
+  provider?: Prisma.SortOrder
+  endpoint?: Prisma.SortOrder
+  tier?: Prisma.SortOrder
+  optillmLevel?: Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrder
+  conversationId?: Prisma.SortOrder
+  requestId?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+}
+
+export type UsageMinOrderByAggregateInput = {
+  id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
+  promptTokens?: Prisma.SortOrder
+  completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrder
+  totalTokens?: Prisma.SortOrder
+  costCents?: Prisma.SortOrder
+  model?: Prisma.SortOrder
+  provider?: Prisma.SortOrder
+  endpoint?: Prisma.SortOrder
+  tier?: Prisma.SortOrder
+  optillmLevel?: Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrder
+  conversationId?: Prisma.SortOrder
+  requestId?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+}
+
+export type UsageSumOrderByAggregateInput = {
+  promptTokens?: Prisma.SortOrder
+  completionTokens?: Prisma.SortOrder
+  adjustedCompletionTokens?: Prisma.SortOrder
+  reasoningTokens?: Prisma.SortOrder
+  totalTokens?: Prisma.SortOrder
+  costCents?: Prisma.SortOrder
+  optillmMultiplier?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 export type UsageListRelationFilter = {
@@ -516,71 +689,20 @@ export type UsageOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
-export type UsageCountOrderByAggregateInput = {
-  id?: Prisma.SortOrder
-  userId?: Prisma.SortOrder
-  promptTokens?: Prisma.SortOrder
-  completionTokens?: Prisma.SortOrder
-  totalTokens?: Prisma.SortOrder
-  costCents?: Prisma.SortOrder
-  model?: Prisma.SortOrder
-  provider?: Prisma.SortOrder
-  endpoint?: Prisma.SortOrder
-  tier?: Prisma.SortOrder
-  conversationId?: Prisma.SortOrder
-  requestId?: Prisma.SortOrder
-  durationMs?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
+export type NullableIntFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
 }
 
-export type UsageAvgOrderByAggregateInput = {
-  promptTokens?: Prisma.SortOrder
-  completionTokens?: Prisma.SortOrder
-  totalTokens?: Prisma.SortOrder
-  costCents?: Prisma.SortOrder
-  durationMs?: Prisma.SortOrder
-}
-
-export type UsageMaxOrderByAggregateInput = {
-  id?: Prisma.SortOrder
-  userId?: Prisma.SortOrder
-  promptTokens?: Prisma.SortOrder
-  completionTokens?: Prisma.SortOrder
-  totalTokens?: Prisma.SortOrder
-  costCents?: Prisma.SortOrder
-  model?: Prisma.SortOrder
-  provider?: Prisma.SortOrder
-  endpoint?: Prisma.SortOrder
-  tier?: Prisma.SortOrder
-  conversationId?: Prisma.SortOrder
-  requestId?: Prisma.SortOrder
-  durationMs?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-}
-
-export type UsageMinOrderByAggregateInput = {
-  id?: Prisma.SortOrder
-  userId?: Prisma.SortOrder
-  promptTokens?: Prisma.SortOrder
-  completionTokens?: Prisma.SortOrder
-  totalTokens?: Prisma.SortOrder
-  costCents?: Prisma.SortOrder
-  model?: Prisma.SortOrder
-  provider?: Prisma.SortOrder
-  endpoint?: Prisma.SortOrder
-  tier?: Prisma.SortOrder
-  conversationId?: Prisma.SortOrder
-  requestId?: Prisma.SortOrder
-  durationMs?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-}
-
-export type UsageSumOrderByAggregateInput = {
-  promptTokens?: Prisma.SortOrder
-  completionTokens?: Prisma.SortOrder
-  totalTokens?: Prisma.SortOrder
-  costCents?: Prisma.SortOrder
-  durationMs?: Prisma.SortOrder
+export type NullableFloatFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
 }
 
 export type UsageCreateNestedManyWithoutUserInput = {
@@ -625,24 +747,20 @@ export type UsageUncheckedUpdateManyWithoutUserNestedInput = {
   deleteMany?: Prisma.UsageScalarWhereInput | Prisma.UsageScalarWhereInput[]
 }
 
-export type NullableIntFieldUpdateOperationsInput = {
-  set?: number | null
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
-}
-
 export type UsageCreateWithoutUserInput = {
   id?: string
   promptTokens?: number
   completionTokens?: number
+  adjustedCompletionTokens?: number | null
+  reasoningTokens?: number | null
   totalTokens?: number
   costCents?: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel?: string | null
+  optillmMultiplier?: number | null
   conversationId?: string | null
   requestId?: string | null
   durationMs?: number | null
@@ -653,12 +771,16 @@ export type UsageUncheckedCreateWithoutUserInput = {
   id?: string
   promptTokens?: number
   completionTokens?: number
+  adjustedCompletionTokens?: number | null
+  reasoningTokens?: number | null
   totalTokens?: number
   costCents?: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel?: string | null
+  optillmMultiplier?: number | null
   conversationId?: string | null
   requestId?: string | null
   durationMs?: number | null
@@ -698,12 +820,16 @@ export type UsageScalarWhereInput = {
   userId?: Prisma.StringFilter<"Usage"> | string
   promptTokens?: Prisma.IntFilter<"Usage"> | number
   completionTokens?: Prisma.IntFilter<"Usage"> | number
+  adjustedCompletionTokens?: Prisma.IntNullableFilter<"Usage"> | number | null
+  reasoningTokens?: Prisma.IntNullableFilter<"Usage"> | number | null
   totalTokens?: Prisma.IntFilter<"Usage"> | number
   costCents?: Prisma.IntFilter<"Usage"> | number
   model?: Prisma.StringFilter<"Usage"> | string
   provider?: Prisma.StringFilter<"Usage"> | string
   endpoint?: Prisma.StringFilter<"Usage"> | string
   tier?: Prisma.StringFilter<"Usage"> | string
+  optillmLevel?: Prisma.StringNullableFilter<"Usage"> | string | null
+  optillmMultiplier?: Prisma.FloatNullableFilter<"Usage"> | number | null
   conversationId?: Prisma.StringNullableFilter<"Usage"> | string | null
   requestId?: Prisma.StringNullableFilter<"Usage"> | string | null
   durationMs?: Prisma.IntNullableFilter<"Usage"> | number | null
@@ -714,12 +840,16 @@ export type UsageCreateManyUserInput = {
   id?: string
   promptTokens?: number
   completionTokens?: number
+  adjustedCompletionTokens?: number | null
+  reasoningTokens?: number | null
   totalTokens?: number
   costCents?: number
   model: string
   provider: string
   endpoint: string
   tier: string
+  optillmLevel?: string | null
+  optillmMultiplier?: number | null
   conversationId?: string | null
   requestId?: string | null
   durationMs?: number | null
@@ -730,12 +860,16 @@ export type UsageUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -746,12 +880,16 @@ export type UsageUncheckedUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -762,12 +900,16 @@ export type UsageUncheckedUpdateManyWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   promptTokens?: Prisma.IntFieldUpdateOperationsInput | number
   completionTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  adjustedCompletionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  reasoningTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   totalTokens?: Prisma.IntFieldUpdateOperationsInput | number
   costCents?: Prisma.IntFieldUpdateOperationsInput | number
   model?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.StringFieldUpdateOperationsInput | string
   endpoint?: Prisma.StringFieldUpdateOperationsInput | string
   tier?: Prisma.StringFieldUpdateOperationsInput | string
+  optillmLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  optillmMultiplier?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -781,17 +923,21 @@ export type UsageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   userId?: boolean
   promptTokens?: boolean
   completionTokens?: boolean
+  adjustedCompletionTokens?: boolean
+  reasoningTokens?: boolean
   totalTokens?: boolean
   costCents?: boolean
   model?: boolean
   provider?: boolean
   endpoint?: boolean
   tier?: boolean
+  optillmLevel?: boolean
+  optillmMultiplier?: boolean
   conversationId?: boolean
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usage"]>
 
 export type UsageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -799,17 +945,21 @@ export type UsageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   userId?: boolean
   promptTokens?: boolean
   completionTokens?: boolean
+  adjustedCompletionTokens?: boolean
+  reasoningTokens?: boolean
   totalTokens?: boolean
   costCents?: boolean
   model?: boolean
   provider?: boolean
   endpoint?: boolean
   tier?: boolean
+  optillmLevel?: boolean
+  optillmMultiplier?: boolean
   conversationId?: boolean
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usage"]>
 
 export type UsageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -817,17 +967,21 @@ export type UsageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   userId?: boolean
   promptTokens?: boolean
   completionTokens?: boolean
+  adjustedCompletionTokens?: boolean
+  reasoningTokens?: boolean
   totalTokens?: boolean
   costCents?: boolean
   model?: boolean
   provider?: boolean
   endpoint?: boolean
   tier?: boolean
+  optillmLevel?: boolean
+  optillmMultiplier?: boolean
   conversationId?: boolean
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usage"]>
 
 export type UsageSelectScalar = {
@@ -835,45 +989,53 @@ export type UsageSelectScalar = {
   userId?: boolean
   promptTokens?: boolean
   completionTokens?: boolean
+  adjustedCompletionTokens?: boolean
+  reasoningTokens?: boolean
   totalTokens?: boolean
   costCents?: boolean
   model?: boolean
   provider?: boolean
   endpoint?: boolean
   tier?: boolean
+  optillmLevel?: boolean
+  optillmMultiplier?: boolean
   conversationId?: boolean
   requestId?: boolean
   durationMs?: boolean
   createdAt?: boolean
 }
 
-export type UsageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "promptTokens" | "completionTokens" | "totalTokens" | "costCents" | "model" | "provider" | "endpoint" | "tier" | "conversationId" | "requestId" | "durationMs" | "createdAt", ExtArgs["result"]["usage"]>
+export type UsageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "promptTokens" | "completionTokens" | "adjustedCompletionTokens" | "reasoningTokens" | "totalTokens" | "costCents" | "model" | "provider" | "endpoint" | "tier" | "optillmLevel" | "optillmMultiplier" | "conversationId" | "requestId" | "durationMs" | "createdAt", ExtArgs["result"]["usage"]>
 export type UsageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 export type UsageIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 export type UsageIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  User?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
 
 export type $UsagePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Usage"
   objects: {
-    user: Prisma.$UserPayload<ExtArgs>
+    User: Prisma.$UserPayload<ExtArgs>
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     userId: string
     promptTokens: number
     completionTokens: number
+    adjustedCompletionTokens: number | null
+    reasoningTokens: number | null
     totalTokens: number
     costCents: number
     model: string
     provider: string
     endpoint: string
     tier: string
+    optillmLevel: string | null
+    optillmMultiplier: number | null
     conversationId: string | null
     requestId: string | null
     durationMs: number | null
@@ -1272,7 +1434,7 @@ readonly fields: UsageFieldRefs;
  */
 export interface Prisma__UsageClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  User<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1306,12 +1468,16 @@ export interface UsageFieldRefs {
   readonly userId: Prisma.FieldRef<"Usage", 'String'>
   readonly promptTokens: Prisma.FieldRef<"Usage", 'Int'>
   readonly completionTokens: Prisma.FieldRef<"Usage", 'Int'>
+  readonly adjustedCompletionTokens: Prisma.FieldRef<"Usage", 'Int'>
+  readonly reasoningTokens: Prisma.FieldRef<"Usage", 'Int'>
   readonly totalTokens: Prisma.FieldRef<"Usage", 'Int'>
   readonly costCents: Prisma.FieldRef<"Usage", 'Int'>
   readonly model: Prisma.FieldRef<"Usage", 'String'>
   readonly provider: Prisma.FieldRef<"Usage", 'String'>
   readonly endpoint: Prisma.FieldRef<"Usage", 'String'>
   readonly tier: Prisma.FieldRef<"Usage", 'String'>
+  readonly optillmLevel: Prisma.FieldRef<"Usage", 'String'>
+  readonly optillmMultiplier: Prisma.FieldRef<"Usage", 'Float'>
   readonly conversationId: Prisma.FieldRef<"Usage", 'String'>
   readonly requestId: Prisma.FieldRef<"Usage", 'String'>
   readonly durationMs: Prisma.FieldRef<"Usage", 'Int'>

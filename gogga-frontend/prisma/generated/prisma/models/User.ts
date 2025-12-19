@@ -20,8 +20,30 @@ export type UserModel = runtime.Types.Result.DefaultSelection<Prisma.$UserPayloa
 
 export type AggregateUser = {
   _count: UserCountAggregateOutputType | null
+  _avg: UserAvgAggregateOutputType | null
+  _sum: UserSumAggregateOutputType | null
   _min: UserMinAggregateOutputType | null
   _max: UserMaxAggregateOutputType | null
+}
+
+export type UserAvgAggregateOutputType = {
+  creditBalance: number | null
+  usageChatTokens: number | null
+  usageImages: number | null
+  usageImageEdits: number | null
+  usageUpscales: number | null
+  usageVideoSeconds: number | null
+  usageGoggaTalkMins: number | null
+}
+
+export type UserSumAggregateOutputType = {
+  creditBalance: number | null
+  usageChatTokens: number | null
+  usageImages: number | null
+  usageImageEdits: number | null
+  usageUpscales: number | null
+  usageVideoSeconds: number | null
+  usageGoggaTalkMins: number | null
 }
 
 export type UserMinAggregateOutputType = {
@@ -32,6 +54,14 @@ export type UserMinAggregateOutputType = {
   isTester: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  creditBalance: number | null
+  usageChatTokens: number | null
+  usageImages: number | null
+  usageImageEdits: number | null
+  usageUpscales: number | null
+  usageVideoSeconds: number | null
+  usageGoggaTalkMins: number | null
+  usageResetDate: Date | null
 }
 
 export type UserMaxAggregateOutputType = {
@@ -42,6 +72,14 @@ export type UserMaxAggregateOutputType = {
   isTester: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  creditBalance: number | null
+  usageChatTokens: number | null
+  usageImages: number | null
+  usageImageEdits: number | null
+  usageUpscales: number | null
+  usageVideoSeconds: number | null
+  usageGoggaTalkMins: number | null
+  usageResetDate: Date | null
 }
 
 export type UserCountAggregateOutputType = {
@@ -52,9 +90,37 @@ export type UserCountAggregateOutputType = {
   isTester: number
   createdAt: number
   updatedAt: number
+  creditBalance: number
+  usageChatTokens: number
+  usageImages: number
+  usageImageEdits: number
+  usageUpscales: number
+  usageVideoSeconds: number
+  usageGoggaTalkMins: number
+  usageResetDate: number
   _all: number
 }
 
+
+export type UserAvgAggregateInputType = {
+  creditBalance?: true
+  usageChatTokens?: true
+  usageImages?: true
+  usageImageEdits?: true
+  usageUpscales?: true
+  usageVideoSeconds?: true
+  usageGoggaTalkMins?: true
+}
+
+export type UserSumAggregateInputType = {
+  creditBalance?: true
+  usageChatTokens?: true
+  usageImages?: true
+  usageImageEdits?: true
+  usageUpscales?: true
+  usageVideoSeconds?: true
+  usageGoggaTalkMins?: true
+}
 
 export type UserMinAggregateInputType = {
   id?: true
@@ -64,6 +130,14 @@ export type UserMinAggregateInputType = {
   isTester?: true
   createdAt?: true
   updatedAt?: true
+  creditBalance?: true
+  usageChatTokens?: true
+  usageImages?: true
+  usageImageEdits?: true
+  usageUpscales?: true
+  usageVideoSeconds?: true
+  usageGoggaTalkMins?: true
+  usageResetDate?: true
 }
 
 export type UserMaxAggregateInputType = {
@@ -74,6 +148,14 @@ export type UserMaxAggregateInputType = {
   isTester?: true
   createdAt?: true
   updatedAt?: true
+  creditBalance?: true
+  usageChatTokens?: true
+  usageImages?: true
+  usageImageEdits?: true
+  usageUpscales?: true
+  usageVideoSeconds?: true
+  usageGoggaTalkMins?: true
+  usageResetDate?: true
 }
 
 export type UserCountAggregateInputType = {
@@ -84,6 +166,14 @@ export type UserCountAggregateInputType = {
   isTester?: true
   createdAt?: true
   updatedAt?: true
+  creditBalance?: true
+  usageChatTokens?: true
+  usageImages?: true
+  usageImageEdits?: true
+  usageUpscales?: true
+  usageVideoSeconds?: true
+  usageGoggaTalkMins?: true
+  usageResetDate?: true
   _all?: true
 }
 
@@ -125,6 +215,18 @@ export type UserAggregateArgs<ExtArgs extends runtime.Types.Extensions.InternalA
   /**
    * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
    * 
+   * Select which fields to average
+  **/
+  _avg?: UserAvgAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
+   * Select which fields to sum
+  **/
+  _sum?: UserSumAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
    * Select which fields to find the minimum value
   **/
   _min?: UserMinAggregateInputType
@@ -155,6 +257,8 @@ export type UserGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
   take?: number
   skip?: number
   _count?: UserCountAggregateInputType | true
+  _avg?: UserAvgAggregateInputType
+  _sum?: UserSumAggregateInputType
   _min?: UserMinAggregateInputType
   _max?: UserMaxAggregateInputType
 }
@@ -167,7 +271,17 @@ export type UserGroupByOutputType = {
   isTester: boolean
   createdAt: Date
   updatedAt: Date
+  creditBalance: number
+  usageChatTokens: number
+  usageImages: number
+  usageImageEdits: number
+  usageUpscales: number
+  usageVideoSeconds: number
+  usageGoggaTalkMins: number
+  usageResetDate: Date
   _count: UserCountAggregateOutputType | null
+  _avg: UserAvgAggregateOutputType | null
+  _sum: UserSumAggregateOutputType | null
   _min: UserMinAggregateOutputType | null
   _max: UserMaxAggregateOutputType | null
 }
@@ -198,10 +312,20 @@ export type UserWhereInput = {
   isTester?: Prisma.BoolFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
+  creditBalance?: Prisma.IntFilter<"User"> | number
+  usageChatTokens?: Prisma.IntFilter<"User"> | number
+  usageImages?: Prisma.IntFilter<"User"> | number
+  usageImageEdits?: Prisma.IntFilter<"User"> | number
+  usageUpscales?: Prisma.IntFilter<"User"> | number
+  usageVideoSeconds?: Prisma.IntFilter<"User"> | number
+  usageGoggaTalkMins?: Prisma.FloatFilter<"User"> | number
+  usageResetDate?: Prisma.DateTimeFilter<"User"> | Date | string
   DebugSubmission?: Prisma.DebugSubmissionListRelationFilter
   Subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
   Usage?: Prisma.UsageListRelationFilter
   UsageSummary?: Prisma.UsageSummaryListRelationFilter
+  CreditAdjustment?: Prisma.CreditAdjustmentListRelationFilter
+  UsageEvent?: Prisma.UsageEventListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -212,10 +336,20 @@ export type UserOrderByWithRelationInput = {
   isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
+  usageResetDate?: Prisma.SortOrder
   DebugSubmission?: Prisma.DebugSubmissionOrderByRelationAggregateInput
   Subscription?: Prisma.SubscriptionOrderByWithRelationInput
   Usage?: Prisma.UsageOrderByRelationAggregateInput
   UsageSummary?: Prisma.UsageSummaryOrderByRelationAggregateInput
+  CreditAdjustment?: Prisma.CreditAdjustmentOrderByRelationAggregateInput
+  UsageEvent?: Prisma.UsageEventOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -229,10 +363,20 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   isTester?: Prisma.BoolFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
+  creditBalance?: Prisma.IntFilter<"User"> | number
+  usageChatTokens?: Prisma.IntFilter<"User"> | number
+  usageImages?: Prisma.IntFilter<"User"> | number
+  usageImageEdits?: Prisma.IntFilter<"User"> | number
+  usageUpscales?: Prisma.IntFilter<"User"> | number
+  usageVideoSeconds?: Prisma.IntFilter<"User"> | number
+  usageGoggaTalkMins?: Prisma.FloatFilter<"User"> | number
+  usageResetDate?: Prisma.DateTimeFilter<"User"> | Date | string
   DebugSubmission?: Prisma.DebugSubmissionListRelationFilter
   Subscription?: Prisma.XOR<Prisma.SubscriptionNullableScalarRelationFilter, Prisma.SubscriptionWhereInput> | null
   Usage?: Prisma.UsageListRelationFilter
   UsageSummary?: Prisma.UsageSummaryListRelationFilter
+  CreditAdjustment?: Prisma.CreditAdjustmentListRelationFilter
+  UsageEvent?: Prisma.UsageEventListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -243,9 +387,19 @@ export type UserOrderByWithAggregationInput = {
   isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
+  usageResetDate?: Prisma.SortOrder
   _count?: Prisma.UserCountOrderByAggregateInput
+  _avg?: Prisma.UserAvgOrderByAggregateInput
   _max?: Prisma.UserMaxOrderByAggregateInput
   _min?: Prisma.UserMinOrderByAggregateInput
+  _sum?: Prisma.UserSumOrderByAggregateInput
 }
 
 export type UserScalarWhereWithAggregatesInput = {
@@ -259,6 +413,14 @@ export type UserScalarWhereWithAggregatesInput = {
   isTester?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
+  creditBalance?: Prisma.IntWithAggregatesFilter<"User"> | number
+  usageChatTokens?: Prisma.IntWithAggregatesFilter<"User"> | number
+  usageImages?: Prisma.IntWithAggregatesFilter<"User"> | number
+  usageImageEdits?: Prisma.IntWithAggregatesFilter<"User"> | number
+  usageUpscales?: Prisma.IntWithAggregatesFilter<"User"> | number
+  usageVideoSeconds?: Prisma.IntWithAggregatesFilter<"User"> | number
+  usageGoggaTalkMins?: Prisma.FloatWithAggregatesFilter<"User"> | number
+  usageResetDate?: Prisma.DateTimeWithAggregatesFilter<"User"> | Date | string
 }
 
 export type UserCreateInput = {
@@ -269,10 +431,20 @@ export type UserCreateInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
   Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
   Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -283,10 +455,20 @@ export type UserUncheckedCreateInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
   Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
   Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -297,10 +479,20 @@ export type UserUpdateInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
   Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
   Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -311,10 +503,20 @@ export type UserUncheckedUpdateInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
   Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
   Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -325,6 +527,14 @@ export type UserCreateManyInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
 }
 
 export type UserUpdateManyMutationInput = {
@@ -335,6 +545,14 @@ export type UserUpdateManyMutationInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type UserUncheckedUpdateManyInput = {
@@ -345,6 +563,14 @@ export type UserUncheckedUpdateManyInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type UserNullableScalarRelationFilter = {
@@ -365,6 +591,24 @@ export type UserCountOrderByAggregateInput = {
   isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
+  usageResetDate?: Prisma.SortOrder
+}
+
+export type UserAvgOrderByAggregateInput = {
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
 }
 
 export type UserMaxOrderByAggregateInput = {
@@ -375,6 +619,14 @@ export type UserMaxOrderByAggregateInput = {
   isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
+  usageResetDate?: Prisma.SortOrder
 }
 
 export type UserMinOrderByAggregateInput = {
@@ -385,6 +637,24 @@ export type UserMinOrderByAggregateInput = {
   isTester?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
+  usageResetDate?: Prisma.SortOrder
+}
+
+export type UserSumOrderByAggregateInput = {
+  creditBalance?: Prisma.SortOrder
+  usageChatTokens?: Prisma.SortOrder
+  usageImages?: Prisma.SortOrder
+  usageImageEdits?: Prisma.SortOrder
+  usageUpscales?: Prisma.SortOrder
+  usageVideoSeconds?: Prisma.SortOrder
+  usageGoggaTalkMins?: Prisma.SortOrder
 }
 
 export type UserCreateNestedOneWithoutDebugSubmissionInput = {
@@ -445,6 +715,42 @@ export type UserUpdateOneRequiredWithoutUsageSummaryNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUsageSummaryInput, Prisma.UserUpdateWithoutUsageSummaryInput>, Prisma.UserUncheckedUpdateWithoutUsageSummaryInput>
 }
 
+export type FloatFieldUpdateOperationsInput = {
+  set?: number
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
+}
+
+export type UserCreateNestedOneWithoutCreditAdjustmentInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutCreditAdjustmentInput, Prisma.UserUncheckedCreateWithoutCreditAdjustmentInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutCreditAdjustmentInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutCreditAdjustmentNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutCreditAdjustmentInput, Prisma.UserUncheckedCreateWithoutCreditAdjustmentInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutCreditAdjustmentInput
+  upsert?: Prisma.UserUpsertWithoutCreditAdjustmentInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutCreditAdjustmentInput, Prisma.UserUpdateWithoutCreditAdjustmentInput>, Prisma.UserUncheckedUpdateWithoutCreditAdjustmentInput>
+}
+
+export type UserCreateNestedOneWithoutUsageEventInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUsageEventInput, Prisma.UserUncheckedCreateWithoutUsageEventInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUsageEventInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutUsageEventNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUsageEventInput, Prisma.UserUncheckedCreateWithoutUsageEventInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUsageEventInput
+  upsert?: Prisma.UserUpsertWithoutUsageEventInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUsageEventInput, Prisma.UserUpdateWithoutUsageEventInput>, Prisma.UserUncheckedUpdateWithoutUsageEventInput>
+}
+
 export type UserCreateWithoutDebugSubmissionInput = {
   id?: string
   email: string
@@ -453,9 +759,19 @@ export type UserCreateWithoutDebugSubmissionInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
   Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutDebugSubmissionInput = {
@@ -466,9 +782,19 @@ export type UserUncheckedCreateWithoutDebugSubmissionInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
   Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutDebugSubmissionInput = {
@@ -495,9 +821,19 @@ export type UserUpdateWithoutDebugSubmissionInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
   Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutDebugSubmissionInput = {
@@ -508,9 +844,19 @@ export type UserUncheckedUpdateWithoutDebugSubmissionInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
   Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSubscriptionInput = {
@@ -521,9 +867,19 @@ export type UserCreateWithoutSubscriptionInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
   Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSubscriptionInput = {
@@ -534,9 +890,19 @@ export type UserUncheckedCreateWithoutSubscriptionInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
   Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSubscriptionInput = {
@@ -563,9 +929,19 @@ export type UserUpdateWithoutSubscriptionInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
   Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSubscriptionInput = {
@@ -576,9 +952,19 @@ export type UserUncheckedUpdateWithoutSubscriptionInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
   Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUsageInput = {
@@ -589,9 +975,19 @@ export type UserCreateWithoutUsageInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
   Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUsageInput = {
@@ -602,9 +998,19 @@ export type UserUncheckedCreateWithoutUsageInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
   Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
   UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUsageInput = {
@@ -631,9 +1037,19 @@ export type UserUpdateWithoutUsageInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
   Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUsageInput = {
@@ -644,9 +1060,19 @@ export type UserUncheckedUpdateWithoutUsageInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
   Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
   UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUsageSummaryInput = {
@@ -657,9 +1083,19 @@ export type UserCreateWithoutUsageSummaryInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
   Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
   Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUsageSummaryInput = {
@@ -670,9 +1106,19 @@ export type UserUncheckedCreateWithoutUsageSummaryInput = {
   isTester?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
   Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
   Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUsageSummaryInput = {
@@ -699,9 +1145,19 @@ export type UserUpdateWithoutUsageSummaryInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
   Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
   Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUsageSummaryInput = {
@@ -712,9 +1168,235 @@ export type UserUncheckedUpdateWithoutUsageSummaryInput = {
   isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
   Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
   Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutCreditAdjustmentInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
+  DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutCreditAdjustmentInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  UsageEvent?: Prisma.UsageEventUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutCreditAdjustmentInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutCreditAdjustmentInput, Prisma.UserUncheckedCreateWithoutCreditAdjustmentInput>
+}
+
+export type UserUpsertWithoutCreditAdjustmentInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutCreditAdjustmentInput, Prisma.UserUncheckedUpdateWithoutCreditAdjustmentInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutCreditAdjustmentInput, Prisma.UserUncheckedCreateWithoutCreditAdjustmentInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutCreditAdjustmentInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutCreditAdjustmentInput, Prisma.UserUncheckedUpdateWithoutCreditAdjustmentInput>
+}
+
+export type UserUpdateWithoutCreditAdjustmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutCreditAdjustmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  UsageEvent?: Prisma.UsageEventUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutUsageEventInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
+  DebugSubmission?: Prisma.DebugSubmissionCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutUsageEventInput = {
+  id?: string
+  email: string
+  isAdmin?: boolean
+  isServiceAdmin?: boolean
+  isTester?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  creditBalance?: number
+  usageChatTokens?: number
+  usageImages?: number
+  usageImageEdits?: number
+  usageUpscales?: number
+  usageVideoSeconds?: number
+  usageGoggaTalkMins?: number
+  usageResetDate?: Date | string
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedCreateNestedManyWithoutUserInput
+  Subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutUserInput
+  Usage?: Prisma.UsageUncheckedCreateNestedManyWithoutUserInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedCreateNestedManyWithoutUserInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutUsageEventInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutUsageEventInput, Prisma.UserUncheckedCreateWithoutUsageEventInput>
+}
+
+export type UserUpsertWithoutUsageEventInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutUsageEventInput, Prisma.UserUncheckedUpdateWithoutUsageEventInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutUsageEventInput, Prisma.UserUncheckedCreateWithoutUsageEventInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutUsageEventInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutUsageEventInput, Prisma.UserUncheckedUpdateWithoutUsageEventInput>
+}
+
+export type UserUpdateWithoutUsageEventInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  DebugSubmission?: Prisma.DebugSubmissionUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutUsageEventInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  isAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isServiceAdmin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isTester?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creditBalance?: Prisma.IntFieldUpdateOperationsInput | number
+  usageChatTokens?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImages?: Prisma.IntFieldUpdateOperationsInput | number
+  usageImageEdits?: Prisma.IntFieldUpdateOperationsInput | number
+  usageUpscales?: Prisma.IntFieldUpdateOperationsInput | number
+  usageVideoSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  usageGoggaTalkMins?: Prisma.FloatFieldUpdateOperationsInput | number
+  usageResetDate?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  DebugSubmission?: Prisma.DebugSubmissionUncheckedUpdateManyWithoutUserNestedInput
+  Subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutUserNestedInput
+  Usage?: Prisma.UsageUncheckedUpdateManyWithoutUserNestedInput
+  UsageSummary?: Prisma.UsageSummaryUncheckedUpdateManyWithoutUserNestedInput
+  CreditAdjustment?: Prisma.CreditAdjustmentUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -726,12 +1408,16 @@ export type UserCountOutputType = {
   DebugSubmission: number
   Usage: number
   UsageSummary: number
+  CreditAdjustment: number
+  UsageEvent: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   DebugSubmission?: boolean | UserCountOutputTypeCountDebugSubmissionArgs
   Usage?: boolean | UserCountOutputTypeCountUsageArgs
   UsageSummary?: boolean | UserCountOutputTypeCountUsageSummaryArgs
+  CreditAdjustment?: boolean | UserCountOutputTypeCountCreditAdjustmentArgs
+  UsageEvent?: boolean | UserCountOutputTypeCountUsageEventArgs
 }
 
 /**
@@ -765,6 +1451,20 @@ export type UserCountOutputTypeCountUsageSummaryArgs<ExtArgs extends runtime.Typ
   where?: Prisma.UsageSummaryWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountCreditAdjustmentArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.CreditAdjustmentWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountUsageEventArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UsageEventWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -774,10 +1474,20 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  creditBalance?: boolean
+  usageChatTokens?: boolean
+  usageImages?: boolean
+  usageImageEdits?: boolean
+  usageUpscales?: boolean
+  usageVideoSeconds?: boolean
+  usageGoggaTalkMins?: boolean
+  usageResetDate?: boolean
   DebugSubmission?: boolean | Prisma.User$DebugSubmissionArgs<ExtArgs>
   Subscription?: boolean | Prisma.User$SubscriptionArgs<ExtArgs>
   Usage?: boolean | Prisma.User$UsageArgs<ExtArgs>
   UsageSummary?: boolean | Prisma.User$UsageSummaryArgs<ExtArgs>
+  CreditAdjustment?: boolean | Prisma.User$CreditAdjustmentArgs<ExtArgs>
+  UsageEvent?: boolean | Prisma.User$UsageEventArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -789,6 +1499,14 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  creditBalance?: boolean
+  usageChatTokens?: boolean
+  usageImages?: boolean
+  usageImageEdits?: boolean
+  usageUpscales?: boolean
+  usageVideoSeconds?: boolean
+  usageGoggaTalkMins?: boolean
+  usageResetDate?: boolean
 }, ExtArgs["result"]["user"]>
 
 export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -799,6 +1517,14 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  creditBalance?: boolean
+  usageChatTokens?: boolean
+  usageImages?: boolean
+  usageImageEdits?: boolean
+  usageUpscales?: boolean
+  usageVideoSeconds?: boolean
+  usageGoggaTalkMins?: boolean
+  usageResetDate?: boolean
 }, ExtArgs["result"]["user"]>
 
 export type UserSelectScalar = {
@@ -809,14 +1535,24 @@ export type UserSelectScalar = {
   isTester?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  creditBalance?: boolean
+  usageChatTokens?: boolean
+  usageImages?: boolean
+  usageImageEdits?: boolean
+  usageUpscales?: boolean
+  usageVideoSeconds?: boolean
+  usageGoggaTalkMins?: boolean
+  usageResetDate?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "isAdmin" | "isServiceAdmin" | "isTester" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "isAdmin" | "isServiceAdmin" | "isTester" | "createdAt" | "updatedAt" | "creditBalance" | "usageChatTokens" | "usageImages" | "usageImageEdits" | "usageUpscales" | "usageVideoSeconds" | "usageGoggaTalkMins" | "usageResetDate", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   DebugSubmission?: boolean | Prisma.User$DebugSubmissionArgs<ExtArgs>
   Subscription?: boolean | Prisma.User$SubscriptionArgs<ExtArgs>
   Usage?: boolean | Prisma.User$UsageArgs<ExtArgs>
   UsageSummary?: boolean | Prisma.User$UsageSummaryArgs<ExtArgs>
+  CreditAdjustment?: boolean | Prisma.User$CreditAdjustmentArgs<ExtArgs>
+  UsageEvent?: boolean | Prisma.User$UsageEventArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -829,6 +1565,8 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     Subscription: Prisma.$SubscriptionPayload<ExtArgs> | null
     Usage: Prisma.$UsagePayload<ExtArgs>[]
     UsageSummary: Prisma.$UsageSummaryPayload<ExtArgs>[]
+    CreditAdjustment: Prisma.$CreditAdjustmentPayload<ExtArgs>[]
+    UsageEvent: Prisma.$UsageEventPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -838,6 +1576,14 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     isTester: boolean
     createdAt: Date
     updatedAt: Date
+    creditBalance: number
+    usageChatTokens: number
+    usageImages: number
+    usageImageEdits: number
+    usageUpscales: number
+    usageVideoSeconds: number
+    usageGoggaTalkMins: number
+    usageResetDate: Date
   }, ExtArgs["result"]["user"]>
   composites: {}
 }
@@ -1236,6 +1982,8 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   Subscription<T extends Prisma.User$SubscriptionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$SubscriptionArgs<ExtArgs>>): Prisma.Prisma__SubscriptionClient<runtime.Types.Result.GetResult<Prisma.$SubscriptionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   Usage<T extends Prisma.User$UsageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$UsageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   UsageSummary<T extends Prisma.User$UsageSummaryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$UsageSummaryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsageSummaryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  CreditAdjustment<T extends Prisma.User$CreditAdjustmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$CreditAdjustmentArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CreditAdjustmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  UsageEvent<T extends Prisma.User$UsageEventArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$UsageEventArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UsageEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1272,6 +2020,14 @@ export interface UserFieldRefs {
   readonly isTester: Prisma.FieldRef<"User", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"User", 'DateTime'>
+  readonly creditBalance: Prisma.FieldRef<"User", 'Int'>
+  readonly usageChatTokens: Prisma.FieldRef<"User", 'Int'>
+  readonly usageImages: Prisma.FieldRef<"User", 'Int'>
+  readonly usageImageEdits: Prisma.FieldRef<"User", 'Int'>
+  readonly usageUpscales: Prisma.FieldRef<"User", 'Int'>
+  readonly usageVideoSeconds: Prisma.FieldRef<"User", 'Int'>
+  readonly usageGoggaTalkMins: Prisma.FieldRef<"User", 'Float'>
+  readonly usageResetDate: Prisma.FieldRef<"User", 'DateTime'>
 }
     
 
@@ -1746,6 +2502,54 @@ export type User$UsageSummaryArgs<ExtArgs extends runtime.Types.Extensions.Inter
   take?: number
   skip?: number
   distinct?: Prisma.UsageSummaryScalarFieldEnum | Prisma.UsageSummaryScalarFieldEnum[]
+}
+
+/**
+ * User.CreditAdjustment
+ */
+export type User$CreditAdjustmentArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the CreditAdjustment
+   */
+  select?: Prisma.CreditAdjustmentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the CreditAdjustment
+   */
+  omit?: Prisma.CreditAdjustmentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.CreditAdjustmentInclude<ExtArgs> | null
+  where?: Prisma.CreditAdjustmentWhereInput
+  orderBy?: Prisma.CreditAdjustmentOrderByWithRelationInput | Prisma.CreditAdjustmentOrderByWithRelationInput[]
+  cursor?: Prisma.CreditAdjustmentWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.CreditAdjustmentScalarFieldEnum | Prisma.CreditAdjustmentScalarFieldEnum[]
+}
+
+/**
+ * User.UsageEvent
+ */
+export type User$UsageEventArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the UsageEvent
+   */
+  select?: Prisma.UsageEventSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the UsageEvent
+   */
+  omit?: Prisma.UsageEventOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UsageEventInclude<ExtArgs> | null
+  where?: Prisma.UsageEventWhereInput
+  orderBy?: Prisma.UsageEventOrderByWithRelationInput | Prisma.UsageEventOrderByWithRelationInput[]
+  cursor?: Prisma.UsageEventWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.UsageEventScalarFieldEnum | Prisma.UsageEventScalarFieldEnum[]
 }
 
 /**

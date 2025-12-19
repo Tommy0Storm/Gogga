@@ -87,3 +87,33 @@ export type Voucher = Prisma.VoucherModel
  * 
  */
 export type VoucherLog = Prisma.VoucherLogModel
+/**
+ * Model ModelPricing
+ * 
+ */
+export type ModelPricing = Prisma.ModelPricingModel
+/**
+ * Model FeatureCost
+ * 
+ */
+export type FeatureCost = Prisma.FeatureCostModel
+/**
+ * Model ExchangeRate
+ * 
+ */
+export type ExchangeRate = Prisma.ExchangeRateModel
+/**
+ * Model PricingAudit
+ * 
+ */
+export type PricingAudit = Prisma.PricingAuditModel
+/**
+ * Model CreditAdjustment
+ * 
+ */
+export type CreditAdjustment = Prisma.CreditAdjustmentModel
+/**
+ * Model UsageEvent
+ * 
+ */
+export type UsageEvent = Prisma.UsageEventModel

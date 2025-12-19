@@ -71,28 +71,128 @@ class Settings(BaseSettings):
     QWEN_THINKING_MIN_P: float = 0.0
     
     # Pricing Configuration (USD per Million Tokens)
+    # Cerebras official pricing (December 2025) - verified from cerebras.ai/cloud
     # FREE tier: OpenRouter free models - no cost but still track tokens
     COST_FREE_INPUT: float = 0.0
     COST_FREE_OUTPUT: float = 0.0
     
-    # JIVE tier: Qwen 3 32B (via Cerebras)
-    COST_JIVE_INPUT: float = 0.40   # $0.40 per M tokens (same pricing as JIGGA 32B)
-    COST_JIVE_OUTPUT: float = 0.80  # $0.80 per M tokens
+    # JIVE tier: Qwen 3 32B (via Cerebras @ 2,600 t/s)
+    # Source: cerebras.ai/cloud pricing page
+    COST_JIVE_INPUT: float = 0.40   # $0.40 per M input tokens
+    COST_JIVE_OUTPUT: float = 0.80  # $0.80 per M output tokens
     
-    # JIGGA tier: Qwen 3 32B (via Cerebras)
-    COST_JIGGA_INPUT: float = 0.40   # $0.40 per M tokens
-    COST_JIGGA_OUTPUT: float = 0.80  # $0.80 per M tokens
+    # JIGGA tier: Qwen 3 32B (via Cerebras) - same pricing as JIVE
+    COST_JIGGA_INPUT: float = 0.40   # $0.40 per M input tokens
+    COST_JIGGA_OUTPUT: float = 0.80  # $0.80 per M output tokens
     
-    # JIGGA tier 235B: Qwen 3 235B Instruct (via Cerebras)
+    # JIGGA tier 235B: Qwen 3 235B A22B Instruct (via Cerebras @ 1,400 t/s)
+    # Routes for: constitutional, legal, litigation, African languages
     COST_JIGGA_235B_INPUT: float = 0.60   # $0.60 per M tokens
     COST_JIGGA_235B_OUTPUT: float = 1.20  # $1.20 per M tokens
     
+    # OptiLLM Reasoning Multiplier
+    # When OptiLLM enhancements are applied, output tokens increase due to:
+    # - Chain-of-thought reflection (adds ~20-40% tokens)
+    # - Planning generation (adds ~10-20% tokens)
+    # - Re-read context repetition (adds ~5% tokens)
+    OPTILLM_BASIC_MULTIPLIER: float = 1.1     # FREE: SPL + Re-Read only
+    OPTILLM_STANDARD_MULTIPLIER: float = 1.3  # JIVE: + CoT Reflection  
+    OPTILLM_ADVANCED_MULTIPLIER: float = 1.5  # JIGGA: + Planning + Empathy
+    
     # Image Generation Pricing
     COST_FLUX_IMAGE: float = 0.04  # $0.04 per FLUX 1.1 Pro image
-    COST_LONGCAT_IMAGE: float = 0.0  # FREE tier images
+    COST_LONGCAT_IMAGE: float = 0.0  # FREE tier images (Pollinations)
     
-    # Exchange Rate
-    ZAR_USD_RATE: float = Field(default=18.50, ge=1.0, le=100.0)
+    # Vertex AI Imagen Pricing (USD per image)
+    COST_IMAGEN_V3_CREATE: float = 0.04  # $0.04 per Imagen v3 create/edit
+    COST_IMAGEN_V4_UPSCALE: float = 0.06  # $0.06 per Imagen v4 Ultra upscale
+    
+    # Vertex AI Veo Pricing (USD per second)
+    COST_VEO_VIDEO_ONLY: float = 0.20  # $0.20 per second video only
+    COST_VEO_VIDEO_AUDIO: float = 0.40  # $0.40 per second video + audio
+    
+    # Media Tier Allowances (monthly limits)
+    # FREE tier - preview only
+    MEDIA_FREE_IMAGES: int = 1  # 1 preview/day (watermarked)
+    MEDIA_FREE_VIDEO_SECONDS: int = 3  # 3-sec sample
+    
+    # JIVE tier (R49/mo)
+    MEDIA_JIVE_IMAGES: int = 50  # 50 images/month
+    MEDIA_JIVE_EDITS: int = 20  # 20 edits/month
+    MEDIA_JIVE_UPSCALE: int = 20  # 20 upscales/month (v3 only)
+    MEDIA_JIVE_VIDEO_MINUTES: int = 5  # 5 minutes/month video only
+    MEDIA_JIVE_VIDEO_AUDIO_MINUTES: int = 2  # 2 minutes/month video+audio
+    
+    # JIGGA tier (R149/mo)
+    MEDIA_JIGGA_IMAGES: int = 200  # 200 images/month
+    MEDIA_JIGGA_EDITS: int = 100  # 100 edits/month
+    MEDIA_JIGGA_UPSCALE: int = 50  # 50 upscales/month (v3+v4)
+    MEDIA_JIGGA_VIDEO_MINUTES: int = 20  # 20 minutes/month video only
+    MEDIA_JIGGA_VIDEO_AUDIO_MINUTES: int = 10  # 10 minutes/month video+audio
+    
+    # Vertex AI Configuration
+    VERTEX_PROJECT_ID: str = Field(default="", description="Google Cloud Project ID")
+    VERTEX_LOCATION: str = Field(default="us-central1", description="Vertex AI region")
+    
+    # Vertex AI Model Names (Dec 2025 - from official docs)
+    IMAGEN_V3_MODEL: str = "imagen-3.0-generate-002"  # Text-to-image
+    IMAGEN_V3_EDIT_MODEL: str = "imagen-3.0-capability-001"  # Edit/inpaint
+    IMAGEN_V4_UPSCALE_MODEL: str = "imagen-4.0-upscale-preview"  # Upscale to 2K/3K/4K
+    VEO_MODEL: str = "veo-3.1-generate-001"  # Video generation
+    VEO_FAST_MODEL: str = "veo-3.1-fast-generate-001"  # Faster video generation
+    
+    # Exchange Rate (ZAR/USD) - December 2025
+    ZAR_USD_RATE: float = Field(default=19.0, ge=1.0, le=100.0)  # R19 per $1 USD
+    
+    # ============================================
+    # SUBSCRIPTION TIER LIMITS (Monthly)
+    # Verified pricing achieves 47% margin on both tiers
+    # ============================================
+    
+    # JIVE tier (R99/month = $5.21 USD)
+    TIER_JIVE_PRICE_ZAR: int = 99
+    TIER_JIVE_CHAT_TOKENS: int = 500_000      # Cost: $0.30 (Qwen 32B)
+    TIER_JIVE_IMAGES: int = 20                 # Cost: $0.80 (create only)
+    TIER_JIVE_IMAGE_EDITS: int = 0             # Not included
+    TIER_JIVE_UPSCALES: int = 0                # Not included  
+    TIER_JIVE_VIDEO_SECONDS: int = 5           # Cost: $1.00 (1 short video)
+    TIER_JIVE_GOGGA_TALK_MINS: float = 30      # Cost: $0.68
+    # Total JIVE cost: $2.78 → 47% margin
+    
+    # JIGGA tier (R299/month = $15.74 USD)
+    TIER_JIGGA_PRICE_ZAR: int = 299
+    TIER_JIGGA_CHAT_TOKENS: int = 2_000_000    # Cost: $1.20 (32B + 235B routing)
+    TIER_JIGGA_IMAGES: int = 70                 # Cost: $2.80
+    TIER_JIGGA_IMAGE_EDITS: int = 30            # Cost: $1.20 
+    TIER_JIGGA_UPSCALES: int = 10               # Cost: $0.60
+    TIER_JIGGA_VIDEO_SECONDS: int = 16          # Cost: $3.20 (2 videos)
+    TIER_JIGGA_GOGGA_TALK_MINS: float = 25      # Cost: $0.56
+    # Total JIGGA cost: $8.36 → 47% margin
+    
+    # ============================================
+    # CREDIT PACK DEFINITIONS
+    # 1 credit = $0.10 USD = R1.90 ZAR
+    # ============================================
+    
+    CREDIT_VALUE_USD: float = 0.10  # Each credit worth $0.10
+    
+    # JIVE Credit Packs (restricted to: chat, image_create, gogga_talk)
+    CREDIT_PACK_JIVE_STARTER: int = 50       # 50 credits for R49
+    CREDIT_PACK_JIVE_STANDARD: int = 100     # 100 credits for R89
+    CREDIT_PACK_JIVE_PLUS: int = 175         # 175 credits for R129 (+17% bonus)
+    
+    # JIGGA Credit Packs (no restrictions - all features)
+    CREDIT_PACK_JIGGA_PRO: int = 150         # 150 credits for R149
+    CREDIT_PACK_JIGGA_BUSINESS: int = 320    # 320 credits for R279 (+7% bonus)
+    CREDIT_PACK_JIGGA_ENTERPRISE: int = 700  # 700 credits for R549 (+17% bonus)
+    
+    # Credit costs per action (in credits)
+    CREDIT_COST_10K_TOKENS: int = 1          # 1 credit per 10K tokens
+    CREDIT_COST_IMAGE_CREATE: int = 1        # 1 credit per image
+    CREDIT_COST_IMAGE_EDIT: int = 1          # 1 credit per edit
+    CREDIT_COST_UPSCALE: int = 1             # 1 credit per upscale
+    CREDIT_COST_VIDEO_SECOND: int = 2        # 2 credits per second
+    CREDIT_COST_GOGGA_TALK_MIN: int = 1      # 1 credit per minute
     
     # PayFast Configuration (Sandbox credentials by default)
     PAYFAST_MERCHANT_ID: str = Field(default="10043379")

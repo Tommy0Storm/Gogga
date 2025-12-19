@@ -18,30 +18,30 @@ export { Prisma }
 export * as $Enums from './enums'
 export * from './enums';
 /**
- * Model User
+ * Model AdminLog
  * 
  */
-export type User = Prisma.UserModel
-/**
- * Model LoginToken
- * 
- */
-export type LoginToken = Prisma.LoginTokenModel
+export type AdminLog = Prisma.AdminLogModel
 /**
  * Model AuthLog
  * 
  */
 export type AuthLog = Prisma.AuthLogModel
 /**
- * Model Subscription
- * 
- */
-export type Subscription = Prisma.SubscriptionModel
-/**
  * Model CreditPurchase
  * 
  */
 export type CreditPurchase = Prisma.CreditPurchaseModel
+/**
+ * Model DebugSubmission
+ * 
+ */
+export type DebugSubmission = Prisma.DebugSubmissionModel
+/**
+ * Model LoginToken
+ * 
+ */
+export type LoginToken = Prisma.LoginTokenModel
 /**
  * Model ProcessedPayment
  * 
@@ -53,20 +53,10 @@ export type ProcessedPayment = Prisma.ProcessedPaymentModel
  */
 export type RecurringSchedule = Prisma.RecurringScheduleModel
 /**
- * Model Voucher
+ * Model Subscription
  * 
  */
-export type Voucher = Prisma.VoucherModel
-/**
- * Model VoucherLog
- * 
- */
-export type VoucherLog = Prisma.VoucherLogModel
-/**
- * Model AdminLog
- * 
- */
-export type AdminLog = Prisma.AdminLogModel
+export type Subscription = Prisma.SubscriptionModel
 /**
  * Model SubscriptionEvent
  * 
@@ -83,7 +73,47 @@ export type Usage = Prisma.UsageModel
  */
 export type UsageSummary = Prisma.UsageSummaryModel
 /**
- * Model DebugSubmission
+ * Model User
  * 
  */
-export type DebugSubmission = Prisma.DebugSubmissionModel
+export type User = Prisma.UserModel
+/**
+ * Model Voucher
+ * 
+ */
+export type Voucher = Prisma.VoucherModel
+/**
+ * Model VoucherLog
+ * 
+ */
+export type VoucherLog = Prisma.VoucherLogModel
+/**
+ * Model ModelPricing
+ * 
+ */
+export type ModelPricing = Prisma.ModelPricingModel
+/**
+ * Model FeatureCost
+ * 
+ */
+export type FeatureCost = Prisma.FeatureCostModel
+/**
+ * Model ExchangeRate
+ * 
+ */
+export type ExchangeRate = Prisma.ExchangeRateModel
+/**
+ * Model PricingAudit
+ * 
+ */
+export type PricingAudit = Prisma.PricingAuditModel
+/**
+ * Model CreditAdjustment
+ * 
+ */
+export type CreditAdjustment = Prisma.CreditAdjustmentModel
+/**
+ * Model UsageEvent
+ * 
+ */
+export type UsageEvent = Prisma.UsageEventModel

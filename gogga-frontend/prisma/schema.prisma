@@ -143,21 +143,25 @@ model SubscriptionEvent {
 }
 
 model Usage {
-  id               String   @id @default(cuid())
-  userId           String
-  promptTokens     Int      @default(0)
-  completionTokens Int      @default(0)
-  totalTokens      Int      @default(0)
-  costCents        Int      @default(0)
-  model            String
-  provider         String
-  endpoint         String
-  tier             String
-  conversationId   String?
-  requestId        String?
-  durationMs       Int?
-  createdAt        DateTime @default(now())
-  User             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                       String   @id @default(cuid())
+  userId                   String
+  promptTokens             Int      @default(0)
+  completionTokens         Int      @default(0)
+  adjustedCompletionTokens Int?     // Tokens after OptiLLM multiplier
+  reasoningTokens          Int?     // Separate reasoning tokens (future)
+  totalTokens              Int      @default(0)
+  costCents                Int      @default(0)
+  model                    String
+  provider                 String
+  endpoint                 String
+  tier                     String
+  optillmLevel             String?  // none, basic, standard, advanced
+  optillmMultiplier        Float?   // 1.0, 1.1, 1.3, 1.5
+  conversationId           String?
+  requestId                String?
+  durationMs               Int?
+  createdAt                DateTime @default(now())
+  User                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([endpoint])
   @@index([model])
@@ -195,10 +199,23 @@ model User {
   isTester        Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  
+  // Credit System Fields
+  creditBalance      Int      @default(0)     // Current credit balance (can be negative for testing)
+  usageChatTokens    Int      @default(0)     // Tokens used this billing period
+  usageImages        Int      @default(0)     // Images created this period
+  usageImageEdits    Int      @default(0)     // Image edits this period
+  usageUpscales      Int      @default(0)     // Upscales this period
+  usageVideoSeconds  Int      @default(0)     // Video seconds this period
+  usageGoggaTalkMins Float    @default(0)     // GoggaTalk minutes this period
+  usageResetDate     DateTime @default(now()) // When usage counters were last reset
+  
   DebugSubmission DebugSubmission[]
   Subscription    Subscription?
   Usage           Usage[]
   UsageSummary    UsageSummary[]
+  CreditAdjustment CreditAdjustment[]
+  UsageEvent       UsageEvent[]
 }
 
 model Voucher {
@@ -235,4 +252,151 @@ model VoucherLog {
 
   @@index([actor])
   @@index([voucherId])
+}
+
+// ==================== TOKEN PRICING ADMINISTRATION ====================
+
+// Model pricing configuration (managed by admin panel)
+model ModelPricing {
+  id               String   @id @default(cuid())
+  modelId          String   @unique
+  displayName      String
+  provider         String   // cerebras, openrouter, bfl, pollinations
+  inputPricePerM   Float    @default(0) // USD per million tokens
+  outputPricePerM  Float    @default(0) // USD per million tokens
+  imagePricePerUnit Float   @default(0) // USD per image
+  allowedTiers     String   // comma-separated: "free,jive,jigga"
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([provider])
+  @@index([isActive])
+}
+
+// Feature-level cost configuration (matches admin schema)
+model FeatureCost {
+  id              String   @id @default(cuid())
+  featureKey      String   @unique  // e.g., "rag_search", "cepo_planning", "image_gen"
+  displayName     String   // e.g., "RAG Semantic Search"
+  description     String?
+  
+  // Cost basis
+  costType        String   // "per_request", "per_token", "per_image", "per_mb"
+  costAmountUSD   Float    @default(0)
+  
+  // Tier overrides (JSON: { "free": 0, "jive": 0.001, "jigga": 0.0005 })
+  tierOverrides   String?  // JSON string
+  
+  // Multipliers
+  cepoMultiplier  Float    @default(1.0)  // Extra cost when CePO is enabled
+  
+  // Is this feature billable?
+  isBillable      Boolean  @default(true)
+  
+  // Audit
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+// Exchange rate configuration (matches admin schema)
+model ExchangeRate {
+  id              String   @id @default(cuid())
+  fromCurrency    String   // "USD"
+  toCurrency      String   // "ZAR"
+  rate            Float    // e.g., 18.50
+  
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  
+  @@unique([fromCurrency, toCurrency])
+}
+
+// Pricing change audit log (matches admin schema)
+model PricingAudit {
+  id              String   @id @default(cuid())
+  tableName       String   // "ModelPricing", "FeatureCost", "ExchangeRate"
+  recordId        String   // ID of the changed record
+  action          String   // "create", "update", "delete"
+  previousValues  String?  // JSON of old values
+  newValues       String?  // JSON of new values
+  changedBy       String   // Admin email
+  createdAt       DateTime @default(now())
+  
+  @@index([tableName])
+  @@index([recordId])
+  @@index([createdAt])
+}
+
+// ==================== ENTERPRISE CREDIT SYSTEM ====================
+
+// Audited manual credit adjustments (admin grants/deductions)
+model CreditAdjustment {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Adjustment details
+  amount       Int      // Positive for grant, negative for deduction
+  balanceBefore Int     // Balance before this adjustment
+  balanceAfter  Int     // Balance after this adjustment
+  
+  // Audit fields
+  adjustmentType String  // "admin_grant", "admin_deduct", "system_refund", "tier_change", "monthly_reset"
+  reason         String  // Required reason for audit trail
+  adminEmail     String? // Who made the adjustment (null for system)
+  adminIp        String? // Admin's IP address
+  
+  // Reference to related entities
+  referenceType  String? // "subscription", "credit_purchase", "usage_event"
+  referenceId    String? // ID of related entity
+  
+  createdAt    DateTime @default(now())
+  
+  @@index([userId])
+  @@index([adminEmail])
+  @@index([adjustmentType])
+  @@index([createdAt])
+}
+
+// Idempotent usage events (prevents double-billing)
+model UsageEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Idempotency key (unique per request)
+  idempotencyKey String  @unique  // e.g., "chat:{requestId}" or "image:{generationId}"
+  
+  // Event details
+  actionType    String   // "chat_10k_tokens", "image_create", "image_edit", etc.
+  quantity      Int      // Number of units (tokens/10000, images, seconds, etc.)
+  source        String   // "subscription", "credits", "free"
+  
+  // Credits deducted (if source = "credits")
+  creditsDeducted Int    @default(0)
+  
+  // Context
+  model         String?  // AI model used
+  provider      String?  // Provider (cerebras, openrouter, etc.)
+  tier          String   // User's tier at time of event
+  
+  // Request metadata
+  requestId     String?  // Original request ID for tracing
+  durationMs    Int?     // Request duration
+  
+  // Status
+  status        String   @default("completed") // "completed", "refunded"
+  refundedAt    DateTime?
+  refundReason  String?
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([actionType])
+  @@index([source])
+  @@index([createdAt])
+  @@index([status])
 }

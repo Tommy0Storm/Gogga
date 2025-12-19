@@ -327,6 +327,10 @@ export type LoginTokenMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
 }
 
+export type BoolFieldUpdateOperationsInput = {
+  set?: boolean
+}
+
 
 
 export type LoginTokenSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{

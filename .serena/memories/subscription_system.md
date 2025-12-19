@@ -3,75 +3,56 @@
 ## Overview
 
 GOGGA uses a 3-tier subscription model with PayFast (South African gateway) for payments.
+Credits can be purchased for usage beyond subscription limits.
 
-## Tier Structure
+## Tier Structure (Updated Dec 2025)
 
-| Tier | Price | AI Model | Speed | Images | RAG Docs |
-|------|-------|----------|-------|--------|----------|
-| **FREE** | R0 | Llama 3.3 70B (OpenRouter) | Standard | 50/mo (text only) | ❌ |
-| **JIVE** | R99/mo | Llama 3.3 70B (Cerebras) + CePO | ~2,200 t/s | 200/mo (FLUX 1.1) | 5/session |
-| **JIGGA** | R299/mo | Qwen 3 32B (Cerebras) | ~1,400 t/s | 1,000/mo (FLUX 1.1) | 10/session |
+| Tier | Price | AI Model | Speed | Chat Tokens | Images | GoggaTalk |
+|------|-------|----------|-------|-------------|--------|-----------|
+| **FREE** | R0 | Qwen 235B (OpenRouter) | Slow | Unlimited | 50/mo | ❌ |
+| **JIVE** | R99/mo | Qwen 32B (Cerebras) | ~2,600 t/s | 500K/mo | 20/mo | 30 min/mo |
+| **JIGGA** | R299/mo | Qwen 32B + 235B | ~2,600 t/s | 2M/mo | 70/mo | 25 min/mo |
 
-## Key JIGGA Features
-- **Thinking Mode**: Extended reasoning with `<think>` blocks (collapsible UI)
-- **Semantic RAG**: E5-small embeddings (384-dim) for vector similarity search
-- **Cross-Session Docs**: Access documents from any past session
-- **RAG Analytics Dashboard**: Live performance graphs, vector scoring
-- **Authoritative Mode**: AI quotes directly from documents only
+## JIVE Tier Details (R99/month)
+- **Chat**: 500K tokens (Qwen 32B)
+- **Images**: 20 creates (NO edits or upscales)
+- **Video**: 5 seconds (1 short clip)
+- **GoggaTalk**: 30 minutes voice chat
+- **Credit Packs**: Can only use for chat, image create, and voice
 
-## Auto-Assignment
+## JIGGA Tier Details (R299/month)
+- **Chat**: 2M tokens (32B + 235B routing)
+- **Images**: 70 creates + 30 edits
+- **Upscales**: 10 (Imagen 4 Ultra)
+- **Video**: 16 seconds (2 videos)
+- **GoggaTalk**: 25 minutes voice chat
+- **Credit Packs**: No restrictions - all features
 
-Every user gets FREE tier automatically on first login:
+## Credit Packs (Top-up)
 
-```typescript
-// In auth.ts authorize callback
-const user = await prisma.user.upsert({
-  create: {
-    email: tokenRecord.email,
-    subscription: {
-      create: { tier: 'FREE', status: 'active', startedAt: new Date() }
-    }
-  }
-})
-```
+### JIVE Credit Packs
+| Pack | Credits | Price | Restrictions |
+|------|---------|-------|--------------|
+| Starter | 50 | R49 | Chat, Images, Voice only |
+| Standard | 100 | R89 | Chat, Images, Voice only |
+| Plus | 175 | R129 | Chat, Images, Voice only (+17% bonus) |
 
-## Session Access
+### JIGGA Credit Packs  
+| Pack | Credits | Price | Restrictions |
+|------|---------|-------|--------------|
+| Pro | 150 | R149 | None |
+| Business | 320 | R279 | None (+7% bonus) |
+| Enterprise | 700 | R549 | None (+17% bonus) |
 
-```typescript
-const session = await auth()
-session.user.tier  // 'FREE' | 'JIVE' | 'JIGGA'
-```
+**Credit Value**: 1 credit = $0.10 USD = R1.90 ZAR
 
-## Utility Functions
-
-Located in `src/lib/subscription.ts`:
-
-| Function | Purpose |
-|----------|---------|
-| `getUserSubscription(userId)` | Get subscription from DB |
-| `requireTier(minTier)` | Server component - redirect if insufficient |
-| `hasTier(userTier, requiredTier)` | Client-side tier check |
-| `getTierInfo(tier)` | Get display info (name, color, limits) |
-
-## PayFast Integration
-
-### Endpoints
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/payments/subscribe` | POST | Create subscription form |
-| `/api/v1/payments/notify` | POST | ITN webhook (PayFast → backend) |
-| `/api/v1/payments/cancel/{token}` | POST | Cancel subscription |
-| `/api/v1/payments/tiers` | GET | List tier options |
-| `/api/v1/payments/credit-packs` | GET | List credit pack options |
-
-### Credit Packs (Top-up)
-
-| Pack | Price | Credits |
-|------|-------|---------|
-| Small | R200 | 50,000 |
-| Medium | R500 | 150,000 |
-| Large | R1000 | 350,000 |
+**Credit Costs**:
+- 10K tokens: 1 credit
+- 1 image: 1 credit
+- 1 edit: 1 credit
+- 1 upscale: 1 credit
+- 1 sec video: 2 credits
+- 1 min GoggaTalk: 1 credit
 
 ### Subscription Lifecycle
 

@@ -51,20 +51,26 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-  User: 'User',
-  LoginToken: 'LoginToken',
+  AdminLog: 'AdminLog',
   AuthLog: 'AuthLog',
-  Subscription: 'Subscription',
   CreditPurchase: 'CreditPurchase',
+  DebugSubmission: 'DebugSubmission',
+  LoginToken: 'LoginToken',
   ProcessedPayment: 'ProcessedPayment',
   RecurringSchedule: 'RecurringSchedule',
-  Voucher: 'Voucher',
-  VoucherLog: 'VoucherLog',
-  AdminLog: 'AdminLog',
+  Subscription: 'Subscription',
   SubscriptionEvent: 'SubscriptionEvent',
   Usage: 'Usage',
   UsageSummary: 'UsageSummary',
-  DebugSubmission: 'DebugSubmission'
+  User: 'User',
+  Voucher: 'Voucher',
+  VoucherLog: 'VoucherLog',
+  ModelPricing: 'ModelPricing',
+  FeatureCost: 'FeatureCost',
+  ExchangeRate: 'ExchangeRate',
+  PricingAudit: 'PricingAudit',
+  CreditAdjustment: 'CreditAdjustment',
+  UsageEvent: 'UsageEvent'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -80,29 +86,18 @@ export const TransactionIsolationLevel = {
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
-export const UserScalarFieldEnum = {
+export const AdminLogScalarFieldEnum = {
   id: 'id',
-  email: 'email',
-  isAdmin: 'isAdmin',
-  isServiceAdmin: 'isServiceAdmin',
-  isTester: 'isTester',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
-
-
-export const LoginTokenScalarFieldEnum = {
-  id: 'id',
-  token: 'token',
-  email: 'email',
-  expiresAt: 'expiresAt',
-  used: 'used',
+  adminEmail: 'adminEmail',
+  action: 'action',
+  targetUser: 'targetUser',
+  targetId: 'targetId',
+  meta: 'meta',
+  ip: 'ip',
   createdAt: 'createdAt'
 } as const
 
-export type LoginTokenScalarFieldEnum = (typeof LoginTokenScalarFieldEnum)[keyof typeof LoginTokenScalarFieldEnum]
+export type AdminLogScalarFieldEnum = (typeof AdminLogScalarFieldEnum)[keyof typeof AdminLogScalarFieldEnum]
 
 
 export const AuthLogScalarFieldEnum = {
@@ -117,29 +112,6 @@ export const AuthLogScalarFieldEnum = {
 export type AuthLogScalarFieldEnum = (typeof AuthLogScalarFieldEnum)[keyof typeof AuthLogScalarFieldEnum]
 
 
-export const SubscriptionScalarFieldEnum = {
-  id: 'id',
-  userId: 'userId',
-  tier: 'tier',
-  status: 'status',
-  payfastToken: 'payfastToken',
-  credits: 'credits',
-  creditsUsed: 'creditsUsed',
-  monthlyCredits: 'monthlyCredits',
-  imagesUsed: 'imagesUsed',
-  imagesLimit: 'imagesLimit',
-  startedAt: 'startedAt',
-  nextBilling: 'nextBilling',
-  lastReset: 'lastReset',
-  paymentFailedAt: 'paymentFailedAt',
-  retryCount: 'retryCount',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type SubscriptionScalarFieldEnum = (typeof SubscriptionScalarFieldEnum)[keyof typeof SubscriptionScalarFieldEnum]
-
-
 export const CreditPurchaseScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -152,6 +124,38 @@ export const CreditPurchaseScalarFieldEnum = {
 } as const
 
 export type CreditPurchaseScalarFieldEnum = (typeof CreditPurchaseScalarFieldEnum)[keyof typeof CreditPurchaseScalarFieldEnum]
+
+
+export const DebugSubmissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  reason: 'reason',
+  consoleLogs: 'consoleLogs',
+  networkLogs: 'networkLogs',
+  errorStack: 'errorStack',
+  userAgent: 'userAgent',
+  url: 'url',
+  screenSize: 'screenSize',
+  status: 'status',
+  adminNotes: 'adminNotes',
+  resolvedAt: 'resolvedAt',
+  resolvedBy: 'resolvedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type DebugSubmissionScalarFieldEnum = (typeof DebugSubmissionScalarFieldEnum)[keyof typeof DebugSubmissionScalarFieldEnum]
+
+
+export const LoginTokenScalarFieldEnum = {
+  id: 'id',
+  token: 'token',
+  email: 'email',
+  expiresAt: 'expiresAt',
+  used: 'used',
+  createdAt: 'createdAt'
+} as const
+
+export type LoginTokenScalarFieldEnum = (typeof LoginTokenScalarFieldEnum)[keyof typeof LoginTokenScalarFieldEnum]
 
 
 export const ProcessedPaymentScalarFieldEnum = {
@@ -184,6 +188,110 @@ export const RecurringScheduleScalarFieldEnum = {
 } as const
 
 export type RecurringScheduleScalarFieldEnum = (typeof RecurringScheduleScalarFieldEnum)[keyof typeof RecurringScheduleScalarFieldEnum]
+
+
+export const SubscriptionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  tier: 'tier',
+  status: 'status',
+  payfastToken: 'payfastToken',
+  credits: 'credits',
+  creditsUsed: 'creditsUsed',
+  monthlyCredits: 'monthlyCredits',
+  imagesUsed: 'imagesUsed',
+  imagesLimit: 'imagesLimit',
+  startedAt: 'startedAt',
+  nextBilling: 'nextBilling',
+  lastReset: 'lastReset',
+  paymentFailedAt: 'paymentFailedAt',
+  retryCount: 'retryCount',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SubscriptionScalarFieldEnum = (typeof SubscriptionScalarFieldEnum)[keyof typeof SubscriptionScalarFieldEnum]
+
+
+export const SubscriptionEventScalarFieldEnum = {
+  id: 'id',
+  subscriptionId: 'subscriptionId',
+  userId: 'userId',
+  event: 'event',
+  fromTier: 'fromTier',
+  toTier: 'toTier',
+  fromStatus: 'fromStatus',
+  toStatus: 'toStatus',
+  actor: 'actor',
+  meta: 'meta',
+  createdAt: 'createdAt'
+} as const
+
+export type SubscriptionEventScalarFieldEnum = (typeof SubscriptionEventScalarFieldEnum)[keyof typeof SubscriptionEventScalarFieldEnum]
+
+
+export const UsageScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  adjustedCompletionTokens: 'adjustedCompletionTokens',
+  reasoningTokens: 'reasoningTokens',
+  totalTokens: 'totalTokens',
+  costCents: 'costCents',
+  model: 'model',
+  provider: 'provider',
+  endpoint: 'endpoint',
+  tier: 'tier',
+  optillmLevel: 'optillmLevel',
+  optillmMultiplier: 'optillmMultiplier',
+  conversationId: 'conversationId',
+  requestId: 'requestId',
+  durationMs: 'durationMs',
+  createdAt: 'createdAt'
+} as const
+
+export type UsageScalarFieldEnum = (typeof UsageScalarFieldEnum)[keyof typeof UsageScalarFieldEnum]
+
+
+export const UsageSummaryScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  year: 'year',
+  month: 'month',
+  totalTokens: 'totalTokens',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalCostCents: 'totalCostCents',
+  chatRequests: 'chatRequests',
+  enhanceRequests: 'enhanceRequests',
+  imageRequests: 'imageRequests',
+  imagesUsed: 'imagesUsed',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UsageSummaryScalarFieldEnum = (typeof UsageSummaryScalarFieldEnum)[keyof typeof UsageSummaryScalarFieldEnum]
+
+
+export const UserScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  isAdmin: 'isAdmin',
+  isServiceAdmin: 'isServiceAdmin',
+  isTester: 'isTester',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  creditBalance: 'creditBalance',
+  usageChatTokens: 'usageChatTokens',
+  usageImages: 'usageImages',
+  usageImageEdits: 'usageImageEdits',
+  usageUpscales: 'usageUpscales',
+  usageVideoSeconds: 'usageVideoSeconds',
+  usageGoggaTalkMins: 'usageGoggaTalkMins',
+  usageResetDate: 'usageResetDate'
+} as const
+
+export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
 
 
 export const VoucherScalarFieldEnum = {
@@ -220,94 +328,106 @@ export const VoucherLogScalarFieldEnum = {
 export type VoucherLogScalarFieldEnum = (typeof VoucherLogScalarFieldEnum)[keyof typeof VoucherLogScalarFieldEnum]
 
 
-export const AdminLogScalarFieldEnum = {
+export const ModelPricingScalarFieldEnum = {
   id: 'id',
-  adminEmail: 'adminEmail',
-  action: 'action',
-  targetUser: 'targetUser',
-  targetId: 'targetId',
-  meta: 'meta',
-  ip: 'ip',
-  createdAt: 'createdAt'
-} as const
-
-export type AdminLogScalarFieldEnum = (typeof AdminLogScalarFieldEnum)[keyof typeof AdminLogScalarFieldEnum]
-
-
-export const SubscriptionEventScalarFieldEnum = {
-  id: 'id',
-  subscriptionId: 'subscriptionId',
-  userId: 'userId',
-  event: 'event',
-  fromTier: 'fromTier',
-  toTier: 'toTier',
-  fromStatus: 'fromStatus',
-  toStatus: 'toStatus',
-  actor: 'actor',
-  meta: 'meta',
-  createdAt: 'createdAt'
-} as const
-
-export type SubscriptionEventScalarFieldEnum = (typeof SubscriptionEventScalarFieldEnum)[keyof typeof SubscriptionEventScalarFieldEnum]
-
-
-export const UsageScalarFieldEnum = {
-  id: 'id',
-  userId: 'userId',
-  promptTokens: 'promptTokens',
-  completionTokens: 'completionTokens',
-  totalTokens: 'totalTokens',
-  costCents: 'costCents',
-  model: 'model',
+  modelId: 'modelId',
+  displayName: 'displayName',
   provider: 'provider',
-  endpoint: 'endpoint',
-  tier: 'tier',
-  conversationId: 'conversationId',
-  requestId: 'requestId',
-  durationMs: 'durationMs',
-  createdAt: 'createdAt'
-} as const
-
-export type UsageScalarFieldEnum = (typeof UsageScalarFieldEnum)[keyof typeof UsageScalarFieldEnum]
-
-
-export const UsageSummaryScalarFieldEnum = {
-  id: 'id',
-  userId: 'userId',
-  year: 'year',
-  month: 'month',
-  totalTokens: 'totalTokens',
-  promptTokens: 'promptTokens',
-  completionTokens: 'completionTokens',
-  totalCostCents: 'totalCostCents',
-  chatRequests: 'chatRequests',
-  enhanceRequests: 'enhanceRequests',
-  imageRequests: 'imageRequests',
-  imagesUsed: 'imagesUsed',
+  inputPricePerM: 'inputPricePerM',
+  outputPricePerM: 'outputPricePerM',
+  imagePricePerUnit: 'imagePricePerUnit',
+  allowedTiers: 'allowedTiers',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
-export type UsageSummaryScalarFieldEnum = (typeof UsageSummaryScalarFieldEnum)[keyof typeof UsageSummaryScalarFieldEnum]
+export type ModelPricingScalarFieldEnum = (typeof ModelPricingScalarFieldEnum)[keyof typeof ModelPricingScalarFieldEnum]
 
 
-export const DebugSubmissionScalarFieldEnum = {
+export const FeatureCostScalarFieldEnum = {
   id: 'id',
-  userId: 'userId',
-  reason: 'reason',
-  consoleLogs: 'consoleLogs',
-  networkLogs: 'networkLogs',
-  errorStack: 'errorStack',
-  userAgent: 'userAgent',
-  url: 'url',
-  screenSize: 'screenSize',
-  status: 'status',
-  adminNotes: 'adminNotes',
-  resolvedAt: 'resolvedAt',
-  resolvedBy: 'resolvedBy',
+  featureKey: 'featureKey',
+  displayName: 'displayName',
+  description: 'description',
+  costType: 'costType',
+  costAmountUSD: 'costAmountUSD',
+  tierOverrides: 'tierOverrides',
+  cepoMultiplier: 'cepoMultiplier',
+  isBillable: 'isBillable',
+  updatedBy: 'updatedBy',
+  updatedAt: 'updatedAt',
   createdAt: 'createdAt'
 } as const
 
-export type DebugSubmissionScalarFieldEnum = (typeof DebugSubmissionScalarFieldEnum)[keyof typeof DebugSubmissionScalarFieldEnum]
+export type FeatureCostScalarFieldEnum = (typeof FeatureCostScalarFieldEnum)[keyof typeof FeatureCostScalarFieldEnum]
+
+
+export const ExchangeRateScalarFieldEnum = {
+  id: 'id',
+  fromCurrency: 'fromCurrency',
+  toCurrency: 'toCurrency',
+  rate: 'rate',
+  updatedBy: 'updatedBy',
+  updatedAt: 'updatedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type ExchangeRateScalarFieldEnum = (typeof ExchangeRateScalarFieldEnum)[keyof typeof ExchangeRateScalarFieldEnum]
+
+
+export const PricingAuditScalarFieldEnum = {
+  id: 'id',
+  tableName: 'tableName',
+  recordId: 'recordId',
+  action: 'action',
+  previousValues: 'previousValues',
+  newValues: 'newValues',
+  changedBy: 'changedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type PricingAuditScalarFieldEnum = (typeof PricingAuditScalarFieldEnum)[keyof typeof PricingAuditScalarFieldEnum]
+
+
+export const CreditAdjustmentScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  amount: 'amount',
+  balanceBefore: 'balanceBefore',
+  balanceAfter: 'balanceAfter',
+  adjustmentType: 'adjustmentType',
+  reason: 'reason',
+  adminEmail: 'adminEmail',
+  adminIp: 'adminIp',
+  referenceType: 'referenceType',
+  referenceId: 'referenceId',
+  createdAt: 'createdAt'
+} as const
+
+export type CreditAdjustmentScalarFieldEnum = (typeof CreditAdjustmentScalarFieldEnum)[keyof typeof CreditAdjustmentScalarFieldEnum]
+
+
+export const UsageEventScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  idempotencyKey: 'idempotencyKey',
+  actionType: 'actionType',
+  quantity: 'quantity',
+  source: 'source',
+  creditsDeducted: 'creditsDeducted',
+  model: 'model',
+  provider: 'provider',
+  tier: 'tier',
+  requestId: 'requestId',
+  durationMs: 'durationMs',
+  status: 'status',
+  refundedAt: 'refundedAt',
+  refundReason: 'refundReason',
+  createdAt: 'createdAt'
+} as const
+
+export type UsageEventScalarFieldEnum = (typeof UsageEventScalarFieldEnum)[keyof typeof UsageEventScalarFieldEnum]
 
 
 export const SortOrder = {

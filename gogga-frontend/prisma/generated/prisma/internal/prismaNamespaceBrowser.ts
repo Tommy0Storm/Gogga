@@ -64,7 +64,13 @@ export const ModelName = {
   UsageSummary: 'UsageSummary',
   User: 'User',
   Voucher: 'Voucher',
-  VoucherLog: 'VoucherLog'
+  VoucherLog: 'VoucherLog',
+  ModelPricing: 'ModelPricing',
+  FeatureCost: 'FeatureCost',
+  ExchangeRate: 'ExchangeRate',
+  PricingAudit: 'PricingAudit',
+  CreditAdjustment: 'CreditAdjustment',
+  UsageEvent: 'UsageEvent'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -229,12 +235,16 @@ export const UsageScalarFieldEnum = {
   userId: 'userId',
   promptTokens: 'promptTokens',
   completionTokens: 'completionTokens',
+  adjustedCompletionTokens: 'adjustedCompletionTokens',
+  reasoningTokens: 'reasoningTokens',
   totalTokens: 'totalTokens',
   costCents: 'costCents',
   model: 'model',
   provider: 'provider',
   endpoint: 'endpoint',
   tier: 'tier',
+  optillmLevel: 'optillmLevel',
+  optillmMultiplier: 'optillmMultiplier',
   conversationId: 'conversationId',
   requestId: 'requestId',
   durationMs: 'durationMs',
@@ -270,7 +280,15 @@ export const UserScalarFieldEnum = {
   isServiceAdmin: 'isServiceAdmin',
   isTester: 'isTester',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  creditBalance: 'creditBalance',
+  usageChatTokens: 'usageChatTokens',
+  usageImages: 'usageImages',
+  usageImageEdits: 'usageImageEdits',
+  usageUpscales: 'usageUpscales',
+  usageVideoSeconds: 'usageVideoSeconds',
+  usageGoggaTalkMins: 'usageGoggaTalkMins',
+  usageResetDate: 'usageResetDate'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -308,6 +326,108 @@ export const VoucherLogScalarFieldEnum = {
 } as const
 
 export type VoucherLogScalarFieldEnum = (typeof VoucherLogScalarFieldEnum)[keyof typeof VoucherLogScalarFieldEnum]
+
+
+export const ModelPricingScalarFieldEnum = {
+  id: 'id',
+  modelId: 'modelId',
+  displayName: 'displayName',
+  provider: 'provider',
+  inputPricePerM: 'inputPricePerM',
+  outputPricePerM: 'outputPricePerM',
+  imagePricePerUnit: 'imagePricePerUnit',
+  allowedTiers: 'allowedTiers',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ModelPricingScalarFieldEnum = (typeof ModelPricingScalarFieldEnum)[keyof typeof ModelPricingScalarFieldEnum]
+
+
+export const FeatureCostScalarFieldEnum = {
+  id: 'id',
+  featureKey: 'featureKey',
+  displayName: 'displayName',
+  description: 'description',
+  costType: 'costType',
+  costAmountUSD: 'costAmountUSD',
+  tierOverrides: 'tierOverrides',
+  cepoMultiplier: 'cepoMultiplier',
+  isBillable: 'isBillable',
+  updatedBy: 'updatedBy',
+  updatedAt: 'updatedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type FeatureCostScalarFieldEnum = (typeof FeatureCostScalarFieldEnum)[keyof typeof FeatureCostScalarFieldEnum]
+
+
+export const ExchangeRateScalarFieldEnum = {
+  id: 'id',
+  fromCurrency: 'fromCurrency',
+  toCurrency: 'toCurrency',
+  rate: 'rate',
+  updatedBy: 'updatedBy',
+  updatedAt: 'updatedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type ExchangeRateScalarFieldEnum = (typeof ExchangeRateScalarFieldEnum)[keyof typeof ExchangeRateScalarFieldEnum]
+
+
+export const PricingAuditScalarFieldEnum = {
+  id: 'id',
+  tableName: 'tableName',
+  recordId: 'recordId',
+  action: 'action',
+  previousValues: 'previousValues',
+  newValues: 'newValues',
+  changedBy: 'changedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type PricingAuditScalarFieldEnum = (typeof PricingAuditScalarFieldEnum)[keyof typeof PricingAuditScalarFieldEnum]
+
+
+export const CreditAdjustmentScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  amount: 'amount',
+  balanceBefore: 'balanceBefore',
+  balanceAfter: 'balanceAfter',
+  adjustmentType: 'adjustmentType',
+  reason: 'reason',
+  adminEmail: 'adminEmail',
+  adminIp: 'adminIp',
+  referenceType: 'referenceType',
+  referenceId: 'referenceId',
+  createdAt: 'createdAt'
+} as const
+
+export type CreditAdjustmentScalarFieldEnum = (typeof CreditAdjustmentScalarFieldEnum)[keyof typeof CreditAdjustmentScalarFieldEnum]
+
+
+export const UsageEventScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  idempotencyKey: 'idempotencyKey',
+  actionType: 'actionType',
+  quantity: 'quantity',
+  source: 'source',
+  creditsDeducted: 'creditsDeducted',
+  model: 'model',
+  provider: 'provider',
+  tier: 'tier',
+  requestId: 'requestId',
+  durationMs: 'durationMs',
+  status: 'status',
+  refundedAt: 'refundedAt',
+  refundReason: 'refundReason',
+  createdAt: 'createdAt'
+} as const
+
+export type UsageEventScalarFieldEnum = (typeof UsageEventScalarFieldEnum)[keyof typeof UsageEventScalarFieldEnum]
 
 
 export const SortOrder = {
