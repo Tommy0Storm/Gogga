@@ -16,15 +16,21 @@ import {
   MdClose,
   MdTerminal,
   MdBugReport,
+  MdGeneratingTokens,
+  MdKey,
+  MdPayment,
 } from 'react-icons/md';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: MdDashboard },
   { href: '/services', label: 'Services', icon: MdCloud },
+  { href: '/api-keys', label: 'API Keys', icon: MdKey },
   { href: '/terminal', label: 'Terminal', icon: MdTerminal },
   { href: '/database', label: 'Database', icon: MdStorage },
   { href: '/users', label: 'Users', icon: MdPeople },
   { href: '/subscriptions', label: 'Subscriptions', icon: MdReceipt },
+  { href: '/transactions', label: 'Transactions', icon: MdPayment },
+  { href: '/tokens', label: 'Token Pricing', icon: MdGeneratingTokens },
   { href: '/vouchers', label: 'Vouchers', icon: MdCardGiftcard },
   { href: '/debug-submissions', label: 'Debug Reports', icon: MdBugReport },
   { href: '/logs', label: 'Logs & Audit', icon: MdHistory },

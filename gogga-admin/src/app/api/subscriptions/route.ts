@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const subscriptions = await prisma.subscription.findMany({
       where: whereClause,
       include: {
-        user: {
+        User: {
           select: {
             email: true,
           },
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       subscriptions: subscriptions.map((s) => ({
         id: s.id,
         userId: s.userId,
-        userEmail: s.user.email,
+        userEmail: s.User.email,
         tier: s.tier,
         status: s.status,
         credits: s.credits,
