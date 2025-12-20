@@ -86,8 +86,9 @@ services:
       context: ./gogga-frontend
       dockerfile: Dockerfile
     container_name: gogga_ui
+    entrypoint: []
     ports:
-      - "3000:3000"
+      - "3002:3000"
     environment:
       <<: *node-env
       NEXT_PUBLIC_API_URL: ""

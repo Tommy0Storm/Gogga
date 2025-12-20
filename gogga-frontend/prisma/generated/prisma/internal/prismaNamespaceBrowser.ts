@@ -70,6 +70,7 @@ export const ModelName = {
   ExchangeRate: 'ExchangeRate',
   PricingAudit: 'PricingAudit',
   CreditAdjustment: 'CreditAdjustment',
+  BugReport: 'BugReport',
   UsageEvent: 'UsageEvent'
 } as const
 
@@ -406,6 +407,19 @@ export const CreditAdjustmentScalarFieldEnum = {
 } as const
 
 export type CreditAdjustmentScalarFieldEnum = (typeof CreditAdjustmentScalarFieldEnum)[keyof typeof CreditAdjustmentScalarFieldEnum]
+
+
+export const BugReportScalarFieldEnum = {
+  id: 'id',
+  message: 'message',
+  userAgent: 'userAgent',
+  url: 'url',
+  timestamp: 'timestamp',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type BugReportScalarFieldEnum = (typeof BugReportScalarFieldEnum)[keyof typeof BugReportScalarFieldEnum]
 
 
 export const UsageEventScalarFieldEnum = {

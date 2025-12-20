@@ -1,2 +1,2 @@
-// Empty module for browser fallback of Node.js modules
-export default {}
+// Empty module for disabling Node.js-only packages in browser
+export default {};

@@ -34,8 +34,8 @@ async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
   const EMAILJS_TEMPLATE_ID = 'template_k9ugryd'
   const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send'
   
-  const publicKey = process.env.EMAILJS_PUBLIC_KEY
-  const privateKey = process.env.EMAILJS_PRIVATE_KEY
+  const publicKey = process.env.EMAILJS_PUBLIC_KEY?.trim()
+  const privateKey = process.env.EMAILJS_PRIVATE_KEY?.trim()
   
   if (!publicKey || !privateKey) {
     console.error('[sendMagicLinkEmail] Missing EmailJS credentials')
@@ -57,7 +57,7 @@ async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
         token: token,
         magic_link: magicLink,
         expires_in: '1 hour',
-        support_email: process.env.EMAIL_FROM || 'hello@vcb-ai.online',
+        support_email: process.env.EMAIL_FROM?.trim() || 'hello@vcb-ai.online',
         app_name: 'GOGGA AI',
       },
     }),

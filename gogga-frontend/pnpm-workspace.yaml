@@ -3,4 +3,12 @@ ignoredBuiltDependencies:
   - prisma
 
 onlyBuiltDependencies:
+  - '@firebase/util'
   - better-sqlite3
+  - core-js
+  - esbuild
+  - onnxruntime-node
+  - protobufjs
+  - rxdb
+  - sharp
+  - unrs-resolver

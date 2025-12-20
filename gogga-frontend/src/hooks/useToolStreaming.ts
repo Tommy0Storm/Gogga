@@ -80,8 +80,8 @@ export function useToolStreaming(options: UseToolStreamingOptions = {}) {
     abortControllerRef.current = new AbortController();
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${backendUrl}/api/v1/chat/stream-with-tools`, {
+      // Use relative URL to proxy through Next.js API route (avoids CORS/mixed content)
+      const response = await fetch(`/api/v1/chat/stream-with-tools`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),

@@ -403,6 +403,7 @@ export const ModelName = {
   ExchangeRate: 'ExchangeRate',
   PricingAudit: 'PricingAudit',
   CreditAdjustment: 'CreditAdjustment',
+  BugReport: 'BugReport',
   UsageEvent: 'UsageEvent'
 } as const
 
@@ -419,7 +420,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "adminLog" | "authLog" | "creditPurchase" | "debugSubmission" | "loginToken" | "processedPayment" | "recurringSchedule" | "subscription" | "subscriptionEvent" | "usage" | "usageSummary" | "user" | "voucher" | "voucherLog" | "modelPricing" | "featureCost" | "exchangeRate" | "pricingAudit" | "creditAdjustment" | "usageEvent"
+    modelProps: "adminLog" | "authLog" | "creditPurchase" | "debugSubmission" | "loginToken" | "processedPayment" | "recurringSchedule" | "subscription" | "subscriptionEvent" | "usage" | "usageSummary" | "user" | "voucher" | "voucherLog" | "modelPricing" | "featureCost" | "exchangeRate" | "pricingAudit" | "creditAdjustment" | "bugReport" | "usageEvent"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1829,6 +1830,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    BugReport: {
+      payload: Prisma.$BugReportPayload<ExtArgs>
+      fields: Prisma.BugReportFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.BugReportFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.BugReportFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>
+        }
+        findFirst: {
+          args: Prisma.BugReportFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.BugReportFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>
+        }
+        findMany: {
+          args: Prisma.BugReportFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>[]
+        }
+        create: {
+          args: Prisma.BugReportCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>
+        }
+        createMany: {
+          args: Prisma.BugReportCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.BugReportCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>[]
+        }
+        delete: {
+          args: Prisma.BugReportDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>
+        }
+        update: {
+          args: Prisma.BugReportUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>
+        }
+        deleteMany: {
+          args: Prisma.BugReportDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.BugReportUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.BugReportUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>[]
+        }
+        upsert: {
+          args: Prisma.BugReportUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BugReportPayload>
+        }
+        aggregate: {
+          args: Prisma.BugReportAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateBugReport>
+        }
+        groupBy: {
+          args: Prisma.BugReportGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BugReportGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.BugReportCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BugReportCountAggregateOutputType> | number
+        }
+      }
+    }
     UsageEvent: {
       payload: Prisma.$UsageEventPayload<ExtArgs>
       fields: Prisma.UsageEventFieldRefs
@@ -2261,6 +2336,19 @@ export const CreditAdjustmentScalarFieldEnum = {
 export type CreditAdjustmentScalarFieldEnum = (typeof CreditAdjustmentScalarFieldEnum)[keyof typeof CreditAdjustmentScalarFieldEnum]
 
 
+export const BugReportScalarFieldEnum = {
+  id: 'id',
+  message: 'message',
+  userAgent: 'userAgent',
+  url: 'url',
+  timestamp: 'timestamp',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type BugReportScalarFieldEnum = (typeof BugReportScalarFieldEnum)[keyof typeof BugReportScalarFieldEnum]
+
+
 export const UsageEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -2453,6 +2541,7 @@ export type GlobalOmitConfig = {
   exchangeRate?: Prisma.ExchangeRateOmit
   pricingAudit?: Prisma.PricingAuditOmit
   creditAdjustment?: Prisma.CreditAdjustmentOmit
+  bugReport?: Prisma.BugReportOmit
   usageEvent?: Prisma.UsageEventOmit
 }
 

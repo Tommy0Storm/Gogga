@@ -589,13 +589,13 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         setStreamingThinking('');
         setIsStreamingThinking(false);
 
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+        // Use relative URL to proxy through Next.js API route (avoids CORS/mixed content)
         // Create AbortController for this request - enables cancellation on navigation
         abortControllerRef.current = new AbortController();
         const { signal } = abortControllerRef.current;
         
         const sseResponse = await fetch(
-          `${backendUrl}/api/v1/chat/stream-with-tools`,
+          `/api/v1/chat/stream-with-tools`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

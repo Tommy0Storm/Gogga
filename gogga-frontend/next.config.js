@@ -10,8 +10,9 @@ const path = require('path');
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  // Next.js 16: Partial Prerendering with cacheComponents (replaces experimental.ppr)
-  cacheComponents: true,
+  // Next.js 16: DISABLED cacheComponents - causes race condition with Turbopack manifest writes
+  // Re-enable once 16.1.1+ patch is released
+  cacheComponents: false,
   // React 19.2: Enable React Compiler for automatic memoization
   // Eliminates need for manual useMemo/useCallback, 10-15% faster renders
   reactCompiler: true,
@@ -21,6 +22,7 @@ const nextConfig = {
     'localhost',
     '127.0.0.1',
     '10.241.135.171',   // Remote dev machine
+    '192.168.0.130',    // Primary dev host (LAN)
     '192.168.0.168',    // Local network access
     '192.168.0.101',
     '192.168.0.102',
@@ -30,27 +32,57 @@ const nextConfig = {
   ],
   // Disable the Next.js dev indicator (floating N button)
   devIndicators: false,
-  // Turbopack configuration (equivalent to webpack config below)
+  // Turbopack configuration - use simple string aliases (not browser condition objects)
   turbopack: {
     resolveAlias: {
-      // Explicitly use the web/browser build for @huggingface/transformers
-      '@huggingface/transformers': {
-        browser: '@huggingface/transformers/dist/transformers.js',
-      },
-      // Disable Node.js-only packages with browser condition - point to empty module
-      sharp: { browser: './src/empty.ts' },
-      'onnxruntime-node': { browser: './src/empty.ts' },
-      // Node.js polyfills - use browser condition to point to empty module
-      fs: { browser: './src/empty.ts' },
-      path: { browser: './src/empty.ts' },
-      crypto: { browser: './src/empty.ts' },
+      // Disable Node.js-only packages - point to empty module
+      // Note: @huggingface/transformers is in serverExternalPackages, no client alias needed
+      sharp: './src/empty.ts',
+      'onnxruntime-node': './src/empty.ts',
     },
   },
-  // Next.js 16: Enable Turbopack filesystem caching (Phase 1)
-  // Persists compiled modules between dev server restarts
-  // Provides 10x faster cold starts after initial compilation
+  // Webpack configuration for crypto polyfill
+  webpack: (config, { isServer, dev }) => {
+    if (dev) {
+      // Workaround: webpack's PackFileCacheStrategy can hit ENOENT on some filesystems
+      // (e.g. failing to rename/open `.pack.gz_` temp files). Disable FS cache in dev.
+      config.cache = false;
+    }
+
+    if (!isServer) {
+      // Polyfill crypto.subtle for RxDB in browser
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+        buffer: require.resolve('buffer'),
+      };
+      
+      // Force browser builds by removing 'node' condition
+      config.resolve.conditionNames = [
+        'browser',
+        'import',
+        'module',
+        'default',
+      ];
+
+      // Disable Node.js-only packages for client bundle
+      // Note: @huggingface/transformers is in serverExternalPackages, no client alias needed
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        sharp$: false,
+        'onnxruntime-node$': false,
+      };
+    }
+
+    return config;
+  },
+  // Next.js 16: Let Turbopack filesystem caching use default (true) - required for proper manifest generation
   experimental: {
-    turbopackFileSystemCacheForDev: true, // Enable filesystem caching
+    // turbopackFileSystemCacheForDev: use default (true) - setting false breaks SST directory assumptions
+    // Optimize large barrel-file imports (react-icons, lucide-react)
+    // Note: @huggingface/transformers removed - conflicts with serverExternalPackages
+    optimizePackageImports: ['react-icons', 'lucide-react'],
   },
   // Set correct workspace root to avoid lockfile detection issues
   outputFileTracingRoot: __dirname,
@@ -108,23 +140,25 @@ const nextConfig = {
         source: '/health',
         destination: `${BACKEND_URL}/health`,
       },
-      {
-        source: '/ingest/static/:path*',
-        destination: 'https://eu-assets.i.posthog.com/static/:path*',
-      },
-      {
-        source: '/ingest/:path*',
-        destination: 'https://eu.i.posthog.com/:path*',
-      },
     ];
   },
-  // This is required to support PostHog trailing slash API requests
-  skipTrailingSlashRedirect: true,
   // Configure webpack for client-side transformers.js
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      const path = require('path');
+  webpack: (config, { isServer, dev }) => {
+    if (dev) {
+      // Workaround: webpack's PackFileCacheStrategy can hit ENOENT on some filesystems
+      // (e.g. failing to rename/open `.pack.gz_` temp files). Disable FS cache in dev.
+      config.cache = false;
+    }
 
+    if (!isServer) {
+      // Polyfill crypto.subtle for RxDB in browser
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+        buffer: require.resolve('buffer'),
+      };
+      
       // Force browser builds by removing 'node' condition
       config.resolve.conditionNames = [
         'browser',
@@ -133,38 +167,26 @@ const nextConfig = {
         'default',
       ];
 
-      // Explicitly alias @huggingface/transformers to the web build
-      // This bypasses package.json exports that prefer transformers.node.mjs
+      // Disable Node.js-only packages for client bundle
+      // Note: @huggingface/transformers is in serverExternalPackages, no client alias needed
       config.resolve.alias = {
         ...config.resolve.alias,
-        '@huggingface/transformers': path.join(
-          __dirname,
-          'node_modules/@huggingface/transformers/dist/transformers.web.js'
-        ),
-        // Disable Node.js-only packages
         sharp$: false,
         'onnxruntime-node$': false,
       };
-
-      // Node.js polyfills
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-      };
-
-      // Ignore .node binary files
-      config.module.rules.push({
-        test: /\.node$/,
-        loader: 'null-loader',
-      });
     }
+
+    // Suppress critical dependency warnings for unpdf (uses dynamic imports)
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      { module: /unpdf/ },
+    ];
 
     return config;
   },
   // Externalize these packages for server components (Next.js 15 moved this out of experimental)
-  serverExternalPackages: ['sharp', 'onnxruntime-node'],
+  // Critical: @huggingface/transformers must be externalized to prevent bundling onnxruntime-node
+  serverExternalPackages: ['sharp', 'onnxruntime-node', '@huggingface/transformers', 'unpdf'],
 };
 
 module.exports = nextConfig;

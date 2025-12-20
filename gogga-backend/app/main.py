@@ -75,7 +75,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3002",
         "http://localhost:3100",  # Admin panel
+        "https://localhost:3000",
+        "https://localhost:3002",
+        "http://192.168.0.130:3000",
+        "http://192.168.0.130:3002",
+        "https://192.168.0.130:3000",
+        "https://192.168.0.130:3002",
         "https://gogga.app",
         "https://www.gogga.app"
     ],

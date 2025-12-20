@@ -1,0 +1,110 @@
+# =============================================================================
+# GOGGA Worker Node - Docker Compose Configuration
+# =============================================================================
+# Runs on 192.168.0.198 (gogga-worker) for AI-intensive workloads
+# Controlled from primary (192.168.0.130) via Docker context
+# =============================================================================
+
+# Resource anchors for worker node (has more resources)
+x-ai-heavy-resources: &ai-heavy-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '3.0'
+        memory: 4G
+      reservations:
+        cpus: '1.0'
+        memory: 2G
+
+x-standard-resources: &standard-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 1G
+      reservations:
+        cpus: '0.5'
+        memory: 512M
+
+# ============================================================
+# SERVICES - Worker Node (AI/Heavy Processing)
+# ============================================================
+services:
+  # CePO Sidecar - OptiLLM Enhanced Reasoning
+  # Moved to worker for better performance (more RAM/CPU available)
+  cepo:
+    image: ghcr.io/algorithmicsuperintelligence/optillm:latest-proxy
+    container_name: gogga_cepo_worker
+    ports:
+      - "8080:8000"
+    env_file:
+      - /mnt/dev-drive/gogga-config/.env
+    environment:
+      # Use re2&cot_reflection - ReRead + CoT with Reflection
+      # Cerebras-compatible: no reasoning_effort, no n>1
+      OPTILLM_APPROACH: "re2&cot_reflection"
+      OPTILLM_PORT: "8000"
+      OPTILLM_MODEL: "qwen-3-32b"
+      OPTILLM_LOG_LEVEL: "INFO"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - /home/hybridwolvin/DEV-Drive/docker/logs/cepo:/app/logs
+    networks:
+      - gogga_worker_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    <<: *ai-heavy-resources
+
+  # RAG Vector Search Service (future - for heavy embedding workloads)
+  # Uncomment when implementing server-side RAG
+  # rag-server:
+  #   image: qdrant/qdrant:latest
+  #   container_name: gogga_rag_worker
+  #   ports:
+  #     - "6333:6333"
+  #     - "6334:6334"
+  #   volumes:
+  #     - /home/hybridwolvin/DEV-Drive/docker/data/qdrant:/qdrant/storage
+  #   networks:
+  #     - gogga_worker_network
+  #   restart: unless-stopped
+  #   <<: *standard-resources
+
+  # Monitoring - Resource usage for worker node
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: gogga_cadvisor_worker
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - gogga_worker_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+networks:
+  gogga_worker_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  cepo_logs:
+    driver: local

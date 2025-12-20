@@ -51,12 +51,16 @@ export function useGoggaTalk(options: UseGoggaTalkOptions = {}) {
   const playQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
   
-  // Get WebSocket URL
+  // Get WebSocket URL - derive from window location for proper runtime config
   const getWsUrl = useCallback(() => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-    if (backendUrl) {
-      return backendUrl.replace(/^http/, 'ws') + '/api/v1/voice/talk';
+    // In browser, derive backend URL from current location
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.hostname;
+      // Backend runs on port 8000
+      return `${protocol}//${host}:8000/api/v1/voice/talk`;
     }
+    // Fallback for SSR (should never be used for WebSocket)
     return 'ws://localhost:8000/api/v1/voice/talk';
   }, []);
   

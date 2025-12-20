@@ -14,7 +14,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+// Server-side route uses BACKEND_URL (not NEXT_PUBLIC_*)
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000'
 
 export async function POST(request: NextRequest) {
   try {

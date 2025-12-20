@@ -1,0 +1,31 @@
+---
+description: Todo2 task overview for Cursor AI awareness - provides real-time context of current project tasks, priorities, and progress
+alwaysApply: true
+---
+
+# Todo2 Project Context
+
+*Last updated: 12/20/2025, 12:55 AM*
+*Generated automatically from .todo2/state.todo2.json*
+
+## Current Task Overview (Last 20 Tasks - Newest First)
+
+*No tasks found in the current project.*
+
+
+## Task Statistics
+- **Total Tasks:** 0
+- **In Progress:** 0 tasks
+- **Todo:** 0 tasks  
+- **Done:** 0 tasks
+- **High Priority:** 0 tasks
+- **Critical Priority:** 0 tasks
+- **Tasks with Dependencies:** 0 tasks
+
+## Recent Activity
+- No recent activity
+
+## Key Project Context
+This is an implementation of an automated cursor rules system that will maintain real-time awareness of Todo2 task status for enhanced AI assistance. The system monitors task changes and automatically updates this overview file to provide contextual information to Cursor chat.
+
+*This file is automatically maintained by Todo2. Last generation: 12/20/2025, 00:55:15*

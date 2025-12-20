@@ -113,6 +113,11 @@ export type PricingAudit = Prisma.PricingAuditModel
  */
 export type CreditAdjustment = Prisma.CreditAdjustmentModel
 /**
+ * Model BugReport
+ * 
+ */
+export type BugReport = Prisma.BugReportModel
+/**
  * Model UsageEvent
  * 
  */

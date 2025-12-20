@@ -119,6 +119,12 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
 
   // Connect to Gemini Live API directly
   const connect = useCallback(async () => {
+    // Check if mediaDevices is available before attempting connection
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      addLog('error', 'Cannot connect: microphone not available (requires HTTPS or localhost)');
+      return;
+    }
+    
     // Guard against double-connect - clean up first if already connected
     if (isConnected || sessionPromiseRef.current) {
       addLog('warning', 'Already connected or connecting - cleaning up first...');
@@ -185,6 +191,13 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
       
       // Get microphone
       addLog('info', 'Requesting microphone access...');
+      
+      // Check if mediaDevices is available (requires HTTPS or localhost)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        addLog('error', 'Microphone not available: mediaDevices API not supported');
+        throw new Error('Microphone not available');
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { 
           echoCancellation: true, 

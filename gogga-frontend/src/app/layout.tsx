@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { AuthProvider } from '@/components/AuthProvider'
 import { GlobalErrorBoundary } from '@/components/ErrorBoundary'
+import { BugReportButton } from '@/components/BugReportButton'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -45,11 +46,14 @@ export default function RootLayout({
         {/* PostHog initialized via instrumentation-client.ts */}
       </head>
       <body
-        className="font-quicksand font-normal antialiased"
+        className="font-quicksand font-normal antialiased relative"
         suppressHydrationWarning
       >
         <GlobalErrorBoundary>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <BugReportButton />
+          </AuthProvider>
         </GlobalErrorBoundary>
       </body>
     </html>
