@@ -142,10 +142,10 @@ export const PersonalitySettings: React.FC<PersonalitySettingsProps> = ({
           <div className="relative">
             <button
               onClick={() => setShowLanguages(!showLanguages)}
-              className="w-full flex items-center justify-between px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white hover:bg-gray-50"
+              className="w-full flex items-center justify-between px-2 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-md bg-white hover:bg-gray-50"
             >
               <span>{languages[profile.preferredLanguage]?.name || 'English'}</span>
-              <ChevronDown size={14} className={`transition-transform ${showLanguages ? 'rotate-180' : ''}`} />
+              <ChevronDown size={14} className={`text-gray-500 transition-transform ${showLanguages ? 'rotate-180' : ''}`} />
             </button>
             {showLanguages && (
               <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
@@ -154,7 +154,7 @@ export const PersonalitySettings: React.FC<PersonalitySettingsProps> = ({
                     key={code}
                     onClick={() => handleLanguageChange(code as SALanguage)}
                     className={`
-                      w-full px-3 py-2 text-left text-sm hover:bg-gray-50
+                      w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50
                       ${profile.preferredLanguage === code ? 'bg-gray-100 font-medium' : ''}
                     `}
                   >
@@ -250,6 +250,8 @@ export const PersonalitySettings: React.FC<PersonalitySettingsProps> = ({
               Preferred Language
             </label>
             <select
+              id="preferred-language"
+              name="preferred-language"
               value={profile.preferredLanguage}
               onChange={(e) => handleLanguageChange(e.target.value as SALanguage)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white"

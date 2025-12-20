@@ -94,7 +94,7 @@ export default function PaymentSuccessPage() {
 
   return (
     <PageErrorBoundary pageName="Payment Success">
-      <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-b from-gray-100 to-gray-200 flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
         {/* Success Icon */}
         <div className="w-16 h-16 mx-auto mb-6 bg-green-500 rounded-full flex items-center justify-center">

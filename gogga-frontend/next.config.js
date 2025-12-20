@@ -41,6 +41,7 @@ const nextConfig = {
       'onnxruntime-node': './src/empty.ts',
     },
   },
+<<<<<<< Updated upstream
   // Webpack configuration for crypto polyfill
   webpack: (config, { isServer, dev }) => {
     if (dev) {
@@ -84,6 +85,10 @@ const nextConfig = {
     // Note: @huggingface/transformers removed - conflicts with serverExternalPackages
     optimizePackageImports: ['react-icons', 'lucide-react'],
   },
+=======
+  // Next.js 16: Turbopack filesystem caching - using defaults
+  // experimental: { turbopackFileSystemCacheForDev: true },
+>>>>>>> Stashed changes
   // Set correct workspace root to avoid lockfile detection issues
   outputFileTracingRoot: __dirname,
   // Image optimization configuration

@@ -4,25 +4,17 @@
  * Wraps the app with NextAuth SessionProvider for client-side session access.
  * Must be a client component to use 'use client' directive.
  * 
+ * Always wraps with SessionProvider to ensure useSession() works everywhere.
  * Disabled refetch to prevent CLIENT_FETCH_ERROR on initial load.
  */
 'use client'
 
 import { SessionProvider } from 'next-auth/react'
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode } from 'react';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Render children without SessionProvider during SSR to avoid fetch errors
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
+  // Always wrap with SessionProvider so useSession() works everywhere
+  // This prevents "[next-auth]: useSession must be wrapped in a <SessionProvider />"
   return (
     <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
       {children}

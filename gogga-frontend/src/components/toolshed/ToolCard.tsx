@@ -8,6 +8,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { ToolDefinition } from '@/lib/toolshedStore';
 
 interface ToolCardProps {
@@ -60,7 +61,7 @@ export function ToolCard({ tool, onForce, isForced = false }: ToolCardProps) {
             isExpanded ? 'rotate-180' : ''
           }`}
         >
-          ▼
+          <ChevronDown size={16} />
         </span>
       </button>
 

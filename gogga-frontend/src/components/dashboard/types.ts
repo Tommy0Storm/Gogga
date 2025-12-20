@@ -35,8 +35,8 @@ export interface EmbeddingStats {
 }
 
 export interface VectorInfo {
-  id: number;
-  docId: number;
+  id: string;
+  docId: string;
   chunkIndex: number;
   dimension: number;
   magnitude: number;
@@ -106,7 +106,7 @@ export interface RetrievalHistoryItem {
 // ============================================================================
 
 export interface ContextDocument {
-  id: number;
+  id: string;
   filename: string;
   content: string;
   chunks: string[];

@@ -12,11 +12,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Wrench, FileText, Cloud, Sun, Moon, CloudRain, CloudSnow, CloudLightning, CloudFog, Wind, Upload, Trash2, Search, Lock, Sparkles, Shield } from 'lucide-react';
+import { X, Wrench, FileText, Cloud, Sun, Moon, CloudRain, CloudSnow, CloudLightning, CloudFog, Wind, Upload, Trash2, Search, Lock, Sparkles, Shield, BookOpen, Paperclip, AlertTriangle } from 'lucide-react';
 import { useDocumentStore } from '@/lib/documentStore';
 import { useToolShed, ToolDefinition, ForcedTool } from '@/lib/toolshedStore';
 import { useRightPanel } from '@/hooks/useRightPanel';
 import { EmbeddingEngine, cosineSimilarity } from '@/lib/embeddingEngine';
+import { RAGUploadButton } from '@/components/rag';
 
 // Weather types
 interface DayForecast {
@@ -155,7 +156,7 @@ function ToolsTabContent({ tools, isLoading, forcedTool, onForceTool, onClearFor
 // Documents Tab Content
 interface DocumentsTabContentProps {
   documents: import('@/lib/db').Document[];
-  selectedDocIds: number[];
+  selectedDocIds: string[];
   isLoading: boolean;
   isEmbedding: boolean;
   isRAGEnabled: boolean;
@@ -164,7 +165,12 @@ interface DocumentsTabContentProps {
   maxDocsPerSession: number;
   storageUsage: { totalMB: number; maxMB: number; usedPercent: number; remainingMB: number };
   onUpload: (file: File) => Promise<void>;
-  onRemove: (docId: number) => Promise<void>;
+  onRemove: (docId: string) => Promise<void>;
+  // RAG Store props (Phase 2)
+  ragDocuments?: import('@/lib/db').Document[];
+  onRAGUpload?: (file: File) => Promise<void>;
+  onRAGRemove?: (docId: string) => Promise<void>;
+  onClearAllRAG?: () => Promise<void>;
 }
 
 function DocumentsTabContent({
@@ -179,9 +185,16 @@ function DocumentsTabContent({
   storageUsage,
   onUpload,
   onRemove,
+  ragDocuments = [],
+  onRAGUpload,
+  onRAGRemove,
+  onClearAllRAG,
 }: DocumentsTabContentProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
+  const [activeSection, setActiveSection] = React.useState<'session' | 'rag'>('session');
+  const [showClearConfirm, setShowClearConfirm] = React.useState(false);
+  const [isClearing, setIsClearing] = React.useState(false);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -199,23 +212,98 @@ function DocumentsTabContent({
     }
   };
 
-  // FREE tier - show upgrade message
-  if (!isRAGEnabled) {
+  // FREE tier - show limited session doc access with upgrade message
+  if (tier === 'free') {
     return (
-      <div className="text-center text-gray-500 py-8">
-        <FileText size={32} className="mx-auto mb-2 opacity-50" />
-        <p className="text-sm">Document Store</p>
-        <p className="text-xs mt-2">Upgrade to JIVE or JIGGA for document uploads</p>
-        <div className="mt-4 p-3 bg-gray-100 rounded-lg text-xs text-gray-600">
-          <p><strong>JIVE:</strong> 5 docs, keyword search</p>
-          <p><strong>JIGGA:</strong> 20 docs, semantic search</p>
+      <div className="space-y-6">
+        {/* Session Documents - FREE tier gets 1 doc enticement */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Paperclip size={16} className="text-gray-600" />
+            <h3 className="font-medium text-gray-800">Session Documents</h3>
+          </div>
+          <div className="text-xs text-gray-500 mb-3">
+            Try it out! Upload 1 document for this chat session.
+          </div>
+          
+          {documents.length === 0 ? (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.pdf,.md,.json,.csv"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isEmbedding}
+                className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                {isLoading || isEmbedding ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
+                    {isEmbedding ? 'Processing...' : 'Uploading...'}
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    Upload Document (1 max)
+                  </>
+                )}
+              </button>
+              {uploadError && (
+                <p className="text-xs text-red-500 mt-1">{uploadError}</p>
+              )}
+            </div>
+          ) : documents[0] ? (() => {
+            const doc = documents[0];
+            return (
+              <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm text-gray-800 truncate" title={doc.filename}>
+                      {doc.filename}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {(doc.size / 1024).toFixed(1)}KB • {doc.chunkCount} chunks
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onRemove(doc.id!)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="Remove document"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })() : null}
+        </div>
+
+        {/* RAG Store - Locked for FREE */}
+        <div className="border-t border-gray-100 pt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen size={16} className="text-gray-400" />
+            <h3 className="font-medium text-gray-400">RAG Store</h3>
+            <Lock size={12} className="text-gray-400" />
+          </div>
+          <div className="p-4 bg-gray-50 rounded-lg text-center">
+            <p className="text-xs text-gray-500">Upgrade for persistent document storage</p>
+            <div className="mt-3 space-y-1 text-xs text-gray-600">
+              <p><strong>JIVE:</strong> 1 RAG doc (5MB)</p>
+              <p><strong>JIGGA:</strong> 200 RAG docs (250MB)</p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   const remainingSlots = maxDocsPerSession - documents.length;
-  const totalActive = documents.length + selectedDocIds.length;
+  const canUploadRAG = tier === 'jive' || tier === 'jigga';
+  const ragLimit = tier === 'jive' ? 1 : 200;
 
   return (
     <div className="space-y-4">
@@ -233,100 +321,253 @@ function DocumentsTabContent({
         </div>
       </div>
 
-      {/* Document Count */}
-      <div className="text-sm text-gray-600">
-        <span className="font-medium">{documents.length}</span>/{maxDocsPerSession} documents
-        {tier === 'jigga' && selectedDocIds.length > 0 && (
-          <span className="text-xs text-gray-400 ml-2">
-            (+{selectedDocIds.length} from other sessions)
-          </span>
-        )}
+      {/* Section Toggle */}
+      <div className="flex bg-gray-100 rounded-lg p-1">
+        <button
+          onClick={() => setActiveSection('session')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-sm transition-colors ${
+            activeSection === 'session' 
+              ? 'bg-white text-gray-800 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Paperclip size={14} />
+          Session ({documents.length})
+        </button>
+        <button
+          onClick={() => setActiveSection('rag')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-sm transition-colors ${
+            activeSection === 'rag' 
+              ? 'bg-white text-gray-800 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <BookOpen size={14} />
+          RAG Store ({ragDocuments.length})
+        </button>
       </div>
 
-      {/* Upload Button */}
-      {canUpload && remainingSlots > 0 && (
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.pdf,.md,.json,.csv"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading || isEmbedding}
-            className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            {isLoading || isEmbedding ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
-                {isEmbedding ? 'Processing...' : 'Uploading...'}
-              </>
-            ) : (
-              <>
-                <Upload size={16} />
-                Upload Document
-              </>
-            )}
-          </button>
-          {uploadError && (
-            <p className="text-xs text-red-500 mt-1">{uploadError}</p>
-          )}
-          <p className="text-xs text-gray-400 mt-1 text-center">
-            {remainingSlots} slot{remainingSlots !== 1 ? 's' : ''} remaining • .txt, .pdf, .md, .json, .csv
-          </p>
-        </div>
-      )}
+      {/* Session Documents Section */}
+      {activeSection === 'session' && (
+        <div className="space-y-3">
+          <div className="text-xs text-gray-500">
+            Documents for this chat session only. Cleared on chat reset.
+          </div>
 
-      {/* Document List */}
-      {documents.length === 0 ? (
-        <div className="text-center text-gray-400 py-6">
-          <FileText size={24} className="mx-auto mb-2 opacity-50" />
-          <p className="text-xs">No documents uploaded yet</p>
-          <p className="text-xs mt-1">Upload documents for RAG-enhanced responses</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className="p-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-gray-800 truncate" title={doc.filename}>
-                    {doc.filename}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {(doc.size / 1024).toFixed(1)}KB • {doc.chunkCount} chunks
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {new Date(doc.createdAt).toLocaleDateString()}
+          {/* Upload Button */}
+          {canUpload && remainingSlots > 0 && (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.pdf,.md,.json,.csv"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isEmbedding}
+                className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                {isLoading || isEmbedding ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
+                    {isEmbedding ? 'Processing...' : 'Uploading...'}
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    Upload Session Doc
+                  </>
+                )}
+              </button>
+              {uploadError && (
+                <p className="text-xs text-red-500 mt-1">{uploadError}</p>
+              )}
+              <p className="text-xs text-gray-400 mt-1 text-center">
+                {remainingSlots} slot{remainingSlots !== 1 ? 's' : ''} remaining
+              </p>
+            </div>
+          )}
+
+          {/* Session Document List */}
+          {documents.length === 0 ? (
+            <div className="text-center text-gray-400 py-4">
+              <Paperclip size={20} className="mx-auto mb-2 opacity-50" />
+              <p className="text-xs">No session documents</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {documents.map((doc, index) => (
+                <div
+                  key={doc.id ?? `session-doc-${index}`}
+                  className="p-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-800 truncate" title={doc.filename}>
+                        {doc.filename}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(doc.size / 1024).toFixed(1)}KB • {doc.chunkCount} chunks
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onRemove(doc.id!)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      title="Remove document"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => onRemove(doc.id!)}
-                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                  title="Remove document"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {/* Tier Info */}
-      <div className="text-xs text-gray-400 border-t border-gray-100 pt-3 mt-3">
-        {tier === 'jive' && (
-          <p>JIVE: Keyword-based search. Upgrade to JIGGA for semantic search.</p>
-        )}
-        {tier === 'jigga' && (
-          <p>JIGGA: Semantic search with E5 embeddings enabled.</p>
-        )}
-      </div>
+      {/* RAG Store Section */}
+      {activeSection === 'rag' && (
+        <div className="space-y-3">
+          <div className="text-xs text-gray-500">
+            Persistent documents available across all chat sessions.
+          </div>
+
+          {/* RAG Upload Button Component */}
+          <RAGUploadButton 
+            tier={tier}
+            currentDocCount={ragDocuments.length}
+            currentStorageMB={storageUsage.totalMB}
+            onUpload={async (file) => {
+              if (onRAGUpload) {
+                try {
+                  await onRAGUpload(file);
+                  return { success: true };
+                } catch (error) {
+                  return { success: false, error: error instanceof Error ? error.message : 'Upload failed' };
+                }
+              }
+              return { success: false, error: 'RAG upload handler not configured' };
+            }}
+          />
+
+          {/* RAG Document List */}
+          {ragDocuments.length === 0 ? (
+            <div className="text-center text-gray-400 py-4">
+              <BookOpen size={20} className="mx-auto mb-2 opacity-50" />
+              <p className="text-xs">No RAG documents</p>
+              <p className="text-xs mt-1">Add documents to your permanent knowledge base</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {ragDocuments.map((doc, index) => (
+                <div
+                  key={doc.id ?? `rag-doc-${index}`}
+                  className="p-3 rounded-lg border border-blue-100 bg-blue-50/30 hover:border-blue-200 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <BookOpen size={12} className="text-blue-500 flex-shrink-0" />
+                        <div className="font-medium text-sm text-gray-800 truncate" title={doc.filename}>
+                          {doc.filename}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(doc.size / 1024).toFixed(1)}KB • {doc.chunkCount} chunks
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {new Date(doc.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    {onRAGRemove && (
+                      <button
+                        onClick={() => onRAGRemove(String(doc.id))}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Remove from RAG store"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tier Info */}
+          <div className="text-xs text-gray-400 border-t border-gray-100 pt-3">
+            {tier === 'jive' && (
+              <p>JIVE: 1 RAG document (enticement). Upgrade to JIGGA for 200 docs + semantic search.</p>
+            )}
+            {tier === 'jigga' && (
+              <p>JIGGA: {ragDocuments.length}/{ragLimit} RAG documents with semantic search.</p>
+            )}
+          </div>
+
+          {/* Clear All RAG Button - JIGGA only */}
+          {tier === 'jigga' && ragDocuments.length > 0 && onClearAllRAG && (
+            <div className="mt-3">
+              {showClearConfirm ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-700 mb-2">
+                    <AlertTriangle size={16} />
+                    <span className="font-medium text-sm">Delete all RAG documents?</span>
+                  </div>
+                  <p className="text-xs text-red-600 mb-3">
+                    This will permanently delete {ragDocuments.length} document(s) and their embeddings. This cannot be undone.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        setIsClearing(true);
+                        try {
+                          await onClearAllRAG();
+                          setShowClearConfirm(false);
+                        } catch (error) {
+                          console.error('Failed to clear RAG documents:', error);
+                        } finally {
+                          setIsClearing(false);
+                        }
+                      }}
+                      disabled={isClearing}
+                      className="flex-1 px-3 py-1.5 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:bg-red-400 transition-colors flex items-center justify-center gap-1"
+                    >
+                      {isClearing ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 size={12} />
+                          Delete All
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setShowClearConfirm(false)}
+                      disabled={isClearing}
+                      className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="w-full px-3 py-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-lg transition-colors flex items-center justify-center gap-1"
+                >
+                  <Trash2 size={12} />
+                  Clear All RAG Documents
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -439,7 +680,7 @@ function WeatherTabContent({ weather, isLoading, selectedDay, onSelectDay }: Wea
 
 // Search result type
 interface SearchResult {
-  docId: number;
+  docId: string;
   documentName: string;
   snippet: string;
   score: number;
@@ -842,6 +1083,8 @@ export function RightSidePanel() {
   const {
     documents,
     allDocuments,
+    sessionDocuments,
+    ragDocuments,
     selectedDocIds,
     isLoading: isLoadingDocs,
     isEmbedding,
@@ -852,10 +1095,13 @@ export function RightSidePanel() {
     storageUsage,
     onUploadDocument,
     onRemoveDocument,
+    onRAGUpload,
+    onRAGRemove,
+    onClearAllRAG,
   } = useDocumentStore();
   
-  // Use allDocuments for display (shows full document pool), session-scoped for RAG context indicator
-  const displayDocuments = allDocuments.length > 0 ? allDocuments : documents;
+  // Use sessionDocuments for display (session-scoped), fallback to documents for legacy
+  const displayDocuments = sessionDocuments.length > 0 ? sessionDocuments : documents;
   
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
@@ -1072,6 +1318,16 @@ export function RightSidePanel() {
               onRemove={async (docId) => {
                 if (onRemoveDocument) await onRemoveDocument(docId);
               }}
+              ragDocuments={ragDocuments}
+              onRAGUpload={onRAGUpload ? async (file) => {
+                await onRAGUpload(file);
+              } : undefined}
+              onRAGRemove={onRAGRemove ? async (docId) => {
+                await onRAGRemove(docId);
+              } : undefined}
+              onClearAllRAG={onClearAllRAG ? async () => {
+                await onClearAllRAG();
+              } : undefined}
             />
           )}
           {activeTab === 'weather' && (

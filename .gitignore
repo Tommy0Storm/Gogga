@@ -160,3 +160,9 @@ gogga-frontend/public/assets/.models/
 gogga-frontend/certs/
 .pnpm-store
 vertex-ai-key.json
+
+# Todo2 - AI-powered task management directories
+.cursor/rules/todo2-overview.mdc
+.cursor/rules/todo2.mdc
+.cursor/mcp.json
+.todo2/

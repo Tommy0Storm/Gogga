@@ -307,6 +307,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
+                      id="export-include-charts"
+                      name="export-include-charts"
                       type="checkbox"
                       checked={options.includeCharts}
                       onChange={(e) => setOptions(o => ({ ...o, includeCharts: e.target.checked }))}
@@ -318,6 +320,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
                   
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
+                      id="export-include-images"
+                      name="export-include-images"
                       type="checkbox"
                       checked={options.includeImages}
                       onChange={(e) => setOptions(o => ({ ...o, includeImages: e.target.checked }))}
@@ -330,6 +334,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
                   {tier === 'jigga' && (
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
+                        id="export-include-thinking"
+                        name="export-include-thinking"
                         type="checkbox"
                         checked={options.includeThinking}
                         onChange={(e) => setOptions(o => ({ ...o, includeThinking: e.target.checked }))}
@@ -342,6 +348,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
                   
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
+                      id="export-include-timestamps"
+                      name="export-include-timestamps"
                       type="checkbox"
                       checked={options.includeTimestamps}
                       onChange={(e) => setOptions(o => ({ ...o, includeTimestamps: e.target.checked }))}
@@ -359,6 +367,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
                       Page Size
                     </label>
                     <select
+                      id="export-page-size"
+                      name="export-page-size"
                       value={options.pageSize}
                       onChange={(e) => setOptions(o => ({ ...o, pageSize: e.target.value as 'a4' | 'letter' | 'legal' }))}
                       className="w-full text-sm border border-gray-200 rounded-md p-2"
@@ -374,6 +384,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
                       Orientation
                     </label>
                     <select
+                      id="export-orientation"
+                      name="export-orientation"
                       value={options.orientation}
                       onChange={(e) => setOptions(o => ({ ...o, orientation: e.target.value as 'portrait' | 'landscape' }))}
                       className="w-full text-sm border border-gray-200 rounded-md p-2"

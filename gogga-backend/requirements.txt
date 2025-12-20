@@ -3,9 +3,13 @@ fastapi>=0.124.0,<1.0.0
 uvicorn[standard]>=0.38.0
 pydantic>=2.12.0,<3.0.0
 pydantic-settings>=2.9.0
+# Security (Added Dec 2025 Audit)
+pyjwt>=2.10.0
+pyahocorasick>=2.1.0  # O(n) pattern matching for tier routing
 # AI SDKs
 cerebras_cloud_sdk>=1.59.0
 google-genai>=1.55.0
+google-cloud-storage>=2.19.0  # GCS for Veo video outputs
 # HTTP & Networking
 httpx>=0.28.0
 python-multipart>=0.0.20
@@ -27,4 +31,5 @@ numpy>=2.3.0
 sympy>=1.14.0
 # GoggaTalk - Google AI Live API for voice chat
 # (not Vertex AI - Live API not available in Vertex SDK)
-beautifulsoup4
+beautifulsoup4# Debugging
+debugpy>=1.8.0

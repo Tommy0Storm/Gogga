@@ -7,12 +7,20 @@
 
 ## Architecture: SA AI Platform (Dec 2025)
 
+### Distributed Infrastructure
 ```
-Frontend (Next.js 16 :3000)  →  Backend (FastAPI :8000)
-     │ RxDB/IndexedDB                  │ Tier Router
-     └─ Client RAG                     └─ AI/Image Services
+Windows VS Code (10.0.0.1)
+     │ SSH
+     ▼
+PRIMARY (192.168.0.130)              WORKER (192.168.0.198)
+├─ Frontend (:3000)                  ├─ CePO (:8080)
+├─ Backend (:8000)    ◄─── NFS ────► ├─ DEV-Drive (NFS)
+├─ Admin (:3100)       Docker ctx    └─ cAdvisor (:8081)
+└─ Proxy (:3001)       ──────────►
 ```
-**Note**: CePO sidecar REMOVED - OptiLLM enhancements now in `optillm_enhancements.py`
+**CePO Sidecar**: OptiLLM with `re2&cot_reflection` approach (Cerebras-compatible)
+**Worker Control**: `docker --context gogga-worker ps` from primary
+**Shared Storage**: `/mnt/dev-drive` ↔ `/home/hybridwolvin/DEV-Drive`
 
 ### Dual Database Strategy
 - **SQLite (Prisma 7)**: Server-side auth & subscriptions (`gogga-frontend/prisma/schema.prisma`)
@@ -25,8 +33,8 @@ Frontend (Next.js 16 :3000)  →  Backend (FastAPI :8000)
 | Tier | Default Model | Complex/Legal Model | Image | Provider |
 |------|---------------|---------------------|-------|----------|
 | FREE | Qwen 235B | Qwen 235B | Pollinations (50/mo) | OpenRouter |
-| JIVE (R49) | Qwen 32B | Qwen 235B | FLUX 1.1 Pro (200/mo) | Cerebras |
-| JIGGA (R149) | Qwen 32B | Qwen 235B | FLUX 1.1 Pro (1000/mo) | Cerebras |
+| JIVE (R49) | Qwen 32B | Qwen 235B | Imagen 3.0 (200/mo) | Cerebras |
+| JIGGA (R149) | Qwen 32B | Qwen 235B | Imagen 3.0 (1000/mo) | Cerebras |
 
 **JIVE & JIGGA are IDENTICAL in features** - only token/image limits differ.
 
@@ -56,6 +64,7 @@ Frontend (Next.js 16 :3000)  →  Backend (FastAPI :8000)
 | RAG Manager | `gogga-frontend/src/lib/ragManager.ts` |
 | BuddySystem | `gogga-frontend/src/lib/buddySystem.ts` |
 | GoggaSmart | `gogga-frontend/src/lib/goggaSmart.ts` |
+| **Distributed Setup** | `infra/distributed/` |
 
 ## Development Commands
 
@@ -67,7 +76,7 @@ cd gogga-backend && uvicorn app.main:app --reload # Backend only
 rm -rf gogga-frontend/.next                       # Clean cache (required often!)
 
 # Testing
-cd gogga-backend && pytest tests/ -v              # Backend (69 tests)
+cd gogga-backend && pytest tests/ -v              # Backend (132 tests: 69 original + 63 router)
 ```
 
 **Dev URLs** (local dev, LAN IP auto-detected):
@@ -142,17 +151,114 @@ signature = hashlib.md5(query_string.encode("utf-8")).hexdigest()
 5. **RxDB Date fields** → use `.toISOString()`, not `new Date()` objects
 6. **RxDB primary keys** → use `generateId()` from `db.ts` for `id` field
 7. **IndexedDB limits**: 100MB total, 15MB per document
+8. **Docker node_modules** → NEVER mount as volume (native modules break)
+9. **Docker frontend** → use local dev (`pnpm dev:http`), Docker watch mode flaky
+10. **CePO Cerebras** → no `reasoning_effort`, no `n>1` (use `re2&cot_reflection`)
+11. **Prisma 7 relations** → Use PascalCase: `include: { Subscription: true }`, NOT `subscription`
+12. **Tailwind v4 CSS vars** → Use `bg-(--var-name)` NOT `bg-[var(--var-name)]`
+
+## Docker Best Practices (CRITICAL)
+
+### ⚠️ NEVER mount node_modules as a volume!
+Native modules (better-sqlite3, sharp) compile platform-specific binaries.
+Volume mounts overwrite container binaries with incompatible host binaries.
+
+```yaml
+# ❌ WRONG - causes "bindings file not found" errors
+volumes:
+  - ./app:/app
+  - node_modules:/app/node_modules
+
+# ✅ CORRECT - use Docker Compose watch
+develop:
+  watch:
+    - action: sync
+      path: ./app/src
+      target: /app/src
+      ignore:
+        - node_modules/
+    - action: rebuild
+      path: ./app/package.json
+```
+
+### Recommended Dev Workflow
+```bash
+# Frontend - LOCAL (faster, more reliable)
+cd gogga-frontend && pnpm dev:http
+
+# Backend/Admin - Docker is fine
+docker compose up -d backend admin cepo
+```
 
 ## Key Memories (`.serena/memories/`)
 
 | Memory | Content |
 |--------|---------|
-| `architecture.md` | Tier routing, math delegation |
+| `architecture.md` | Tier routing, math delegation, audit summary |
+| `enterprise_audit_dec2025.md` | **NEW** Full security & performance audit |
 | `tech_stack.md` | Dependencies, versions |
+| `prisma7_compatibility.md` | PascalCase relations, exactOptionalPropertyTypes |
 | `rxdb_implementation.md` | RxDB schemas, vector search, migrations |
 | `network_configuration.md` | LAN IP auto-detection, Next.js 16 bug workaround |
 | `gogga_smart.md` | Self-improving AI, skill management |
 | `optillm_enhancements.md` | SPL, Re-Read, CoT, Planning |
+| `cepo_configuration.md` | CePO sidecar, Cerebras-compatible approaches |
+| `docker_best_practices.md` | node_modules anti-pattern, Compose watch |
+| `distributed_infrastructure.md` | Two-server setup, NFS, Docker contexts |
+| `authentication_system.md` | NextAuth v5 passwordless flow |
+| `subscription_system.md` | Tiers, credits, PayFast integration |
 | `persona.md` | BuddySystem, SA personality |
 | `payfast_integration.md` | Payment signature, webhooks |
 | `tool_calling.md` | Math tools, executor |
+
+## Security Audit Findings (Dec 2025)
+
+> **CRITICAL**: See `enterprise_audit_dec2025.md` for full audit report
+
+### Immediate Action Required
+1. **Rotate ALL API keys** - .env was committed with live keys
+2. **Implement JWT signing** - Current tokens are base64 only (no signature)
+3. **Protect admin endpoints** - `/admin/*` routes have no authentication
+4. **Fix tier bypass** - X-User-Tier header trusted without validation
+
+### Security Best Practices
+```python
+# ❌ NEVER - accepts any string as valid
+async def validate_api_key(api_key: str) -> str:
+    if not api_key:
+        raise HTTPException(status_code=401)
+    return api_key  # No actual validation!
+
+# ✅ CORRECT - validate against stored hashed keys
+async def validate_api_key(api_key: str) -> str:
+    hashed = hash_api_key(api_key)
+    stored = await db.api_keys.find_one({"hash": hashed})
+    if not stored or stored.revoked:
+        raise HTTPException(status_code=401)
+    return api_key
+```
+
+## Performance Optimization (Dec 2025)
+
+### Quick Wins
+1. **Increase ThreadPoolExecutor** to 64 workers for Cerebras SDK
+2. **Add request idempotency cache** to prevent duplicate LLM calls
+3. **Skip local OptiLLM** when routing to CePO (avoid double processing)
+4. **Remove manual useCallback/useMemo** where React Compiler handles it
+
+### Pattern Matching Optimization
+```python
+# ❌ SLOW - O(n*m) multiple iterations
+def contains_pattern(message: str) -> bool:
+    return any(p in message.lower() for p in 80_PATTERNS)
+
+# ✅ FAST - O(n) Aho-Corasick
+import ahocorasick
+_automaton = ahocorasick.Automaton()
+for p in ALL_PATTERNS:
+    _automaton.add_word(p, p)
+_automaton.make_automaton()
+
+def find_patterns(message: str) -> set[str]:
+    return {m[1] for m in _automaton.iter(message.lower())}
+```

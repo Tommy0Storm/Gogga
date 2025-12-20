@@ -34,7 +34,7 @@ const ragManagerInstance = new RagManager();
 interface RAGState {
   sessionId: string;
   documents: Document[];
-  selectedDocIds: number[]; // For JIGGA: IDs of documents selected from all sessions
+  selectedDocIds: string[]; // For JIGGA: IDs of documents selected from all sessions
   allDocuments: Document[]; // All documents across sessions (for JIGGA selection)
   isLoading: boolean;
   isEmbedding: boolean; // True when generating embeddings (JIGGA)
@@ -68,7 +68,7 @@ interface RAGState {
 
 interface UseRAGReturn extends RAGState {
   uploadDocument: (file: File) => Promise<void>;
-  removeDocument: (docId: number) => Promise<void>;
+  removeDocument: (docId: string) => Promise<void>;
   getContext: (
     query: string,
     options?: { authoritative?: boolean }
@@ -81,7 +81,7 @@ interface UseRAGReturn extends RAGState {
   canUpload: boolean; // JIVE and JIGGA can upload
   canSelectFromAllSessions: boolean; // Only JIGGA
   canUseSemanticRAG: boolean; // Only JIGGA
-  selectDocuments: (docIds: number[]) => Promise<void>; // JIGGA: select docs from all sessions
+  selectDocuments: (docIds: string[]) => Promise<void>; // JIGGA: select docs from all sessions
   loadAllDocuments: () => Promise<void>; // Load all docs for selection UI
   getMaxDocsPerSession: () => number;
   getRemainingDocsSlots: () => number;
@@ -102,6 +102,15 @@ interface UseRAGReturn extends RAGState {
     cachedSessions: number;
     totalCachedDocs: number;
   } | null;
+  // RAG Store methods (persistent, cross-session) - JIVE gets 1 doc, JIGGA gets 200
+  ragStoreDocuments: import('@/lib/db').Document[];
+  uploadToRAGStore: (file: File) => Promise<void>;
+  removeFromRAGStore: (docId: string) => Promise<void>;
+  clearRAGStore: () => Promise<void>;
+  canUploadToRAGStore: boolean;
+  ragStoreLimit: number;
+  ragStorageMB: number;
+  ragStorageMaxMB: number;
 }
 
 // Helper to get or create session ID with localStorage persistence
@@ -120,9 +129,10 @@ export function useRAG(tier: Tier): UseRAGReturn {
   // Get or generate session ID - persist to localStorage to survive remounts
   const sessionIdRef = useRef<string>(getOrCreateSessionId());
 
-  // Determine RAG mode based on tier
+  // Determine RAG search mode based on tier (basic = keyword, semantic = vector)
   const ragMode: RagMode = tier === 'jigga' ? 'semantic' : 'basic';
-  const ragConfig = getTierConfig(tier, ragMode);
+  // Get tier config (prompt mode 'analysis'|'authoritative' is separate from search mode)
+  const ragConfig = getTierConfig(tier);
 
   const [state, setState] = useState<RAGState>({
     sessionId: sessionIdRef.current,
@@ -151,6 +161,15 @@ export function useRAG(tier: Tier): UseRAGReturn {
   const canUpload = tier === 'jive' || tier === 'jigga';
   const canSelectFromAllSessions = canSelectAcrossSessions(tier);
   const canUseSemanticRAG = tier === 'jigga';
+
+  // RAG Store limits by tier (persistent, cross-session documents)
+  const ragStoreLimit = tier === 'jive' ? 1 : tier === 'jigga' ? 200 : 0;
+  const ragStorageMaxMB = tier === 'jive' ? 5 : tier === 'jigga' ? 250 : 0;
+  const canUploadToRAGStore = tier === 'jive' || tier === 'jigga';
+
+  // RAG Store state (persistent documents)
+  const [ragStoreDocuments, setRagStoreDocuments] = useState<Document[]>([]);
+  const [ragStorageMB, setRagStorageMB] = useState(0);
 
   const getRemainingDocsSlots = useCallback(() => {
     const max = getMaxDocsPerSession(tier);
@@ -227,11 +246,31 @@ export function useRAG(tier: Tier): UseRAGReturn {
     onUpdateStorageUsage();
   });
 
+  // Load RAG Store documents (persistent, cross-session)
+  const loadRAGStoreDocuments = useCallback(async () => {
+    if (!canUploadToRAGStore) return;
+    
+    try {
+      const userId = sessionIdRef.current.split('_')[0] || 'anonymous';
+      const docs = await rag.getRAGStoreDocuments(userId);
+      setRagStoreDocuments(docs);
+      
+      // Calculate storage used
+      const totalBytes = docs.reduce((sum, doc) => sum + (doc.size || 0), 0);
+      setRagStorageMB(totalBytes / (1024 * 1024));
+    } catch (err) {
+      console.error('[RAG Store] Failed to load documents:', err);
+    }
+  }, [canUploadToRAGStore]);
+
   // Load documents on mount or when session changes
   useEffect(() => {
     if (isRAGEnabled) {
       onLoadDocuments();
     }
+    
+    // Load RAG Store documents
+    loadRAGStoreDocuments();
     
     // Always load all documents for RightSidePanel visibility (regardless of tier)
     // This allows users to see their document pool even on FREE/JIVE tiers
@@ -244,7 +283,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
     return () => {
       rag.unloadSession(sessionIdRef.current);
     };
-  }, [isRAGEnabled]); // Stable handlers, only re-run when RAG enabled/disabled
+  }, [isRAGEnabled, loadRAGStoreDocuments]); // Stable handlers, only re-run when RAG enabled/disabled
 
   const loadAllDocuments = useCallback(async () => {
     // Always load all documents for visibility in RightSidePanel
@@ -269,7 +308,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
   }, []);
 
   const selectDocuments = useCallback(
-    async (docIds: number[]) => {
+    async (docIds: string[]) => {
       if (!canSelectFromAllSessions) {
         throw new Error('Document selection is only available in JIGGA tier');
       }
@@ -401,13 +440,19 @@ export function useRAG(tier: Tier): UseRAGReturn {
   );
 
   const removeDocument = useCallback(
-    async (docId: number) => {
-      if (!isRAGEnabled) return;
+    async (docId: string) => {
+      console.log('[useRAG] removeDocument called:', { docId, isRAGEnabled, sessionId: sessionIdRef.current });
+      if (!isRAGEnabled) {
+        console.log('[useRAG] RAG not enabled, returning');
+        return;
+      }
 
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
+        console.log('[useRAG] Calling rag.removeDocument...');
         await rag.removeDocument(sessionIdRef.current, docId);
+        console.log('[useRAG] rag.removeDocument completed');
 
         // Also remove from selected if present
         setState((prev) => ({
@@ -415,8 +460,11 @@ export function useRAG(tier: Tier): UseRAGReturn {
           selectedDocIds: prev.selectedDocIds.filter((id) => id !== docId),
         }));
 
+        console.log('[useRAG] Refreshing documents...');
         await refreshDocuments();
+        console.log('[useRAG] Documents refreshed');
       } catch (err) {
+        console.error('[useRAG] removeDocument error:', err);
         setState((prev) => ({
           ...prev,
           isLoading: false,
@@ -624,6 +672,148 @@ export function useRAG(tier: Tier): UseRAGReturn {
     }
   }, [isRAGEnabled, refreshDocuments]);
 
+  // =========================================================================
+  // RAG Store Functions (Persistent, Cross-Session Documents)
+  // JIVE: 1 doc, 5MB max | JIGGA: 200 docs, 250MB max
+  // =========================================================================
+
+  /**
+   * Upload document to RAG Store (persistent, cross-session)
+   */
+  const uploadToRAGStore = useCallback(
+    async (file: File): Promise<void> => {
+      if (!canUploadToRAGStore) {
+        throw new Error('RAG Store is only available in JIVE and JIGGA tiers');
+      }
+
+      // Check document count limit
+      if (ragStoreDocuments.length >= ragStoreLimit) {
+        throw new Error(
+          `RAG Store limit reached (${ragStoreLimit} document${ragStoreLimit > 1 ? 's' : ''}). ` +
+          `Remove a document first.`
+        );
+      }
+
+      // Check storage limit
+      const newSizeMB = file.size / (1024 * 1024);
+      if (ragStorageMB + newSizeMB > ragStorageMaxMB) {
+        throw new Error(
+          `Storage limit exceeded. Available: ${(ragStorageMaxMB - ragStorageMB).toFixed(1)}MB, ` +
+          `File: ${newSizeMB.toFixed(1)}MB`
+        );
+      }
+
+      setState((prev) => ({
+        ...prev,
+        isLoading: true,
+        isEmbedding: tier === 'jigga',
+        error: null,
+      }));
+
+      try {
+        const userId = sessionIdRef.current.split('_')[0] || 'anonymous';
+        const doc = await rag.addRAGStoreDocument(userId, file);
+
+        // For JIGGA tier, pre-generate embeddings
+        if (tier === 'jigga' && doc) {
+          console.log('[RAG Store] JIGGA tier - generating embeddings for:', doc.filename);
+
+          if (!ragManagerInstance.isReady()) {
+            await ragManagerInstance.initializeSemanticEngine();
+          }
+
+          const embeddingResult = await ragManagerInstance.preloadDocument(doc);
+          if (embeddingResult.success) {
+            console.log('[RAG Store] Embeddings generated:', {
+              filename: doc.filename,
+              chunkCount: embeddingResult.chunkCount,
+            });
+          }
+        }
+
+        // Refresh RAG Store documents
+        await loadRAGStoreDocuments();
+
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isEmbedding: false,
+        }));
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to upload to RAG Store';
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isEmbedding: false,
+          error: errorMessage,
+        }));
+        throw new Error(errorMessage);
+      }
+    },
+    [canUploadToRAGStore, ragStoreDocuments.length, ragStoreLimit, ragStorageMB, ragStorageMaxMB, tier, loadRAGStoreDocuments]
+  );
+
+  /**
+   * Remove document from RAG Store (permanent deletion)
+   */
+  const removeFromRAGStore = useCallback(
+    async (docId: string): Promise<void> => {
+      if (!canUploadToRAGStore) return;
+
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        await rag.removeRAGStoreDocument(docId);
+        await loadRAGStoreDocuments();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: err instanceof Error ? err.message : 'Failed to remove from RAG Store',
+        }));
+        throw err;
+      }
+    },
+    [canUploadToRAGStore, loadRAGStoreDocuments]
+  );
+
+  /**
+   * Clear all documents from RAG Store (JIGGA only feature for bulk cleanup)
+   */
+  const clearRAGStore = useCallback(async (): Promise<void> => {
+    if (tier !== 'jigga') {
+      throw new Error('Clear All RAG is only available in JIGGA tier');
+    }
+
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      const userId = sessionIdRef.current.split('_')[0] || 'anonymous';
+      
+      // Import and use the clearAllRAGDocuments utility
+      const { clearAllRAGDocuments } = await import('@/lib/rag/clearAllRAG');
+      const result = await clearAllRAGDocuments(userId);
+      
+      console.log('[RAG Store] Cleared all documents:', result);
+      
+      // Refresh RAG Store state
+      setRagStoreDocuments([]);
+      setRagStorageMB(0);
+      
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+      }));
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to clear RAG Store',
+      }));
+      throw err;
+    }
+  }, [tier]);
+
   const newSession = useCallback(() => {
     // Unload current session from FlexSearch
     rag.unloadSession(sessionIdRef.current);
@@ -795,6 +985,15 @@ export function useRAG(tier: Tier): UseRAGReturn {
     getSemanticStatus,
     getSemanticChunks,
     preloadEmbeddings,
+    // RAG Store (persistent, cross-session) - JIVE: 1 doc, JIGGA: 200 docs
+    ragStoreDocuments,
+    uploadToRAGStore,
+    removeFromRAGStore,
+    clearRAGStore,
+    canUploadToRAGStore,
+    ragStoreLimit,
+    ragStorageMB,
+    ragStorageMaxMB,
   };
 }
 

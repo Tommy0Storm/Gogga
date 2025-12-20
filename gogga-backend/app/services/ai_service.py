@@ -34,8 +34,8 @@ from app.core.router import (
     tier_router, CognitiveLayer, UserTier,
     QWEN_THINKING_SETTINGS,
     is_extended_output_request, is_document_analysis_request,
-    QWEN_MAX_TOKENS, QWEN_DEFAULT_TOKENS,
-    JIGGA_235B_MAX_TOKENS,
+    QWEN_32B_MAX_TOKENS, QWEN_32B_DEFAULT_TOKENS,
+    QWEN_235B_MAX_TOKENS, QWEN_235B_DEFAULT_TOKENS,
     COMPREHENSIVE_OUTPUT_INSTRUCTION,
     COMPLEX_235B_KEYWORDS,
 )
@@ -49,9 +49,15 @@ from app.services.optillm_enhancements import (
     parse_enhanced_response,
     EnhancementLevel,
 )
+from app.services.credit_service import (
+    CreditService,
+    ActionType,
+    DeductionSource,
+)
 from app.core.exceptions import InferenceError
 from app.tools.definitions import GOGGA_TOOLS, get_tools_for_tier, ToolCall
 from app.plugins import LanguageDetectorPlugin, Plugin
+
 
 
 def build_language_context(language_intel: dict | None) -> str | None:
@@ -108,12 +114,13 @@ MAX_HISTORY_TURNS: Final[int] = 10
 DEFAULT_TEMPERATURE: Final[float] = 0.7
 DEFAULT_MAX_TOKENS: Final[int] = 4096
 DEFAULT_TOP_P: Final[float] = 0.95
-# Note: JIGGA_MAX_TOKENS and JIGGA_DEFAULT_TOKENS imported from router.py
+# Token limits: QWEN_32B_* and QWEN_235B_* imported from router.py
 
 # Retry configuration for rate limits
-MAX_RETRIES: Final[int] = 3
-INITIAL_BACKOFF_SECONDS: Final[float] = 1.0
-BACKOFF_MULTIPLIER: Final[float] = 2.0
+# With 6 keys, we can try all of them before falling back
+MAX_RETRIES: Final[int] = 6
+INITIAL_BACKOFF_SECONDS: Final[float] = 0.1  # Fast retry with new key
+BACKOFF_MULTIPLIER: Final[float] = 1.5
 
 # Regex pattern to extract <think>...</think> or <thinking>...</thinking> blocks
 # Qwen 3 may use either format depending on configuration
@@ -122,23 +129,45 @@ THINK_PATTERN: Final[re.Pattern] = re.compile(
     re.DOTALL | re.IGNORECASE
 )
 
+# All reasoning tags supported by OptiLLM/CePO (cot_reflection approach)
+# These are used for streaming detection of reasoning content
+REASONING_OPEN_TAGS: Final[tuple[str, ...]] = (
+    "<think", "<thinking", "<reflection", "<plan"
+)
+REASONING_CLOSE_TAGS: Final[tuple[str, ...]] = (
+    "</think", "</thinking", "</reflection", "</plan"
+)
+
 # Type aliases
 MessageDict = dict[str, str]
 ResponseDict = dict[str, Any]
 
-# Cerebras client (lazy init)
-_client: Cerebras | None = None
+# Cerebras client pool (key rotation for load balancing)
+_clients: dict[str, Cerebras] = {}
 
 # Plugin system (lazy init)
 _plugins: list[Plugin] | None = None
 
+# Key rotator for load balancing
+from app.services.cerebras_key_rotator import get_key_rotator
 
-def get_client() -> Cerebras:
-    """Get or create the Cerebras client instance."""
-    global _client
-    if _client is None:
-        _client = Cerebras(api_key=settings.CEREBRAS_API_KEY)
-    return _client
+
+def get_client() -> tuple[Cerebras, str]:
+    """
+    Get a Cerebras client using key rotation for load balancing.
+    
+    Returns:
+        Tuple of (Cerebras client, API key used)
+    """
+    global _clients
+    rotator = get_key_rotator()
+    api_key = rotator.get_next_key()
+    
+    if api_key not in _clients:
+        # Disable SDK internal retries - we handle rotation ourselves
+        _clients[api_key] = Cerebras(api_key=api_key, max_retries=0)
+    
+    return _clients[api_key], api_key
 
 
 def get_plugins() -> list[Plugin]:
@@ -257,13 +286,19 @@ class AIService:
         history: list[MessageDict] | None = None,
         user_tier: UserTier = UserTier.FREE,
         force_layer: CognitiveLayer | None = None,
-        context_tokens: int = 0
+        context_tokens: int = 0,
+        request_id: str | None = None,
     ) -> ResponseDict:
         """
         Generate a response based on user tier.
         
         CRITICAL: This method runs plugins on EVERY request before LLM processing.
         Plugins CANNOT be disabled and enrich context with intelligence (language, etc.).
+        
+        Enterprise Features:
+        - Pre-flight credit check with tier fallback
+        - Idempotent usage deduction post-completion
+        - Full audit trail with request_id tracing
         
         Args:
             user_id: Unique identifier for the user
@@ -272,10 +307,48 @@ class AIService:
             user_tier: User's subscription tier
             force_layer: Optional layer override
             context_tokens: Number of tokens in context (for JIGGA thinking mode)
+            request_id: Unique request ID for idempotency
             
         Returns:
             Dict containing the response and metadata
         """
+        import uuid
+        import time as time_module
+        
+        start_time = time_module.time()
+        
+        # Generate request_id if not provided (for idempotency)
+        if not request_id:
+            request_id = str(uuid.uuid4())
+        
+        # PRE-FLIGHT CREDIT CHECK
+        # Estimate 10K tokens for initial check (actual deduction uses real count)
+        user_state = await CreditService.get_user_state(user_id)
+        credit_check = CreditService.check_action(
+            user_state, 
+            ActionType.CHAT_10K_TOKENS,
+            quantity=1,  # 1 unit = 10K tokens estimate
+        )
+        
+        # Track deduction source for later
+        deduction_source = credit_check.source
+        original_tier = user_tier
+        
+        # Handle tier fallback if needed
+        if not credit_check.allowed:
+            # This shouldn't happen for chat (always falls back to FREE)
+            # but handle edge case
+            logger.warning(
+                f"Credit check denied for chat: user={user_id}, reason={credit_check.reason}"
+            )
+            user_tier = UserTier.FREE
+            deduction_source = DeductionSource.FREE
+        elif credit_check.source == DeductionSource.FREE:
+            # Subscription exceeded, no credits → fallback to FREE tier
+            logger.info(
+                f"Tier fallback to FREE: user={user_id}, original_tier={user_tier.value}"
+            )
+            user_tier = UserTier.FREE
         # Build request object for plugins
         request = {
             "user_id": user_id,
@@ -388,6 +461,60 @@ class AIService:
         
         # RUN PLUGINS: Post-process response (if needed)
         response = await run_plugins_after_response(response)
+        
+        # ENTERPRISE: Deduct usage with idempotency
+        # Extract actual token counts from response for accurate billing
+        duration_ms = int((time_module.time() - start_time) * 1000)
+        meta = response.get("meta", {})
+        total_tokens = meta.get("total_tokens", 0)
+        input_tokens = meta.get("input_tokens", 0)
+        output_tokens = meta.get("output_tokens", 0)
+        
+        # Calculate 10K token units for billing (round up)
+        token_units = max(1, (total_tokens + 9999) // 10000)
+        
+        # Only deduct if not FREE tier and action was allowed
+        if deduction_source and deduction_source != DeductionSource.FREE:
+            try:
+                # Generate idempotency key: action:user:request_id
+                idempotency_key = f"chat:{user_id}:{request_id}"
+                
+                deduct_result = await CreditService.deduct_usage(
+                    user_id=user_id,
+                    action=ActionType.CHAT_10K_TOKENS,
+                    quantity=token_units,
+                    source=deduction_source,
+                    idempotency_key=idempotency_key,
+                    request_id=request_id,
+                    model=meta.get("model", "unknown"),
+                    provider=meta.get("provider", "unknown"),
+                    tier=original_tier.value,
+                    duration_ms=duration_ms,
+                )
+                
+                # Add billing info to response meta
+                if "meta" not in response:
+                    response["meta"] = {}
+                response["meta"]["billing"] = {
+                    "source": deduction_source.value,
+                    "token_units": token_units,
+                    "credits_deducted": deduct_result.get("creditsDeducted", 0),
+                    "event_id": deduct_result.get("eventId"),
+                    "duplicate": deduct_result.get("duplicate", False),
+                }
+            except Exception as e:
+                # Log but don't fail the response
+                logger.error(f"Failed to deduct usage: user={user_id}, error={e}")
+        else:
+            # FREE tier - add billing info for transparency
+            if "meta" not in response:
+                response["meta"] = {}
+            response["meta"]["billing"] = {
+                "source": "free",
+                "token_units": token_units,
+                "credits_deducted": 0,
+                "reason": "Free tier fallback" if deduction_source == DeductionSource.FREE else "Subscription included",
+            }
         
         return response
     
@@ -532,18 +659,19 @@ class AIService:
         top_p = QWEN_THINKING_SETTINGS["top_p"]
         
         # Determine max_tokens based on request type and model
+        # NOTE: JIVE and JIGGA are mirrors for chat - use same token limits
         if use_235b:
-            # 235B supports up to 40k output tokens
+            # 235B supports up to 40k output tokens (we use 32k conservatively)
             if is_extended_request or is_doc_request:
-                max_tokens = JIGGA_235B_MAX_TOKENS  # 32000 for extended output
+                max_tokens = QWEN_235B_MAX_TOKENS  # 32000 for extended output
             else:
-                max_tokens = QWEN_MAX_TOKENS  # 8000 for normal
+                max_tokens = QWEN_235B_DEFAULT_TOKENS  # 8000 for normal complex queries
         else:
             # 32B supports up to 8k output tokens
             if is_extended_request or is_doc_request:
-                max_tokens = QWEN_MAX_TOKENS  # 8000 for extended output
+                max_tokens = QWEN_32B_MAX_TOKENS  # 8000 for extended output
             else:
-                max_tokens = QWEN_DEFAULT_TOKENS  # 4096 for casual chat
+                max_tokens = QWEN_32B_DEFAULT_TOKENS  # 4096 for casual chat
 
         logger.info(f"{tier.upper()} thinking mode - model={model_id}, temp=0.6, top_p=0.95, max_tokens={max_tokens}")
 
@@ -571,11 +699,27 @@ class AIService:
                     
                     # Parse CePO response (OpenAI format)
                     choice = cepo_response.get("choices", [{}])[0]
-                    content = choice.get("message", {}).get("content", "")
+                    raw_content = choice.get("message", {}).get("content", "")
                     usage = cepo_response.get("usage", {})
                     
+                    # Extract thinking/reasoning sections from CePO response
+                    # CePO uses cot_reflection approach which outputs <thinking>, <reflection>, <output> tags
+                    parsed_sections = parse_enhanced_response(raw_content)
+                    thinking_content = ""
+                    
+                    # Combine all reasoning sections for display
+                    if parsed_sections.get("thinking"):
+                        thinking_content += f"[Thinking]\n{parsed_sections['thinking']}\n\n"
+                    if parsed_sections.get("reflection"):
+                        thinking_content += f"[Reflection]\n{parsed_sections['reflection']}\n\n"
+                    if parsed_sections.get("plan"):
+                        thinking_content += f"[Plan]\n{parsed_sections['plan']}\n\n"
+                    
+                    # Use clean output as main response, or raw content if no <output> found
+                    content = parsed_sections.get("output", raw_content)
+                    
                     elapsed = time.perf_counter() - start_time
-                    logger.info(f"CePO response received in {elapsed:.2f}s")
+                    logger.info(f"CePO response received in {elapsed:.2f}s (has_thinking={bool(thinking_content)})")
                     
                     # Track usage and return response
                     await track_usage(
@@ -588,7 +732,7 @@ class AIService:
                     
                     return {
                         "response": content,
-                        "thinking": None,  # CePO handles thinking internally
+                        "thinking": thinking_content.strip() if thinking_content else None,
                         "tool_calls": [],
                         "meta": {
                             "model": model_id,
@@ -598,6 +742,7 @@ class AIService:
                             "input_tokens": usage.get("prompt_tokens", 0),
                             "output_tokens": usage.get("completion_tokens", 0),
                             "cepo_metrics": cepo_service.get_metrics(),
+                            "has_thinking": bool(thinking_content),
                         }
                     }
                     
@@ -606,14 +751,18 @@ class AIService:
                     logger.warning(f"CePO routing failed, falling back to direct: {cepo_error}")
             
             # === STANDARD CEREBRAS PATH ===
-            client = get_client()
+            rotator = get_key_rotator()
             
             # Get tools for this tier (JIVE gets basic, JIGGA gets all, 235B gets delegate)
             tools = get_tools_for_tier(tier, model=model_id) if enable_tools else None
 
-            # Retry loop with exponential backoff for rate limits
+            # Retry loop with key rotation for rate limits
             last_error = None
             for attempt in range(MAX_RETRIES):
+                client, api_key = get_client()  # Get next key via rotation
+                key_name = api_key[:8] + "..." + api_key[-4:]  # For logging
+                logger.debug(f"🔑 Attempt {attempt+1}/{MAX_RETRIES} using key {key_name}")
+                
                 try:
                     # Build API call kwargs
                     api_kwargs = {
@@ -634,6 +783,7 @@ class AIService:
                         client.chat.completions.create,
                         **api_kwargs
                     )
+                    rotator.mark_success(api_key)  # Reset 429 counter
                     break  # Success - exit retry loop
 
                 except Exception as e:
@@ -642,18 +792,19 @@ class AIService:
                     if "429" not in error_str and "too_many_requests" not in error_str.lower():
                         # Non-rate-limit error - raise immediately
                         raise
+                    # Mark key as rate-limited and try next key immediately
+                    rotator.mark_rate_limited(api_key)
                     last_error = e
+                    logger.warning(
+                        f"🚫 Key {key_name} rate-limited (attempt {attempt+1}/{MAX_RETRIES}), trying next key..."
+                    )
                     if attempt < MAX_RETRIES - 1:
-                        backoff = INITIAL_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER ** attempt)
-                        logger.warning(
-                            "GOGGA AI busy (attempt %d/%d), retrying in %.1fs...",
-                            attempt + 1, MAX_RETRIES, backoff
-                        )
-                        await asyncio.sleep(backoff)
+                        # Minimal backoff - just switch to next key quickly
+                        await asyncio.sleep(INITIAL_BACKOFF_SECONDS)
                         continue
                     # All retries exhausted - fallback to OpenRouter
                     logger.warning(
-                        "GOGGA AI temporarily busy, using backup service..."
+                        "🔄 All Cerebras keys rate-limited, using OpenRouter fallback..."
                     )
                     return await AIService._fallback_to_openrouter(
                         user_id, actual_message, history, layer, tier
@@ -671,11 +822,20 @@ class AIService:
             latency = time.perf_counter() - start_time
             
             # Check for tool calls in the response
+            # Only send frontend-executable tools (charts, images, memory)
+            # Server-side tools (search, math) should NOT be sent to frontend
+            from app.tools.search_executor import ALL_SEARCH_TOOL_NAMES
+            from app.tools.math_definitions import ALL_MATH_TOOL_NAMES
+            
             tool_calls_data = None
             if hasattr(choice, 'tool_calls') and choice.tool_calls:
                 tool_calls_data = []
                 for tc in choice.tool_calls:
                     import json
+                    # Skip server-side tools
+                    if tc.function.name in ALL_SEARCH_TOOL_NAMES or tc.function.name in ALL_MATH_TOOL_NAMES:
+                        logger.info(f"Filtering server-side tool from response: {tc.function.name}")
+                        continue
                     try:
                         args = json.loads(tc.function.arguments)
                     except json.JSONDecodeError:
@@ -685,7 +845,8 @@ class AIService:
                         "name": tc.function.name,
                         "arguments": args
                     })
-                logger.info(f"Tool calls detected: {[tc['name'] for tc in tool_calls_data]}")
+                if tool_calls_data:
+                    logger.info(f"Frontend tool calls detected: {[tc['name'] for tc in tool_calls_data]}")
 
             # Parse thinking block from response (JIGGA thinking mode)
             # Qwen wraps its reasoning in <think>...</think> tags
@@ -815,6 +976,70 @@ class AIService:
                 "GOGGA AI is experiencing high demand. Please try again in a moment."
             ) from e
     
+    @staticmethod
+    async def _fallback_stream_to_openrouter(
+        user_id: str,
+        message: str,
+        history: list[MessageDict] | None,
+        original_layer: CognitiveLayer,
+        original_tier: str,
+        detected_language: dict | None = None
+    ):
+        """
+        Streaming fallback to OpenRouter when Cerebras is rate-limited.
+        
+        Yields SSE events compatible with the streaming format.
+        """
+        import json
+        import time
+        from app.services.openrouter_service import openrouter_service
+        
+        logger.info(
+            "Streaming fallback to OpenRouter | user=%s | original_tier=%s",
+            user_id, original_tier
+        )
+        
+        # Send log event about fallback
+        yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Switching to backup service...', 'icon': 'refresh'})}\n\n"
+        
+        system_prompt = tier_router.get_system_prompt(original_layer)
+        start_time = time.perf_counter()
+        
+        try:
+            result = await openrouter_service.chat_free(
+                message=message,
+                system_prompt=system_prompt,
+                history=history,
+                user_id=user_id
+            )
+            
+            content = result.get("response", "")
+            
+            # Stream content in chunks
+            chunk_size = 50
+            for i in range(0, len(content), chunk_size):
+                chunk = content[i:i+chunk_size]
+                yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+            
+            # Send done event
+            latency = time.perf_counter() - start_time
+            done_data = {
+                'type': 'done',
+                'latency': round(latency, 3),
+                'meta': {
+                    'tier': original_tier,
+                    'layer': original_layer.value,
+                    'provider': 'openrouter_fallback',
+                    'fallback_reason': 'rate_limit',
+                }
+            }
+            if detected_language:
+                done_data['detected_language'] = detected_language
+            yield f"data: {json.dumps(done_data)}\n\n"
+            
+        except Exception as e:
+            logger.error("Streaming fallback also failed: %s", e)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'GOGGA AI is experiencing high demand. Please try again in a moment.'})}\n\n"
 
     @staticmethod
     async def generate_stream(
@@ -874,29 +1099,22 @@ class AIService:
         messages.append({"role": "user", "content": actual_message})
 
         # Set generation parameters based on tier and mode
-        if is_jigga:
-            if is_extended_request or is_doc_request:
-                max_tokens = JIGGA_MAX_TOKENS
-            else:
-                max_tokens = JIGGA_DEFAULT_TOKENS
-            
-            if thinking_mode:
-                temperature = QWEN_THINKING_SETTINGS["temperature"]
-                top_p = QWEN_THINKING_SETTINGS["top_p"]
-            else:
-                temperature = QWEN_FAST_SETTINGS["temperature"]
-                top_p = QWEN_FAST_SETTINGS["top_p"]
+        # NOTE: JIVE and JIGGA are mirrors for chat - use same token limits
+        if is_extended_request or is_doc_request:
+            max_tokens = QWEN_32B_MAX_TOKENS  # 8000 for extended
         else:
-            # JIVE tier (Qwen 3 235B)
+            max_tokens = QWEN_32B_DEFAULT_TOKENS  # 4096 for casual
+        
+        if thinking_mode:
+            temperature = QWEN_THINKING_SETTINGS["temperature"]
+            top_p = QWEN_THINKING_SETTINGS["top_p"]
+        else:
             temperature = DEFAULT_TEMPERATURE
             top_p = DEFAULT_TOP_P
-            if is_extended_request or is_doc_request:
-                max_tokens = JIVE_MAX_TOKENS
-            else:
-                max_tokens = JIVE_DEFAULT_TOKENS
 
         try:
-            client = get_client()
+            client, api_key = get_client()
+            rotator = get_key_rotator()
             
             # Send initial metadata
             yield f"data: {json.dumps({'type': 'meta', 'tier': tier, 'layer': layer.value, 'model': model_id, 'thinking_mode': thinking_mode})}\n\n"
@@ -926,16 +1144,22 @@ class AIService:
                 if chunk.choices and chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     full_content += content
+                    content_lower = content.lower()
                     
-                    # Check for thinking tags in JIGGA mode
-                    if thinking_mode:
-                        # Detect start of thinking block
-                        if "<think" in content.lower() and not in_thinking:
+                    # Detect reasoning tags - supports all OptiLLM/CePO formats
+                    # Works for: <think>, <thinking>, <reflection>, <plan>
+                    is_reasoning_start = any(tag in content_lower for tag in REASONING_OPEN_TAGS)
+                    is_reasoning_end = any(tag in content_lower for tag in REASONING_CLOSE_TAGS)
+                    
+                    # Check for thinking/reasoning tags (JIGGA mode or any CePO/OptiLLM response)
+                    if thinking_mode or is_reasoning_start or in_thinking:
+                        # Detect start of thinking/reasoning block
+                        if is_reasoning_start and not in_thinking:
                             in_thinking = True
                             yield f"data: {json.dumps({'type': 'thinking_start'})}\n\n"
                         
-                        # Detect end of thinking block
-                        if "</think" in content.lower() and in_thinking:
+                        # Detect end of thinking/reasoning block
+                        if is_reasoning_end and in_thinking:
                             in_thinking = False
                             yield f"data: {json.dumps({'type': 'thinking_end'})}\n\n"
                         
@@ -956,6 +1180,18 @@ class AIService:
 
             # Parse thinking for accurate content separation
             main_response, thinking_block = parse_thinking_response(full_content)
+            
+            # Handle empty response (model only output thinking, no actual content)
+            if not main_response.strip() and thinking_block:
+                fallback_msg = "I was thinking through your request but didn't generate a complete response. Could you please try rephrasing or providing more details?"
+                logger.warning("Cerebras returned only thinking content with no response | tier=%s | model=%s", tier, model_id)
+                yield f"data: {json.dumps({'type': 'content', 'content': fallback_msg})}\n\n"
+                main_response = fallback_msg
+            elif not main_response.strip() and not thinking_block:
+                fallback_msg = "I apologize, but I couldn't generate a response. Please try again or rephrase your question."
+                logger.warning("Cerebras returned empty response | tier=%s | model=%s", tier, model_id)
+                yield f"data: {json.dumps({'type': 'content', 'content': fallback_msg})}\n\n"
+                main_response = fallback_msg
 
             # Track usage with tier for proper pricing
             cost_data = await track_usage(
@@ -1078,8 +1314,8 @@ class AIService:
             messages.extend(history[-MAX_HISTORY_TURNS:])
         messages.append({"role": "user", "content": message})
         
-        # First LLM call - check for tool calls
-        client = get_client()
+        # First LLM call - check for tool calls (with key rotation for rate limits)
+        rotator = get_key_rotator()
         tools = get_tools_for_tier(tier, model=model_id)  # Pass model for 235B detection
         
         # Store lang_intel for done event
@@ -1094,18 +1330,54 @@ class AIService:
             }
         
         try:
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                model=model_id,
-                messages=messages,
-                tools=tools if tools else None,
-                temperature=config.get("temperature", 0.6),
-                top_p=config.get("top_p", 0.95),
-                max_completion_tokens=config.get("max_tokens", 4096)
-            )
+            # Retry loop with key rotation for rate limits
+            response = None
+            for attempt in range(MAX_RETRIES):
+                client, api_key = get_client()  # Get next key via rotation
+                key_name = api_key[:8] + "..." + api_key[-4:]
+                logger.debug(f"🔑 Streaming attempt {attempt+1}/{MAX_RETRIES} using key {key_name}")
+                
+                try:
+                    response = await asyncio.to_thread(
+                        client.chat.completions.create,
+                        model=model_id,
+                        messages=messages,
+                        tools=tools if tools else None,
+                        temperature=config.get("temperature", 0.6),
+                        top_p=config.get("top_p", 0.95),
+                        max_completion_tokens=config.get("max_tokens", 4096)
+                    )
+                    rotator.mark_success(api_key)
+                    break  # Success - exit retry loop
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    if "429" not in error_str and "too_many_requests" not in error_str.lower() and "token_quota" not in error_str.lower():
+                        raise  # Non-rate-limit error
+                    rotator.mark_rate_limited(api_key)
+                    logger.warning(f"🚫 Key {key_name} rate-limited (streaming attempt {attempt+1}/{MAX_RETRIES}), trying next...")
+                    if attempt < MAX_RETRIES - 1:
+                        await asyncio.sleep(INITIAL_BACKOFF_SECONDS)
+                        continue
+                    # All retries exhausted - fallback to OpenRouter
+                    logger.warning("🔄 All Cerebras keys rate-limited, falling back to OpenRouter...")
+                    async for chunk in AIService._fallback_stream_to_openrouter(
+                        user_id, message, history, layer, tier, detected_language_for_done
+                    ):
+                        yield chunk
+                    return
+            
+            if response is None:
+                raise Exception("Failed to get response after all retries")
             
             choice = response.choices[0].message
             assistant_content = choice.content or ""
+            
+            # Log first response details for debugging
+            has_tool_calls = hasattr(choice, 'tool_calls') and choice.tool_calls
+            logger.info(f"First LLM response | content_len={len(assistant_content)} | has_tools={has_tool_calls} | model={model_id}")
+            if not assistant_content and not has_tool_calls:
+                logger.warning(f"First LLM call returned EMPTY response | tier={tier} | model={model_id} | message_preview={message[:100]}")
             
             # Check for server-side tool calls (math + search)
             math_tool_calls = []
@@ -1129,6 +1401,20 @@ class AIService:
                         search_tool_calls.append(tool_data)
                     else:
                         other_tool_calls.append(tool_data)
+            
+            # SPECIAL CASE: sequential_think with empty content
+            # If the ONLY math tool is sequential_think and we have no content,
+            # this is the model "thinking" instead of responding. Skip tool execution
+            # and retry without tools to get an actual response.
+            only_sequential_think = (
+                len(math_tool_calls) == 1 
+                and math_tool_calls[0]["name"] == "sequential_think"
+                and not assistant_content
+                and not search_tool_calls
+            )
+            if only_sequential_think:
+                logger.warning("LLM returned only sequential_think with no content - treating as empty response for retry")
+                math_tool_calls = []  # Clear so we enter the no-math-tools retry path
             
             # Process search tools first (AI should pause and wait for results)
             search_results = []
@@ -1232,6 +1518,54 @@ class AIService:
             
             # If no math tools, just stream the content
             if not math_tool_calls:
+                # Check if we got empty content but had search tool calls that were filtered
+                # This happens when the LLM tries to search again instead of synthesizing
+                if not assistant_content and search_results:
+                    logger.warning("Post-search LLM call returned no content. Making retry without search tools.")
+                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Generating summary...', 'icon': 'ai'})}\n\n"
+                    
+                    # Retry without search tools to force synthesis
+                    non_search_tools = [t for t in (tools or []) if t.get("function", {}).get("name", "") not in ALL_SEARCH_TOOL_NAMES]
+                    retry_messages = extended_messages + [{"role": "assistant", "content": "I have the search results. Let me synthesize the information now."}]
+                    
+                    retry_response = await asyncio.to_thread(
+                        client.chat.completions.create,
+                        model=model_id,
+                        messages=retry_messages,
+                        tools=non_search_tools if non_search_tools else None,
+                        temperature=config.get("temperature", 0.6),
+                        top_p=config.get("top_p", 0.95),
+                        max_completion_tokens=config.get("max_tokens", 4096)
+                    )
+                    
+                    assistant_content = retry_response.choices[0].message.content or ""
+                    response = retry_response  # Update for usage tracking
+                    logger.info(f"Retry response content length: {len(assistant_content)}")
+                
+                # Handle empty response - retry with simpler prompt
+                if not assistant_content and not search_results:
+                    logger.warning("First LLM call returned no content and no tools. Making retry without tools.")
+                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Generating response...', 'icon': 'ai'})}\n\n"
+                    
+                    # Retry without tools to force a direct response
+                    retry_response = await asyncio.to_thread(
+                        client.chat.completions.create,
+                        model=model_id,
+                        messages=messages,  # Use original messages, not extended
+                        temperature=config.get("temperature", 0.6),
+                        top_p=config.get("top_p", 0.95),
+                        max_completion_tokens=config.get("max_tokens", 4096)
+                    )
+                    
+                    assistant_content = retry_response.choices[0].message.content or ""
+                    response = retry_response  # Update for usage tracking
+                    logger.info(f"Retry (no tools) response content length: {len(assistant_content)}")
+                    
+                    # If still empty, use a fallback
+                    if not assistant_content:
+                        assistant_content = "I apologize, but I'm having trouble generating a response right now. Please try again or rephrase your question."
+                        logger.error(f"Empty response after retry | tier={tier} | model={model_id}")
+                
                 if assistant_content:
                     yield f"data: {json.dumps({'type': 'content', 'content': assistant_content})}\n\n"
                 
@@ -1267,6 +1601,7 @@ class AIService:
             # MATH TOOL EXECUTION - Stream execution logs
             yield f"data: {json.dumps({'type': 'tool_start', 'tools': [tc['name'] for tc in math_tool_calls]})}\n\n"
             
+            import time as _time
             tool_results = []
             for tc in math_tool_calls:
                 tool_name = tc["name"]
@@ -1283,11 +1618,13 @@ class AIService:
                     # Execute the tool
                     yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[~] Executing calculation...', 'icon': 'calc'})}\n\n"
                     
+                    calc_start = _time.time()
                     result = await execute_math_tool(
                         tool_name=tool_name,
                         arguments=args,
                         tier=tier
                     )
+                    calc_elapsed = _time.time() - calc_start
                     
                     # Convert result
                     if hasattr(result, '__dict__') and not isinstance(result, dict):
@@ -1295,8 +1632,19 @@ class AIService:
                     else:
                         result_dict = result
                     
-                    # Log: Success
-                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'success', 'message': f'[+] {tool_name} completed', 'icon': 'check'})}\n\n"
+                    # Log: Result values (show key data points)
+                    result_data = result_dict.get('data', result_dict) if isinstance(result_dict, dict) else result_dict
+                    if isinstance(result_data, dict):
+                        # Extract key values to display (exclude metadata fields)
+                        skip_keys = {'display_type', 'calculation_steps', 'formula', 'success'}
+                        display_items = [(k, v) for k, v in result_data.items() if k not in skip_keys and v is not None][:6]
+                        if display_items:
+                            for key, value in display_items:
+                                formatted_key = key.replace('_', ' ').title()
+                                yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': f'    {formatted_key}: {value}', 'icon': 'result'})}\n\n"
+                    
+                    # Log: Success with timing
+                    yield f"data: {json.dumps({'type': 'tool_log', 'level': 'success', 'message': f'[+] {tool_name} completed ({calc_elapsed*1000:.0f}ms)', 'icon': 'check'})}\n\n"
                     
                     tool_results.append({
                         "tool_call_id": tc["id"],
@@ -1332,6 +1680,7 @@ class AIService:
             
             # Log: Sending to LLM
             yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Sending results to AI...', 'icon': 'ai'})}\n\n"
+            yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Generating response...', 'icon': 'ai'})}\n\n"
             
             # Second LLM call - get final response (streaming)
             # Include non-math tools (charts, images) so AI can call them after processing results
@@ -1365,13 +1714,90 @@ class AIService:
                 final_api_kwargs["tools"] = non_math_tools
                 logger.info(f"Second LLM call with {len(non_math_tools)} non-math tools")
             
+            llm2_start = _time.time()
             final_response = await asyncio.to_thread(
                 client.chat.completions.create,
                 **final_api_kwargs
             )
+            llm2_elapsed = _time.time() - llm2_start
             
             final_choice = final_response.choices[0].message
             final_content = final_choice.content or ""
+            
+            # Log LLM response time
+            yield f"data: {json.dumps({'type': 'tool_log', 'level': 'debug', 'message': f'    AI response: {llm2_elapsed:.1f}s', 'icon': '•'})}\n\n"
+            
+            # Check if the LLM returned only server-side tool calls (no content)
+            # If so, make another call WITHOUT those tools to force a text response
+            filtered_tool_count = 0
+            if hasattr(final_choice, 'tool_calls') and final_choice.tool_calls:
+                for tc in final_choice.tool_calls:
+                    if tc.function.name in ALL_SEARCH_TOOL_NAMES or tc.function.name in ALL_MATH_TOOL_NAMES:
+                        filtered_tool_count += 1
+            
+            if not final_content and filtered_tool_count > 0:
+                logger.warning(f"Second pass returned {filtered_tool_count} server-side tools with no content. Making third call without search tools.")
+                yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[~] Refining response...', 'icon': 'ai'})}\n\n"
+                
+                # Third call: Remove search tools entirely to force text response
+                frontend_only_tools = [t for t in (non_math_tools or []) if t.get("function", {}).get("name", "") not in ALL_SEARCH_TOOL_NAMES]
+                
+                third_api_kwargs = {
+                    "model": model_id,
+                    "messages": final_messages + [{"role": "assistant", "content": "I'll provide the summary directly without additional searches."}],
+                    "temperature": config.get("temperature", 0.6),
+                    "top_p": config.get("top_p", 0.95),
+                    "max_completion_tokens": config.get("max_tokens", 4096)
+                }
+                if frontend_only_tools:
+                    third_api_kwargs["tools"] = frontend_only_tools
+                
+                llm3_start = _time.time()
+                third_response = await asyncio.to_thread(
+                    client.chat.completions.create,
+                    **third_api_kwargs
+                )
+                llm3_elapsed = _time.time() - llm3_start
+                
+                final_choice = third_response.choices[0].message
+                final_content = final_choice.content or ""
+                logger.info(f"Third pass content length: {len(final_content)}")
+                yield f"data: {json.dumps({'type': 'tool_log', 'level': 'debug', 'message': f'    Refinement: {llm3_elapsed:.1f}s', 'icon': '•'})}\n\n"
+            
+            # Handle empty response - provide a smarter fallback message
+            # Check if we have frontend tool calls that will produce output
+            has_chart_tool = any(
+                (hasattr(final_choice, 'tool_calls') and final_choice.tool_calls and 
+                 any(tc.function.name == 'create_chart' for tc in final_choice.tool_calls))
+            )
+            has_image_tool = any(
+                (hasattr(final_choice, 'tool_calls') and final_choice.tool_calls and 
+                 any(tc.function.name == 'generate_image' for tc in final_choice.tool_calls))
+            )
+            
+            if not final_content.strip():
+                if has_chart_tool and math_tool_calls:
+                    # Chart + math: Generate a contextual message
+                    math_tools_used = [tc['name'] for tc in math_tool_calls]
+                    if 'math_financial' in math_tools_used:
+                        final_content = "Here's the result of your financial calculation, visualized in the chart below. The chart shows how your values grow over the specified period."
+                    elif 'math_statistics' in math_tools_used:
+                        final_content = "Here's your statistical analysis visualized in the chart below."
+                    elif 'math_sa_tax' in math_tools_used:
+                        final_content = "Here's your SA tax calculation breakdown shown in the chart."
+                    else:
+                        final_content = "Here's your calculation result, visualized in the chart below."
+                    logger.info(f"Generated chart fallback message for math tools: {math_tools_used}")
+                elif has_chart_tool:
+                    final_content = "Here's your data visualized in the chart below."
+                    logger.info("Generated chart fallback message (no math)")
+                elif has_image_tool:
+                    final_content = "I'm generating the image for you now."
+                    logger.info("Generated image fallback message")
+                else:
+                    fallback_msg = "I apologize, but I couldn't generate a complete response. Please try rephrasing your question or providing more details."
+                    logger.warning(f"Empty final content after tool processing | tier={tier} | model={model_id}")
+                    final_content = fallback_msg
             
             # Stream the final content in chunks for UX
             chunk_size = 50
@@ -1379,10 +1805,15 @@ class AIService:
                 chunk = final_content[i:i+chunk_size]
                 yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
             
-            # Capture any tool calls from the second response (charts, images)
+            # Capture any tool calls from the second response (charts, images only)
+            # Filter out server-side tools that shouldn't go to frontend
             second_pass_tools = []
             if hasattr(final_choice, 'tool_calls') and final_choice.tool_calls:
                 for tc in final_choice.tool_calls:
+                    # Skip server-side tools (search and math)
+                    if tc.function.name in ALL_SEARCH_TOOL_NAMES or tc.function.name in ALL_MATH_TOOL_NAMES:
+                        logger.warning(f"Filtering out server-side tool from second pass: {tc.function.name}")
+                        continue
                     try:
                         args = json.loads(tc.function.arguments)
                     except json.JSONDecodeError:
@@ -1392,7 +1823,8 @@ class AIService:
                         "name": tc.function.name,
                         "arguments": args
                     })
-                logger.info(f"Second pass tool calls: {[tc['name'] for tc in second_pass_tools]}")
+                if second_pass_tools:
+                    logger.info(f"Second pass frontend tool calls: {[tc['name'] for tc in second_pass_tools]}")
             
             # Combine any tool calls from first pass (other_tool_calls) with second pass
             all_frontend_tools = other_tool_calls + second_pass_tools
@@ -1439,14 +1871,22 @@ class AIService:
         try:
             # Just verify client can be created - don't waste API calls
             # Actual health is verified on real requests
-            client = get_client()
+            client, api_key = get_client()
+            rotator = get_key_rotator()
+            stats = rotator.get_stats()
             
             # Check client is configured correctly
             if client is not None:
                 return {
                     "status": "healthy",
                     "provider": "cerebras",
-                    "note": "Client initialized (no test call to preserve rate limit)"
+                    "note": "Client initialized (no test call to preserve rate limit)",
+                    "key_rotation": {
+                        "total_keys": stats["total_keys"],
+                        "available_keys": stats["available_keys"],
+                        "total_requests": stats["total_requests"],
+                        "total_429s": stats["total_429s"],
+                    }
                 }
             else:
                 return {

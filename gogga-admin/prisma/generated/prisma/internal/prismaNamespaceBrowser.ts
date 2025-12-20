@@ -70,6 +70,7 @@ export const ModelName = {
   ExchangeRate: 'ExchangeRate',
   PricingAudit: 'PricingAudit',
   CreditAdjustment: 'CreditAdjustment',
+  ToolUsage: 'ToolUsage',
   UsageEvent: 'UsageEvent'
 } as const
 
@@ -406,6 +407,23 @@ export const CreditAdjustmentScalarFieldEnum = {
 } as const
 
 export type CreditAdjustmentScalarFieldEnum = (typeof CreditAdjustmentScalarFieldEnum)[keyof typeof CreditAdjustmentScalarFieldEnum]
+
+
+export const ToolUsageScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  toolName: 'toolName',
+  tier: 'tier',
+  callCount: 'callCount',
+  successCount: 'successCount',
+  failureCount: 'failureCount',
+  totalDurationMs: 'totalDurationMs',
+  avgDurationMs: 'avgDurationMs',
+  uniqueUsers: 'uniqueUsers',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ToolUsageScalarFieldEnum = (typeof ToolUsageScalarFieldEnum)[keyof typeof ToolUsageScalarFieldEnum]
 
 
 export const UsageEventScalarFieldEnum = {

@@ -23,6 +23,6 @@ COPY --chown=node:node certs/ ./certs/
 
 EXPOSE 3000
 
-# Run Prisma generate using local node_modules version (not npx which downloads latest)
-# Then start the dev server with HTTP (proxy handles external connections)
-CMD ["sh", "-c", "./node_modules/.bin/prisma generate && npm run dev:http"]
+# Run Prisma generate at startup then start dev server with HTTP
+# Chainguard images use busybox sh at /usr/bin/sh
+CMD ["/usr/bin/sh", "-c", "./node_modules/.bin/prisma generate && npm run dev:https"]

@@ -8,6 +8,8 @@
 
 const net = require('net');
 const tls = require('tls');
+const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
@@ -18,10 +20,25 @@ const TARGET_PORT = 3000;
 const TARGET_HOST = process.env.TARGET_HOST || 'host.docker.internal';
 const LISTEN_HOST = '0.0.0.0';
 const USE_TLS = process.env.USE_TLS === 'true';
+const SERVE_TLS = process.env.SERVE_TLS === 'true';
+
+// Load certs for serving HTTPS
+let serverOptions = {};
+if (SERVE_TLS) {
+  try {
+    serverOptions = {
+      key: fs.readFileSync(process.env.TLS_KEY || '/app/certs/key.pem'),
+      cert: fs.readFileSync(process.env.TLS_CERT || '/app/certs/cert.pem'),
+    };
+  } catch (e) {
+    console.error('Failed to load TLS certs for server:', e.message);
+    process.exit(1);
+  }
+}
 
 let connectionCount = 0;
 
-const server = net.createServer((clientSocket) => {
+function handleConnection(clientSocket) {
   connectionCount++;
   const connId = connectionCount;
   
@@ -61,7 +78,12 @@ const server = net.createServer((clientSocket) => {
 
   clientSocket.on('close', () => targetSocket.destroy());
   targetSocket.on('close', () => clientSocket.destroy());
-});
+}
+
+// Create server based on SERVE_TLS setting
+const server = SERVE_TLS 
+  ? tls.createServer(serverOptions, handleConnection)
+  : net.createServer(handleConnection);
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -72,14 +94,15 @@ server.on('error', (err) => {
 });
 
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
+  const proto = SERVE_TLS ? 'https' : 'http';
   console.log(`🔀 GOGGA Network Proxy`);
   console.log(`   Forwarding: 0.0.0.0:${LISTEN_PORT} → ${TARGET_HOST}:${TARGET_PORT}`);
-  console.log(`   Access: http://192.168.0.168:${LISTEN_PORT}`);
+  console.log(`   Mode: ${SERVE_TLS ? 'HTTPS→HTTPS' : USE_TLS ? 'HTTP→HTTPS' : 'HTTP→HTTP'}`);
+  console.log(`   Access: ${proto}://192.168.0.130:${LISTEN_PORT}`);
   console.log(`   Ready for connections...`);
 });
 
-// Health check endpoint for Docker
-const http = require('http');
+// Health check endpoint for Docker (http already imported at top)
 http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });

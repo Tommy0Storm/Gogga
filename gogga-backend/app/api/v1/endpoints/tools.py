@@ -17,6 +17,8 @@ from fastapi import APIRouter, Query
 from app.tools.executor import execute_generate_image, execute_math_tool
 from app.tools.search_executor import execute_search_tool
 from app.tools.definitions import get_tools_for_tier, get_tool_by_name, is_server_side_tool
+from app.services.veo_service import veo_service, VeoRequest
+from app.core.router import UserTier
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,6 +68,49 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             )
             return ToolExecuteResponse(success=True, result=result)
         
+        elif request.tool_name == "generate_video":
+            # Execute video generation (JIVE/JIGGA only)
+            tier = request.arguments.get("tier", "free").lower()
+            
+            # FREE tier cannot generate videos
+            if tier == "free":
+                return ToolExecuteResponse(
+                    success=False,
+                    error="Video generation is only available for JIVE and JIGGA tiers. Please upgrade."
+                )
+            
+            # Build VeoRequest from arguments
+            veo_request = VeoRequest(
+                prompt=request.arguments.get("prompt", ""),
+                generate_audio=request.arguments.get("generate_audio", True),
+                duration_seconds=request.arguments.get("duration_seconds", 5),
+                aspect_ratio=request.arguments.get("aspect_ratio", "16:9"),
+            )
+            
+            # Get user tier enum
+            user_tier = UserTier(tier)
+            
+            # Start video generation (returns job_id immediately)
+            veo_response = await veo_service.generate(
+                request=veo_request,
+                user_id=request.arguments.get("user_id", "anonymous"),
+                user_tier=user_tier,
+            )
+            
+            if not veo_response.success:
+                return ToolExecuteResponse(success=False, error=veo_response.error)
+            
+            result = {
+                "type": "video",
+                "job_id": veo_response.job_id,
+                "status": veo_response.status.value,
+                "prompt": veo_response.prompt,
+                "duration_seconds": veo_response.duration_seconds,
+                "message": "Video generation started. This takes 30-60 seconds.",
+            }
+            logger.info(f"🎬 VIDEO GENERATION STARTED: job_id={veo_response.job_id}")
+            return ToolExecuteResponse(success=True, result=result)
+        
         elif request.tool_name in ("web_search", "legal_search", "shopping_search", "places_search"):
             # Execute search tool
             logger.info(f"🔍 SEARCH TOOL: Executing {request.tool_name}")
@@ -106,10 +151,69 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             logger.info(f"🔧 MATH/PYTHON/THINKING TOOL SUCCESS: result_type={result.get('display_type')}, success={result.get('success')}")
             return ToolExecuteResponse(success=result.get("success", True), result=result)
         
+        elif request.tool_name == "generate_document":
+            # Execute document generation
+            logger.info(f"📄 DOCUMENT TOOL: Executing generate_document")
+            from app.tools.document_executor import execute_document_tool
+            
+            tier = request.arguments.get("tier", "free")
+            result = await execute_document_tool(
+                arguments=request.arguments,
+                user_tier=tier,
+                user_id=request.arguments.get("user_id", "document_tool"),
+            )
+            
+            if result.get("success"):
+                logger.info(f"📄 DOCUMENT TOOL SUCCESS: title={result.get('result', {}).get('title', 'N/A')}")
+            else:
+                logger.warning(f"📄 DOCUMENT TOOL FAILED: {result.get('error')}")
+            
+            return ToolExecuteResponse(success=result.get("success", False), result=result.get("result"), error=result.get("error"))
+        
+        elif request.tool_name == "upscale_image":
+            # Execute premium image upscaling (Imagen 4 Ultra)
+            logger.info(f"🔍 UPSCALE IMAGE TOOL: Executing for tier={request.arguments.get('tier', 'unknown')}")
+            from app.tools.executor import execute_upscale_image
+            
+            tier = request.arguments.get("tier", "free")
+            result = await execute_upscale_image(
+                source_image_id=request.arguments.get("source_image_id", ""),
+                upscale_factor=request.arguments.get("upscale_factor", "x2"),
+                tier=tier,
+            )
+            
+            if result.get("success"):
+                logger.info(f"🔍 UPSCALE IMAGE READY: factor={result.get('upscale_factor')}")
+            else:
+                logger.warning(f"🔍 UPSCALE IMAGE FAILED: {result.get('error')}")
+            
+            return ToolExecuteResponse(success=result.get("success", False), result=result, error=result.get("error"))
+        
+        elif request.tool_name == "edit_image":
+            # Execute premium image editing (Imagen 3.0)
+            logger.info(f"✏️ EDIT IMAGE TOOL: Executing mode={request.arguments.get('edit_mode', 'unknown')}")
+            from app.tools.executor import execute_edit_image
+            
+            tier = request.arguments.get("tier", "free")
+            result = await execute_edit_image(
+                source_image_id=request.arguments.get("source_image_id", ""),
+                edit_prompt=request.arguments.get("edit_prompt", ""),
+                edit_mode=request.arguments.get("edit_mode", "INPAINT_INSERTION"),
+                mask_description=request.arguments.get("mask_description"),
+                tier=tier,
+            )
+            
+            if result.get("success"):
+                logger.info(f"✏️ EDIT IMAGE READY: mode={result.get('edit_mode')}")
+            else:
+                logger.warning(f"✏️ EDIT IMAGE FAILED: {result.get('error')}")
+            
+            return ToolExecuteResponse(success=result.get("success", False), result=result, error=result.get("error"))
+        
         else:
             return ToolExecuteResponse(
                 success=False,
-                error=f"Unknown tool: {request.tool_name}. Supported: generate_image, math_*, python_execute, sequential_think"
+                error=f"Unknown tool: {request.tool_name}. Supported: generate_image, generate_video, generate_document, upscale_image, edit_image, math_*, python_execute, sequential_think, *_search"
             )
             
     except Exception as e:

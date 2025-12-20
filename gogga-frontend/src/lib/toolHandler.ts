@@ -1,12 +1,18 @@
 /**
  * GOGGA Tool Handler
- * 
+ *
  * Executes tools called by the AI and returns results.
  * Tools are defined in the backend but executed on the frontend
  * because they operate on client-side data (IndexedDB).
  */
 
-import { createMemory, deleteGoggaMemory, getAllMemories, type MemoryCategory } from './db';
+import {
+  createMemory,
+  deleteGoggaMemory,
+  getAllMemories,
+  trackToolUsage,
+  type MemoryCategory,
+} from './db';
 import { toolExecutionEmitter } from './toolExecutionEmitter';
 
 // =============================================================================
@@ -41,6 +47,7 @@ export interface DeleteMemoryArgs {
 export interface GenerateImageArgs {
   prompt: string;
   style?: 'photorealistic' | 'artistic' | 'cartoon' | 'sketch' | '3d-render';
+  tier?: string; // User tier for provider routing (free/jive/jigga)
 }
 
 export interface CreateChartArgs {
@@ -57,7 +64,14 @@ export interface CreateChartArgs {
     | 'treemap';
   title: string;
   subtitle?: string;
-  data: Array<{ name?: string; value?: number; value2?: number; x?: number; y?: number; [key: string]: unknown }>;
+  data: Array<{
+    name?: string;
+    value?: number;
+    value2?: number;
+    x?: number;
+    y?: number;
+    [key: string]: unknown;
+  }>;
   x_label?: string;
   y_label?: string;
   colors?: string[];
@@ -94,6 +108,43 @@ export interface MathResult {
     | 'formula';
   data: Record<string, unknown>;
   error?: string;
+}
+
+export interface GenerateVideoArgs {
+  prompt: string;
+  style?: 'cinematic' | 'realistic' | 'animated' | 'abstract';
+  generate_audio?: boolean;
+  tier?: string;
+}
+
+export interface GeneratedVideoResult {
+  type: 'video';
+  job_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  video_url?: string;
+  prompt: string;
+  style?: string;
+  message?: string;
+}
+
+export interface GenerateDocumentArgs {
+  content: string;
+  document_type?: string;
+  language?: string;
+  formality?: 'formal' | 'semi-formal' | 'casual';
+  include_sa_context?: boolean;
+  additional_requirements?: string;
+  tier?: string;
+}
+
+export interface GeneratedDocumentResult {
+  type: 'document';
+  title: string;
+  content: string;
+  document_type: string;
+  language: string;
+  word_count: number;
+  sections?: string[];
 }
 
 // =============================================================================
@@ -274,14 +325,14 @@ export interface GeneratedImagesResult {
 }
 
 /**
- * Generate images using backend dual generation (Pollinations + AI Horde)
- * Calls the backend API to get multiple images in parallel
+ * Generate images using backend tier-based routing
+ * FREE: Pollinations + AI Horde, JIVE/JIGGA: Vertex AI Imagen 3.0
  */
 async function executeGenerateImage(
   args: GenerateImageArgs
 ): Promise<ToolResult> {
   try {
-    const { prompt, style } = args;
+    const { prompt, style, tier } = args;
 
     if (!prompt) {
       return {
@@ -292,15 +343,17 @@ async function executeGenerateImage(
       };
     }
 
+    console.log('[ToolHandler] Generating image with tier:', tier || 'free');
     console.log('[ToolHandler] Calling backend for dual image generation...');
 
-    // Call backend API for dual generation (Pollinations + AI Horde)
+    // Call backend API for dual generation (tier-based routing)
+    // FREE: Pollinations + AI Horde, JIVE/JIGGA: Vertex AI Imagen 3.0
     const response = await fetch('/api/v1/tools/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tool_name: 'generate_image',
-        arguments: { prompt, style },
+        arguments: { prompt, style, tier: tier || 'free' },
       }),
     });
 
@@ -393,11 +446,251 @@ async function executeGenerateImage(
 }
 
 /**
+ * Generate video using backend Veo 3.1 API
+ * JIVE/JIGGA only - returns job_id for polling
+ */
+async function executeGenerateVideo(
+  args: GenerateVideoArgs
+): Promise<ToolResult> {
+  try {
+    const { prompt, style, generate_audio = true, tier } = args;
+
+    if (!prompt) {
+      return {
+        tool_call_id: '',
+        success: false,
+        result: '',
+        error: 'Missing required field: prompt',
+      };
+    }
+
+    // FREE tier cannot generate videos
+    if (!tier || tier.toLowerCase() === 'free') {
+      const errorResult: GeneratedVideoResult = {
+        type: 'video',
+        job_id: '',
+        status: 'failed',
+        prompt,
+        message:
+          'Video generation is only available for JIVE and JIGGA tiers. Please upgrade to create videos.',
+      };
+      return {
+        tool_call_id: '',
+        success: false,
+        result: JSON.stringify(errorResult),
+        error: 'Video generation requires JIVE or JIGGA tier',
+      };
+    }
+
+    console.log('[ToolHandler] Starting video generation with tier:', tier);
+
+    // Call backend via tools/execute endpoint (consistent with image generation)
+    const response = await fetch('/api/v1/tools/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tool_name: 'generate_video',
+        arguments: {
+          prompt,
+          generate_audio,
+          tier: tier,
+          style: style,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.error ||
+          errorData.detail ||
+          `Backend returned ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    // Handle tools/execute response format: {success, result, error}
+    if (!data.success) {
+      throw new Error(data.error || 'Video generation failed');
+    }
+
+    const backendResult = data.result;
+
+    // Return job info for frontend to poll
+    const videoResult: GeneratedVideoResult = {
+      type: 'video',
+      job_id: backendResult.job_id,
+      status: backendResult.status || 'pending',
+      prompt,
+      style,
+      message:
+        backendResult.message ||
+        'Video generation started. This takes 30-60 seconds. The video will appear when ready.',
+    };
+
+    console.log(
+      '[ToolHandler] Video generation started, job_id:',
+      backendResult.job_id
+    );
+
+    return {
+      tool_call_id: '',
+      success: true,
+      result: JSON.stringify(videoResult),
+    };
+  } catch (error) {
+    console.error('[ToolHandler] Failed to generate video:', error);
+
+    const errorResult: GeneratedVideoResult = {
+      type: 'video',
+      job_id: '',
+      status: 'failed',
+      prompt: args.prompt,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Failed to start video generation',
+    };
+
+    return {
+      tool_call_id: '',
+      success: false,
+      result: JSON.stringify(errorResult),
+      error:
+        error instanceof Error ? error.message : 'Failed to generate video',
+    };
+  }
+}
+
+/**
+ * Generate a document via backend API
+ * Documents are generated on the backend using AI
+ */
+async function executeGenerateDocument(
+  args: GenerateDocumentArgs
+): Promise<ToolResult> {
+  const {
+    content,
+    document_type,
+    language,
+    formality,
+    include_sa_context,
+    additional_requirements,
+    tier,
+  } = args;
+
+  try {
+    console.log('[ToolHandler] Generating document with tier:', tier || 'free');
+
+    // Emit start event
+    toolExecutionEmitter.emit({
+      type: 'start',
+      toolName: 'generate_document',
+      message: `Generating ${document_type || 'document'}...`,
+      level: 'info',
+      icon: '📄',
+      data: { document_type, language },
+    });
+
+    const response = await fetch('/api/v1/tools/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tool_name: 'generate_document',
+        arguments: {
+          content,
+          document_type: document_type || 'general',
+          language: language || 'en',
+          formality: formality || 'formal',
+          include_sa_context: include_sa_context !== false,
+          additional_requirements,
+        },
+        tier: tier || 'free',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Document generation failed');
+    }
+
+    const docResult = data.result;
+
+    // Format as a document result for frontend rendering
+    const documentResult: GeneratedDocumentResult = {
+      type: 'document',
+      title: docResult.title || 'Generated Document',
+      content: docResult.content || docResult.document || '',
+      document_type: docResult.document_type || document_type || 'general',
+      language: docResult.language || language || 'en',
+      word_count: docResult.word_count || 0,
+      sections: docResult.sections,
+    };
+
+    console.log('[ToolHandler] Document generated:', {
+      title: documentResult.title,
+      wordCount: documentResult.word_count,
+    });
+
+    // Emit completion
+    toolExecutionEmitter.emit({
+      type: 'complete',
+      toolName: 'generate_document',
+      message: `Document generated: ${documentResult.title}`,
+      level: 'success',
+      icon: '✅',
+      data: documentResult,
+    });
+
+    return {
+      tool_call_id: '',
+      success: true,
+      result: JSON.stringify(documentResult),
+    };
+  } catch (error) {
+    console.error('[ToolHandler] Failed to generate document:', error);
+
+    toolExecutionEmitter.emit({
+      type: 'error',
+      toolName: 'generate_document',
+      message:
+        error instanceof Error ? error.message : 'Document generation failed',
+      level: 'error',
+      icon: '❌',
+      data: null,
+    });
+
+    return {
+      tool_call_id: '',
+      success: false,
+      result: '',
+      error:
+        error instanceof Error ? error.message : 'Failed to generate document',
+    };
+  }
+}
+
+/**
  * Create a chart configuration for frontend rendering
  */
 function executeCreateChart(args: CreateChartArgs): ToolResult {
   try {
-    const { chart_type, title, subtitle, data, x_label, y_label, colors, series } = args;
+    const {
+      chart_type,
+      title,
+      subtitle,
+      data,
+      x_label,
+      y_label,
+      colors,
+      series,
+    } = args;
 
     if (!chart_type || !title || !data) {
       return {
@@ -443,7 +736,8 @@ function executeCreateChart(args: CreateChartArgs): ToolResult {
 
     // For multi-series, we need colors for series not data points
     const numSeries = series?.length || 1;
-    const chartColors = colors || defaultColors.slice(0, Math.max(numSeries, data.length));
+    const chartColors =
+      colors || defaultColors.slice(0, Math.max(numSeries, data.length));
 
     const chartResult: ChartResult = {
       type: 'chart',
@@ -572,15 +866,17 @@ async function executeMathTool(
 
     // Extract result data, handling nested structure
     const resultData = data.result?.data || data.result || {};
-    
+
     // If backend returned calculation_steps, add them to execution logs
-    const calculationSteps = resultData.calculation_steps as Array<{
-      step: number;
-      description: string;
-      formula: string;
-      value: string | null;
-    }> | undefined;
-    
+    const calculationSteps = resultData.calculation_steps as
+      | Array<{
+          step: number;
+          description: string;
+          formula: string;
+          value: string | null;
+        }>
+      | undefined;
+
     if (calculationSteps && Array.isArray(calculationSteps)) {
       addLog('info', '━━━ Calculation Steps ━━━', '📐');
       for (const step of calculationSteps) {
@@ -602,7 +898,9 @@ async function executeMathTool(
     };
 
     // Log success with result summary
-    const dataKeys = Object.keys(mathResult.data).filter(k => k !== 'calculation_steps');
+    const dataKeys = Object.keys(mathResult.data).filter(
+      (k) => k !== 'calculation_steps'
+    );
     addLog('info', `Display type: ${mathResult.display_type}`, '🎨');
     addLog(
       'debug',
@@ -668,12 +966,20 @@ async function executeMathTool(
 
 /**
  * Execute a tool call and return the result
+ * @param toolCall - The tool call to execute
+ * @param tier - Optional user tier for provider routing (image generation)
  */
-export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
+export async function executeToolCall(
+  toolCall: ToolCall,
+  tier?: string
+): Promise<ToolResult> {
+  const startTime = performance.now();
   console.log(
     '[ToolHandler] Executing tool:',
     toolCall.name,
-    toolCall.arguments
+    toolCall.arguments,
+    'tier:',
+    tier || 'free'
   );
 
   let result: ToolResult;
@@ -692,9 +998,27 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
       break;
 
     case 'generate_image':
-      result = await executeGenerateImage(
-        toolCall.arguments as unknown as GenerateImageArgs
-      );
+      // Inject tier into args for provider routing
+      result = await executeGenerateImage({
+        ...(toolCall.arguments as unknown as GenerateImageArgs),
+        tier: tier,
+      });
+      break;
+
+    case 'generate_video':
+      // Video generation - JIVE/JIGGA only
+      result = await executeGenerateVideo({
+        ...(toolCall.arguments as unknown as GenerateVideoArgs),
+        tier: tier,
+      });
+      break;
+
+    case 'generate_document':
+      // Document generation - executed on backend
+      result = await executeGenerateDocument({
+        ...(toolCall.arguments as unknown as GenerateDocumentArgs),
+        tier: tier,
+      });
       break;
 
     case 'create_chart':
@@ -714,6 +1038,24 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
       result = await executeMathTool(toolCall.name, toolCall.arguments);
       break;
 
+    // Server-side tools that should NOT reach frontend
+    // If these leak through, return friendly error (they should be handled backend-side)
+    case 'web_search':
+    case 'legal_search':
+    case 'shopping_search':
+    case 'places_search':
+    case 'sequential_think':
+      console.warn(
+        `[ToolHandler] Server-side tool '${toolCall.name}' reached frontend - should be handled backend-side`
+      );
+      result = {
+        tool_call_id: toolCall.id,
+        success: false,
+        result: '',
+        error: `Tool '${toolCall.name}' should be executed server-side. Please try again.`,
+      };
+      break;
+
     default:
       result = {
         tool_call_id: toolCall.id,
@@ -726,19 +1068,35 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
   // Set the tool_call_id
   result.tool_call_id = toolCall.id;
 
+  // Track tool usage for analytics
+  const executionTimeMs = Math.round(performance.now() - startTime);
+  try {
+    await trackToolUsage({
+      toolName: toolCall.name,
+      tier: tier || 'free',
+      success: result.success,
+      executionTimeMs,
+    });
+  } catch (error) {
+    console.warn('[ToolHandler] Failed to track tool usage:', error);
+  }
+
   return result;
 }
 
 /**
  * Execute multiple tool calls in sequence
+ * @param toolCalls - Array of tool calls to execute
+ * @param tier - Optional user tier for provider routing (image generation)
  */
 export async function executeToolCalls(
-  toolCalls: ToolCall[]
+  toolCalls: ToolCall[],
+  tier?: string
 ): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
 
   for (const toolCall of toolCalls) {
-    const result = await executeToolCall(toolCall);
+    const result = await executeToolCall(toolCall, tier);
     results.push(result);
   }
 
@@ -811,12 +1169,37 @@ export function formatToolResultsMessage(results: ToolResult[]): string {
         continue;
       }
 
+      // Handle video result - use special marker for frontend rendering
+      if (parsed.type === 'video') {
+        console.log(
+          '[ToolHandler] 🎬 Video detected, adding __TOOL_VIDEO__ marker'
+        );
+        messages.push(`__TOOL_VIDEO__:${JSON.stringify(parsed)}`);
+        continue;
+      }
+
       // Handle math result - use special marker for frontend rendering
       if (parsed.type === 'math') {
         console.log(
           '[ToolHandler] 🧮 Math detected, adding __TOOL_MATH__ marker'
         );
         messages.push(`__TOOL_MATH__:${JSON.stringify(parsed)}`);
+        continue;
+      }
+
+      // Handle document result - display content directly as markdown
+      if (parsed.type === 'document') {
+        console.log('[ToolHandler] 📄 Document detected, displaying content');
+        // For documents, we display the content directly with a header
+        const docTitle = parsed.title || 'Generated Document';
+        const docContent = parsed.content || '';
+        const wordCount = parsed.word_count || 0;
+
+        // Format as markdown with title header and content
+        const documentDisplay = `## 📄 ${docTitle}\n\n${docContent}\n\n---\n*${wordCount} words • ${
+          parsed.document_type || 'document'
+        } • ${parsed.language || 'en'}*`;
+        messages.push(documentDisplay);
         continue;
       }
 

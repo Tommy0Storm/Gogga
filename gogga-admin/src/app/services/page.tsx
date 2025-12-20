@@ -52,13 +52,13 @@ const ClientResponsiveContainer: React.FC<ClientResponsiveContainerProps> = ({
   if (!isMounted) {
     return (
       <div 
-        className="flex items-center justify-center bg-[var(--admin-bg-secondary)] rounded-lg animate-pulse"
+        className="flex items-center justify-center bg-(--admin-bg-secondary) rounded-lg animate-pulse"
         style={{ 
           width: typeof width === 'number' ? `${width}px` : width, 
           height: typeof height === 'number' ? `${height}px` : height 
         }}
       >
-        <span className="text-xs text-[var(--admin-text-muted)]">Loading chart...</span>
+        <span className="text-xs text-(--admin-text-muted)">Loading chart...</span>
       </div>
     );
   }
@@ -377,8 +377,8 @@ export default function ServicesPage() {
   }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="p-3 bg-[var(--admin-surface)] border border-[var(--admin-border)] rounded-lg shadow-lg">
-          <p className="text-sm text-[var(--admin-text-secondary)] mb-2">{label}</p>
+        <div className="p-3 bg-(--admin-surface) border border-(--admin-border) rounded-lg shadow-lg">
+          <p className="text-sm text-(--admin-text-secondary) mb-2">{label}</p>
           {payload.map((entry, index) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
               {entry.dataKey}: <span className="font-mono">{entry.value}ms</span>
@@ -394,8 +394,8 @@ export default function ServicesPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-[var(--admin-text-muted)] border-t-[var(--admin-text)] rounded-full mx-auto mb-4" />
-          <p className="text-[var(--admin-text-secondary)]">Loading services...</p>
+          <div className="animate-spin w-8 h-8 border-2 border-(--admin-text-muted) border-t-(--admin-text) rounded-full mx-auto mb-4" />
+          <p className="text-(--admin-text-secondary)">Loading services...</p>
         </div>
       </div>
     );
@@ -404,10 +404,10 @@ export default function ServicesPage() {
   return (
     <div className="space-y-6">
       {/* OpenRouter Fallback Toggle - Testing Mode */}
-      <div className={`admin-card border-2 ${openRouterFallback ? 'border-yellow-500 bg-yellow-500/5' : 'border-[var(--admin-border)]'}`}>
+      <div className={`admin-card border-2 ${openRouterFallback ? 'border-yellow-500 bg-yellow-500/5' : 'border-(--admin-border)'}`}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-[var(--admin-text)] flex items-center gap-2">
+            <h3 className="font-semibold text-(--admin-text) flex items-center gap-2">
               🔄 OpenRouter Fallback Mode
               {openRouterFallback && (
                 <span className="text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-full font-bold">
@@ -415,7 +415,7 @@ export default function ServicesPage() {
                 </span>
               )}
             </h3>
-            <p className="text-sm text-[var(--admin-text-secondary)] mt-1">
+            <p className="text-sm text-(--admin-text-secondary) mt-1">
               {openRouterFallback 
                 ? 'JIVE/JIGGA tiers are routing to OpenRouter (Qwen 235B) instead of Cerebras'
                 : 'JIVE/JIGGA tiers are using Cerebras (normal operation)'}
@@ -425,7 +425,7 @@ export default function ServicesPage() {
             onClick={toggleFallback}
             disabled={fallbackLoading}
             className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-              openRouterFallback ? 'bg-yellow-500' : 'bg-[var(--admin-surface-2)]'
+              openRouterFallback ? 'bg-yellow-500' : 'bg-(--admin-surface-2)'
             } ${fallbackLoading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
           >
             <span
@@ -440,10 +440,10 @@ export default function ServicesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--admin-text)]">
+          <h1 className="text-2xl font-semibold text-(--admin-text)">
             Service Management
           </h1>
-          <p className="text-sm text-[var(--admin-text-secondary)] mt-1">
+          <p className="text-sm text-(--admin-text-secondary) mt-1">
             Monitor and control GOGGA platform services
           </p>
         </div>
@@ -455,7 +455,7 @@ export default function ServicesPage() {
             <MdSupervisorAccount className="w-5 h-5" />
             Service Admins
           </button>
-          <span className="text-sm text-[var(--admin-text-muted)]">
+          <span className="text-sm text-(--admin-text-muted)">
             Last refresh: {lastRefresh.toLocaleTimeString()}
           </span>
           <button
@@ -474,23 +474,23 @@ export default function ServicesPage() {
         {services.map((service) => (
           <div
             key={service.name}
-            className="admin-card hover:border-[var(--admin-border-light)] transition-colors"
+            className="admin-card hover:border-(--admin-border-light) transition-colors"
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${
                   service.status === 'online' 
                     ? 'bg-green-500/10 text-green-400' 
-                    : 'bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]'
+                    : 'bg-(--admin-surface-2) text-(--admin-text-muted)'
                 }`}>
                   {SERVICE_ICONS[service.name] || <MdCloud className="w-6 h-6" />}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-[var(--admin-text)]">
+                  <h3 className="font-semibold text-(--admin-text)">
                     {service.displayName}
                   </h3>
                   {service.port && (
-                    <p className="text-xs text-[var(--admin-text-muted)] font-mono">
+                    <p className="text-xs text-(--admin-text-muted) font-mono">
                       Port {service.port}
                     </p>
                   )}
@@ -499,7 +499,7 @@ export default function ServicesPage() {
               <StatusBadge status={service.status} />
             </div>
 
-            <p className="text-sm text-[var(--admin-text-secondary)] mb-4">
+            <p className="text-sm text-(--admin-text-secondary) mb-4">
               {service.description}
             </p>
 
@@ -507,7 +507,7 @@ export default function ServicesPage() {
             {service.metrics?.avgLatencyMs !== undefined && (
               <div className="flex items-center gap-4 mb-4 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="text-[var(--admin-text-muted)]">Latency:</span>
+                  <span className="text-(--admin-text-muted)">Latency:</span>
                   <span className={`font-mono ${
                     service.metrics.avgLatencyMs < 100 
                       ? 'text-green-400' 
@@ -523,7 +523,7 @@ export default function ServicesPage() {
 
             {/* Actions */}
             {service.canControl && (
-              <div className="flex items-center gap-2 pt-4 border-t border-[var(--admin-border)]">
+              <div className="flex items-center gap-2 pt-4 border-t border-(--admin-border)">
                 <button
                   onClick={() => handleServiceAction(service.name, 'start')}
                   disabled={actionInProgress !== null || service.status === 'online'}
@@ -564,7 +564,7 @@ export default function ServicesPage() {
       {/* Latency Chart */}
       {latencyHistory.length > 1 && (
         <div className="admin-card">
-          <h3 className="text-lg font-semibold text-[var(--admin-text)] mb-4">
+          <h3 className="text-lg font-semibold text-(--admin-text) mb-4">
             Service Latency (Health Check Response Time)
           </h3>
           <div className="h-[300px]">
@@ -639,15 +639,15 @@ export default function ServicesPage() {
           <div className="flex items-center justify-center gap-6 mt-4 text-sm">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#6b7280]" />
-              <span className="text-[var(--admin-text-secondary)]">Backend</span>
+              <span className="text-(--admin-text-secondary)">Backend</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#9ca3af]" />
-              <span className="text-[var(--admin-text-secondary)]">CePO</span>
+              <span className="text-(--admin-text-secondary)">CePO</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#d1d5db]" />
-              <span className="text-[var(--admin-text-secondary)]">Frontend</span>
+              <span className="text-(--admin-text-secondary)">Frontend</span>
             </div>
           </div>
         </div>
@@ -656,25 +656,25 @@ export default function ServicesPage() {
       {/* Logs Modal */}
       {showLogs && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--admin-surface)] border border-[var(--admin-border)] rounded-lg w-full max-w-4xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-[var(--admin-border)]">
+          <div className="bg-(--admin-surface) border border-(--admin-border) rounded-lg w-full max-w-4xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-(--admin-border)">
               <div className="flex items-center gap-3">
-                <MdTerminal className="w-5 h-5 text-[var(--admin-text-muted)]" />
-                <h3 className="font-semibold text-[var(--admin-text)]">
+                <MdTerminal className="w-5 h-5 text-(--admin-text-muted)" />
+                <h3 className="font-semibold text-(--admin-text)">
                   {selectedService} logs
                 </h3>
               </div>
               <button
                 onClick={() => setShowLogs(false)}
-                className="p-2 hover:bg-[var(--admin-surface-2)] rounded-lg transition-colors"
+                className="p-2 hover:bg-(--admin-surface-2) rounded-lg transition-colors"
               >
-                <MdClose className="w-5 h-5 text-[var(--admin-text-muted)]" />
+                <MdClose className="w-5 h-5 text-(--admin-text-muted)" />
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4 bg-black/50">
               {logLoading ? (
                 <div className="flex items-center justify-center h-32">
-                  <div className="animate-spin w-6 h-6 border-2 border-[var(--admin-text-muted)] border-t-[var(--admin-text)] rounded-full" />
+                  <div className="animate-spin w-6 h-6 border-2 border-(--admin-text-muted) border-t-(--admin-text) rounded-full" />
                 </div>
               ) : (
                 <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap">
@@ -682,7 +682,7 @@ export default function ServicesPage() {
                 </pre>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-[var(--admin-border)]">
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-(--admin-border)">
               <button
                 onClick={() => selectedService && fetchLogs(selectedService)}
                 className="admin-btn admin-btn-secondary flex items-center gap-2"
@@ -704,25 +704,25 @@ export default function ServicesPage() {
       {/* Service Admin Manager Modal */}
       {showAdminManager && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--admin-surface)] border border-[var(--admin-border)] rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-[var(--admin-border)]">
+          <div className="bg-(--admin-surface) border border-(--admin-border) rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-(--admin-border)">
               <div className="flex items-center gap-3">
-                <MdSupervisorAccount className="w-5 h-5 text-[var(--admin-text-muted)]" />
-                <h3 className="font-semibold text-[var(--admin-text)]">
+                <MdSupervisorAccount className="w-5 h-5 text-(--admin-text-muted)" />
+                <h3 className="font-semibold text-(--admin-text)">
                   Service Admin Management
                 </h3>
               </div>
               <button
                 onClick={() => setShowAdminManager(false)}
-                className="p-2 hover:bg-[var(--admin-surface-2)] rounded-lg transition-colors"
+                className="p-2 hover:bg-(--admin-surface-2) rounded-lg transition-colors"
               >
-                <MdClose className="w-5 h-5 text-[var(--admin-text-muted)]" />
+                <MdClose className="w-5 h-5 text-(--admin-text-muted)" />
               </button>
             </div>
             
             {/* Add new service admin */}
-            <div className="p-4 border-b border-[var(--admin-border)]">
-              <p className="text-sm text-[var(--admin-text-secondary)] mb-3">
+            <div className="p-4 border-b border-(--admin-border)">
+              <p className="text-sm text-(--admin-text-secondary) mb-3">
                 Service admins can start, stop, and restart GOGGA services via shell commands.
               </p>
               <div className="flex gap-2">
@@ -731,7 +731,7 @@ export default function ServicesPage() {
                   value={newAdminEmail}
                   onChange={(e) => setNewAdminEmail(e.target.value)}
                   placeholder="user@example.com"
-                  className="flex-1 px-3 py-2 bg-[var(--admin-surface-2)] border border-[var(--admin-border)] rounded-lg text-[var(--admin-text)] placeholder:text-[var(--admin-text-muted)] focus:outline-none focus:border-[var(--admin-border-light)]"
+                  className="flex-1 px-3 py-2 bg-(--admin-surface-2) border border-(--admin-border) rounded-lg text-(--admin-text) placeholder:text-(--admin-text-muted) focus:outline-none focus:border-(--admin-border-light)"
                 />
                 <button
                   onClick={grantServiceAdmin}
@@ -747,7 +747,7 @@ export default function ServicesPage() {
             {/* List of service admins */}
             <div className="flex-1 overflow-auto p-4">
               {serviceAdmins.length === 0 ? (
-                <p className="text-center text-[var(--admin-text-muted)] py-8">
+                <p className="text-center text-(--admin-text-muted) py-8">
                   No service admins configured yet
                 </p>
               ) : (
@@ -755,13 +755,13 @@ export default function ServicesPage() {
                   {serviceAdmins.map((admin) => (
                     <div
                       key={admin.id}
-                      className="flex items-center justify-between p-3 bg-[var(--admin-surface-2)] rounded-lg"
+                      className="flex items-center justify-between p-3 bg-(--admin-surface-2) rounded-lg"
                     >
                       <div>
-                        <p className="font-medium text-[var(--admin-text)]">
+                        <p className="font-medium text-(--admin-text)">
                           {admin.email}
                         </p>
-                        <p className="text-xs text-[var(--admin-text-muted)]">
+                        <p className="text-xs text-(--admin-text-muted)">
                           Added {new Date(admin.createdAt).toLocaleDateString()}
                           {admin.isAdmin && ' • Also full admin'}
                         </p>
@@ -780,7 +780,7 @@ export default function ServicesPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end p-4 border-t border-[var(--admin-border)]">
+            <div className="flex items-center justify-end p-4 border-t border-(--admin-border)">
               <button
                 onClick={() => setShowAdminManager(false)}
                 className="admin-btn admin-btn-secondary"

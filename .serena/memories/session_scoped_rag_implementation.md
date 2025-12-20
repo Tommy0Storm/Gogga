@@ -104,12 +104,120 @@ await db.documents.toCollection().modify(doc => {
 });
 ```
 
+## RAG Store Implementation (Phase 3 - December 2025)
+
+### Architecture
+
+RAG Store documents are persistent, cross-session documents distinguished from session documents by:
+- **Session Documents**: `originSessionId` is set (non-empty) - scoped to chat session
+- **RAG Store Documents**: `originSessionId === ''` - persistent across all sessions
+
+### Tier Limits
+
+| Tier | Session Docs | RAG Store | Storage |
+|------|-------------|-----------|---------|
+| FREE | 1 doc, 2MB | ❌ | N/A |
+| JIVE | 10 docs, 50MB | 1 doc, 5MB | 55MB total |
+| JIGGA | 10 docs, 50MB | 200 docs, 250MB | 300MB total |
+
+### New Functions
+
+#### rag.ts
+- `addRAGStoreDocument(userId, file)` - Upload to persistent RAG Store
+- `removeRAGStoreDocument(docId)` - Delete from RAG Store
+- `getRAGStoreDocuments(userId)` - List user's RAG Store documents
+
+#### useRAG.ts
+- `uploadToRAGStore(file)` - Upload with tier limit enforcement
+- `removeFromRAGStore(docId)` - Delete single doc
+- `clearRAGStore()` - JIGGA only: bulk delete all RAG Store docs
+
+#### clearAllRAG.ts
+- `clearAllRAGDocuments(userId)` - Cascading deletion (embeddings → chunks → docs)
+- `clearRAGDocument(documentId)` - Single document cascade delete
+- `getRAGStorageStats(userId)` - Storage statistics
+
+### Document Store Updates (documentStore.ts)
+
+New fields for RightSidePanel integration:
+- `sessionDocuments: Document[]` - Session-scoped docs
+- `ragDocuments: Document[]` - Persistent RAG Store docs
+- `onRAGUpload`, `onRAGRemove`, `onClearAllRAG` - Action handlers
+
+### UI Integration
+
+RightSidePanel now has two tabs:
+- **📎 Session** - Paperclip icon, session-scoped documents
+- **📚 RAG Store** - BookOpen icon, persistent documents
+
+JIGGA tier gets "Clear All RAG" button with confirmation dialog.
+
+## Phase 6: UI Components (December 2025) ✅
+
+New visualization components added to `components/rag/`:
+
+| Component | Purpose |
+|-----------|---------|
+| `DragDropZone.tsx` | Animated drag-and-drop upload zone with validation |
+| `ModelLoadingProgress.tsx` | E5 model loading indicator with progress bar |
+| `RAGActivityIndicator.tsx` | Pulse animation during RAG search |
+| `ChunkVisualization.tsx` | Expandable source citations with confidence badges |
+| `StorageMeter.tsx` | Document/storage usage visualization |
+
+Also created `lib/utils.ts` with `cn()` utility (clsx + tailwind-merge).
+
+## Phase 7: DocumentPoolModal & Auth Integration (December 2025) ✅
+
+### DocumentPoolModal Component
+- **File**: `components/rag/DocumentPoolModal.tsx`
+- **Purpose**: JIGGA cross-session document access
+- **Features**:
+  - View all documents in user's pool
+  - Search/filter documents (all, active, orphaned)
+  - Activate documents for current session (add to activeSessions[])
+  - Deactivate documents from session (remove from activeSessions[])
+  - Pool statistics display
+  - Loading states and error handling
+
+### Auth Integration
+- **File Modified**: `components/dashboard/DocumentManager.tsx`
+- **Change**: Replaced hardcoded `'current_user'` with real userId from NextAuth
+- **Pattern**:
+```typescript
+const { data: authSession } = useSession();
+const userId = authSession?.user?.id ?? authSession?.user?.email ?? 'anonymous';
+```
+
+## Phase 8: RAGDebugPanel (December 2025) ✅
+
+### RAGDebugPanel Component
+- **File**: `components/rag/RAGDebugPanel.tsx`
+- **Purpose**: Token budget visualization for debugging
+- **Features**:
+  - Collapsible panel with tier badge
+  - Total context utilization bar
+  - Per-category breakdown (System, State, SessionDoc, Volatile, RAG, Response)
+  - Color-coded warnings (>70% amber, >90% red)
+  - Eviction priority reminder
+
+### Token Budgets (exported constant)
+```typescript
+const TOKEN_BUDGETS = {
+  free: { systemPrompt: 500, state: 1000, sessionDoc: 2000, rag: 0, volatile: 4000, response: 4000 },
+  jive: { systemPrompt: 1000, state: 2000, sessionDoc: 4000, rag: 3000, volatile: 6000, response: 5000 },
+  jigga: { systemPrompt: 1500, state: 3000, sessionDoc: 4000, rag: 6000, volatile: 8000, response: 8000 },
+};
+```
+
+## Test Results
+- **RAG tests**: 3/3 passing
+- **Lib tests**: 150/152 passing (2 pre-existing shim failures)
+- **TypeScript**: ✅ No production errors
+
 ## Remaining Work
 
-1. **Auth Integration** - Set real `userId` from session
-2. **DocumentPoolModal** - UI for cross-session selection
-3. **Debug Panel** - Token budget visualization
-4. **E2E Testing** - Manual workflow validation
+1. **Token Administration (Phases 14-18)** - Major feature block
+2. **E2E Testing** - Manual workflow validation
 
 ## Run Tests
 

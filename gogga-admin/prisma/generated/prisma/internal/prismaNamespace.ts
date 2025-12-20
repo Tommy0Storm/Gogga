@@ -403,6 +403,7 @@ export const ModelName = {
   ExchangeRate: 'ExchangeRate',
   PricingAudit: 'PricingAudit',
   CreditAdjustment: 'CreditAdjustment',
+  ToolUsage: 'ToolUsage',
   UsageEvent: 'UsageEvent'
 } as const
 
@@ -419,7 +420,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "adminLog" | "authLog" | "creditPurchase" | "debugSubmission" | "loginToken" | "processedPayment" | "recurringSchedule" | "subscription" | "subscriptionEvent" | "usage" | "usageSummary" | "user" | "voucher" | "voucherLog" | "modelPricing" | "featureCost" | "exchangeRate" | "pricingAudit" | "creditAdjustment" | "usageEvent"
+    modelProps: "adminLog" | "authLog" | "creditPurchase" | "debugSubmission" | "loginToken" | "processedPayment" | "recurringSchedule" | "subscription" | "subscriptionEvent" | "usage" | "usageSummary" | "user" | "voucher" | "voucherLog" | "modelPricing" | "featureCost" | "exchangeRate" | "pricingAudit" | "creditAdjustment" | "toolUsage" | "usageEvent"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1829,6 +1830,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ToolUsage: {
+      payload: Prisma.$ToolUsagePayload<ExtArgs>
+      fields: Prisma.ToolUsageFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ToolUsageFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ToolUsageFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>
+        }
+        findFirst: {
+          args: Prisma.ToolUsageFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ToolUsageFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>
+        }
+        findMany: {
+          args: Prisma.ToolUsageFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>[]
+        }
+        create: {
+          args: Prisma.ToolUsageCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>
+        }
+        createMany: {
+          args: Prisma.ToolUsageCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ToolUsageCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>[]
+        }
+        delete: {
+          args: Prisma.ToolUsageDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>
+        }
+        update: {
+          args: Prisma.ToolUsageUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>
+        }
+        deleteMany: {
+          args: Prisma.ToolUsageDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ToolUsageUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ToolUsageUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>[]
+        }
+        upsert: {
+          args: Prisma.ToolUsageUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ToolUsagePayload>
+        }
+        aggregate: {
+          args: Prisma.ToolUsageAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateToolUsage>
+        }
+        groupBy: {
+          args: Prisma.ToolUsageGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ToolUsageGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ToolUsageCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ToolUsageCountAggregateOutputType> | number
+        }
+      }
+    }
     UsageEvent: {
       payload: Prisma.$UsageEventPayload<ExtArgs>
       fields: Prisma.UsageEventFieldRefs
@@ -2261,6 +2336,23 @@ export const CreditAdjustmentScalarFieldEnum = {
 export type CreditAdjustmentScalarFieldEnum = (typeof CreditAdjustmentScalarFieldEnum)[keyof typeof CreditAdjustmentScalarFieldEnum]
 
 
+export const ToolUsageScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  toolName: 'toolName',
+  tier: 'tier',
+  callCount: 'callCount',
+  successCount: 'successCount',
+  failureCount: 'failureCount',
+  totalDurationMs: 'totalDurationMs',
+  avgDurationMs: 'avgDurationMs',
+  uniqueUsers: 'uniqueUsers',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ToolUsageScalarFieldEnum = (typeof ToolUsageScalarFieldEnum)[keyof typeof ToolUsageScalarFieldEnum]
+
+
 export const UsageEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -2453,6 +2545,7 @@ export type GlobalOmitConfig = {
   exchangeRate?: Prisma.ExchangeRateOmit
   pricingAudit?: Prisma.PricingAuditOmit
   creditAdjustment?: Prisma.CreditAdjustmentOmit
+  toolUsage?: Prisma.ToolUsageOmit
   usageEvent?: Prisma.UsageEventOmit
 }
 

@@ -136,6 +136,21 @@ export default function LiveTerminal({ service, onClose }: LiveTerminalProps) {
     fetchLogs();
   };
 
+  const handleCopy = async () => {
+    if (lastLineRef.current) {
+      try {
+        await navigator.clipboard.writeText(lastLineRef.current);
+        // Flash feedback
+        if (terminalInstance.current) {
+          terminalInstance.current.writeln('');
+          terminalInstance.current.writeln('\x1b[1;32m✓ Copied to clipboard\x1b[0m');
+        }
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Terminal toolbar */}
@@ -156,6 +171,13 @@ export default function LiveTerminal({ service, onClose }: LiveTerminalProps) {
             }`}
           >
             {isPaused ? 'Resume' : 'Pause'}
+          </button>
+          <button
+            onClick={handleCopy}
+            className="px-3 py-1 text-xs bg-blue-700 text-white rounded hover:bg-blue-600"
+            title="Copy all logs to clipboard"
+          >
+            Copy
           </button>
           <button
             onClick={handleClear}

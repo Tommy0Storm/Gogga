@@ -36,6 +36,9 @@ class CostBreakdown(TypedDict):
     """Detailed cost breakdown."""
     input_tokens: int
     output_tokens: int
+    adjusted_output_tokens: int
+    reasoning_tokens: int
+    optillm_multiplier: float
     input_cost_usd: float
     output_cost_usd: float
 
@@ -61,15 +64,18 @@ async def track_usage(
     layer: str,
     input_tokens: int,
     output_tokens: int,
-    tier: str = "free"
+    tier: str = "free",
+    optillm_level: str = "none",
+    reasoning_tokens: int = 0,
 ) -> UsageCost:
     """
     Calculates the cost of an interaction based on tier and model pricing.
     
-    Pricing tiers (USD per Million Tokens):
+    Pricing tiers (USD per Million Tokens) - Cerebras Dec 2025:
     - FREE tier: $0.00 (still tracked for usage limits)
-    - JIVE tier (Qwen 3 235B): $0.10 input, $0.10 output
-    - JIGGA tier (Qwen 3 32B): $0.40 input, $0.80 output
+    - JIVE tier (Qwen 3 32B): $0.10 input, $0.10 output
+    - JIGGA tier (Qwen 3 32B): $0.10 input, $0.10 output
+    - JIGGA 235B (OpenRouter): $0.80 input, $1.10 output
     
     Args:
         user_id: The user's unique identifier (email-based)
@@ -78,6 +84,8 @@ async def track_usage(
         input_tokens: Number of input tokens consumed
         output_tokens: Number of output tokens generated
         tier: User tier: "free", "jive", or "jigga"
+        optillm_level: OptiLLM enhancement level ("none", "basic", "standard", "advanced")
+        reasoning_tokens: Separate reasoning token count (for future use)
         
     Returns:
         UsageCost containing cost in USD, ZAR, and breakdown
@@ -88,15 +96,15 @@ async def track_usage(
     if tier_lower == "jigga":
         # Check if using 235B model (multilingual) or 32B (default)
         if "235b" in model.lower() or layer == "jigga_multilingual":
-            # JIGGA 235B: Qwen 3 235B Instruct pricing
-            input_cost_per_m = settings.COST_JIGGA_235B_INPUT   # $0.60
-            output_cost_per_m = settings.COST_JIGGA_235B_OUTPUT  # $1.20
+            # JIGGA 235B: Qwen 3 235B Instruct pricing (OpenRouter)
+            input_cost_per_m = settings.COST_JIGGA_235B_INPUT   # $0.80
+            output_cost_per_m = settings.COST_JIGGA_235B_OUTPUT  # $1.10
         else:
-            # JIGGA 32B: Qwen 3 32B pricing
-            input_cost_per_m = settings.COST_JIGGA_INPUT   # $0.40
-            output_cost_per_m = settings.COST_JIGGA_OUTPUT  # $0.80
+            # JIGGA 32B: Qwen 3 32B pricing (Cerebras)
+            input_cost_per_m = settings.COST_JIGGA_INPUT   # $0.10
+            output_cost_per_m = settings.COST_JIGGA_OUTPUT  # $0.10
     elif tier_lower == "jive":
-        # JIVE: Qwen 3 235B pricing
+        # JIVE: Qwen 3 32B pricing (Cerebras)
         input_cost_per_m = settings.COST_JIVE_INPUT   # $0.10
         output_cost_per_m = settings.COST_JIVE_OUTPUT  # $0.10
     else:
@@ -104,21 +112,36 @@ async def track_usage(
         input_cost_per_m = settings.COST_FREE_INPUT   # $0.00
         output_cost_per_m = settings.COST_FREE_OUTPUT  # $0.00
     
-    # Calculate Cost (Input + Output)
+    # Apply OptiLLM multiplier to output tokens (reasoning overhead)
+    # This accounts for additional tokens generated during CoT, planning, etc.
+    optillm_multiplier = 1.0
+    if optillm_level == "basic":
+        optillm_multiplier = settings.OPTILLM_BASIC_MULTIPLIER  # 1.1
+    elif optillm_level == "standard":
+        optillm_multiplier = settings.OPTILLM_STANDARD_MULTIPLIER  # 1.3
+    elif optillm_level == "advanced":
+        optillm_multiplier = settings.OPTILLM_ADVANCED_MULTIPLIER  # 1.5
+    
+    # Adjusted output tokens for cost calculation
+    adjusted_output_tokens = int(output_tokens * optillm_multiplier)
+    
+    # Calculate Cost (Input + Adjusted Output)
     input_cost = (input_tokens / MILLION) * input_cost_per_m
-    output_cost = (output_tokens / MILLION) * output_cost_per_m
+    output_cost = (adjusted_output_tokens / MILLION) * output_cost_per_m
     total_cost_usd = input_cost + output_cost
     
     # Convert to ZAR for local reporting
     total_cost_zar = total_cost_usd * settings.ZAR_USD_RATE
     
-    # Log the usage
-    logger.info(
-        "Usage tracked | user=%s | tier=%s | model=%s | layer=%s | "
-        "input=%d | output=%d | cost=$%.6f (R%.4f)",
-        user_id, tier, model, layer, input_tokens, output_tokens,
-        total_cost_usd, total_cost_zar
+    # Log the usage (include OptiLLM overhead if applied)
+    log_msg = (
+        f"Usage tracked | user={user_id} | tier={tier} | model={model} | layer={layer} | "
+        f"input={input_tokens} | output={output_tokens}"
     )
+    if optillm_multiplier > 1.0:
+        log_msg += f" | optillm={optillm_level}({optillm_multiplier}x) | adjusted_output={adjusted_output_tokens}"
+    log_msg += f" | cost=${total_cost_usd:.6f} (R{total_cost_zar:.4f})"
+    logger.info(log_msg)
     
     # Persist to SQLite via frontend API
     try:
@@ -129,11 +152,15 @@ async def track_usage(
                     "userId": user_id,
                     "promptTokens": input_tokens,
                     "completionTokens": output_tokens,
+                    "adjustedCompletionTokens": adjusted_output_tokens,
+                    "reasoningTokens": reasoning_tokens,
                     "totalTokens": input_tokens + output_tokens,
                     "model": model,
                     "provider": _get_provider(model, layer),
                     "endpoint": "chat",
                     "tier": tier.upper(),
+                    "optillmLevel": optillm_level,
+                    "optillmMultiplier": optillm_multiplier,
                 }
             )
     except Exception as e:
@@ -146,6 +173,9 @@ async def track_usage(
         "breakdown": {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "adjusted_output_tokens": adjusted_output_tokens,
+            "reasoning_tokens": reasoning_tokens,
+            "optillm_multiplier": optillm_multiplier,
             "input_cost_usd": round(input_cost, 8),
             "output_cost_usd": round(output_cost, 8)
         }
@@ -164,12 +194,12 @@ async def track_image_usage(
     Pricing:
     - FREE tier (Pollinations.ai): $0.00 per image
     - JIVE/JIGGA tier tool calling (Pollinations.ai): $0.00 per image
-    - JIVE/JIGGA tier GOGGA Pro (FLUX 1.1 Pro): $0.04 per image
+    - JIVE/JIGGA tier GOGGA Pro (Imagen 3.0): $0.04 per image
     
     Args:
         user_id: The user's unique identifier (email-based)
         tier: User tier: "free", "jive", or "jigga"
-        generator: Image generator used: "pollinations", "longcat" (legacy), or "flux"
+        generator: Image generator used: "pollinations", "imagen", or legacy "flux"
         image_count: Number of images generated
         
     Returns:
@@ -178,12 +208,13 @@ async def track_image_usage(
     tier_lower = tier.lower()
     
     # Determine cost per image
-    # Pollinations.ai and LongCat (legacy) are free
+    # Pollinations.ai is free
     generator_lower = generator.lower()
-    if tier_lower == "free" or generator_lower in ("pollinations", "longcat"):
+    if tier_lower == "free" or generator_lower in ("pollinations", "pollinations+horde"):
         cost_per_image = settings.COST_LONGCAT_IMAGE  # $0.00
     else:
-        cost_per_image = settings.COST_FLUX_IMAGE  # $0.04
+        # Imagen or any premium generator
+        cost_per_image = settings.COST_IMAGEN_V3_CREATE  # $0.04
     
     total_cost_usd = cost_per_image * image_count
     total_cost_zar = total_cost_usd * settings.ZAR_USD_RATE
@@ -217,6 +248,150 @@ async def track_image_usage(
     except Exception as e:
         # Don't fail the request if usage logging fails
         logger.warning("Failed to persist image usage to database: %s", e)
+    
+    return {
+        "usd": round(total_cost_usd, 6),
+        "zar": round(total_cost_zar, 4),
+        "breakdown": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_cost_usd": 0.0,
+            "output_cost_usd": total_cost_usd
+        }
+    }
+
+
+async def track_imagen_usage(
+    user_id: str,
+    tier: str,
+    operation: str,
+    image_count: int = 1
+) -> UsageCost:
+    """
+    Track Vertex AI Imagen usage and cost.
+    
+    Pricing:
+    - Imagen v3 create/edit: $0.04 per image
+    - Imagen v4 upscale: $0.06 per image
+    
+    Args:
+        user_id: User identifier
+        tier: User tier
+        operation: "create", "edit", or "upscale"
+        image_count: Number of images
+        
+    Returns:
+        UsageCost containing cost in USD and ZAR
+    """
+    if operation == "upscale":
+        cost_per_image = settings.COST_IMAGEN_V4_UPSCALE
+    else:
+        cost_per_image = settings.COST_IMAGEN_V3_CREATE
+    
+    total_cost_usd = cost_per_image * image_count
+    total_cost_zar = total_cost_usd * settings.ZAR_USD_RATE
+    
+    logger.info(
+        "Imagen usage tracked | user=%s | tier=%s | op=%s | "
+        "count=%d | cost=$%.4f (R%.4f)",
+        user_id, tier, operation, image_count, total_cost_usd, total_cost_zar
+    )
+    
+    # Persist to SQLite via frontend API
+    try:
+        cost_zar_cents = int(total_cost_zar * 100)
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{FRONTEND_URL}/api/usage/log",
+                json={
+                    "userId": user_id,
+                    "promptTokens": 0,
+                    "completionTokens": 0,
+                    "totalTokens": 0,
+                    "costCents": cost_zar_cents,
+                    "model": f"imagen-{operation}",
+                    "provider": "vertex-ai",
+                    "endpoint": "media/images",
+                    "tier": tier.upper(),
+                }
+            )
+    except Exception as e:
+        logger.warning("Failed to persist Imagen usage: %s", e)
+    
+    return {
+        "usd": round(total_cost_usd, 6),
+        "zar": round(total_cost_zar, 4),
+        "breakdown": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "input_cost_usd": 0.0,
+            "output_cost_usd": total_cost_usd
+        }
+    }
+
+
+async def track_veo_usage(
+    user_id: str,
+    tier: str,
+    duration_seconds: int,
+    with_audio: bool = False
+) -> UsageCost:
+    """
+    Track Vertex AI Veo video usage and cost.
+    
+    Pricing:
+    - Video only: $0.20 per second
+    - Video + audio: $0.40 per second
+    
+    Args:
+        user_id: User identifier
+        tier: User tier
+        duration_seconds: Video duration in seconds
+        with_audio: Whether audio was generated
+        
+    Returns:
+        UsageCost containing cost in USD and ZAR
+    """
+    if with_audio:
+        cost_per_second = settings.COST_VEO_VIDEO_AUDIO
+    else:
+        cost_per_second = settings.COST_VEO_VIDEO_ONLY
+    
+    total_cost_usd = cost_per_second * duration_seconds
+    total_cost_zar = total_cost_usd * settings.ZAR_USD_RATE
+    
+    logger.info(
+        "Veo usage tracked | user=%s | tier=%s | duration=%ds | "
+        "audio=%s | cost=$%.4f (R%.4f)",
+        user_id, tier, duration_seconds, with_audio, total_cost_usd, total_cost_zar
+    )
+    
+    # Persist to SQLite via frontend API
+    try:
+        cost_zar_cents = int(total_cost_zar * 100)
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{FRONTEND_URL}/api/usage/log",
+                json={
+                    "userId": user_id,
+                    "promptTokens": 0,
+                    "completionTokens": 0,
+                    "totalTokens": 0,
+                    "costCents": cost_zar_cents,
+                    "model": f"veo-{'audio' if with_audio else 'video'}",
+                    "provider": "vertex-ai",
+                    "endpoint": "media/videos",
+                    "tier": tier.upper(),
+                    "metadata": {
+                        "duration_seconds": duration_seconds,
+                        "with_audio": with_audio
+                    }
+                }
+            )
+    except Exception as e:
+        logger.warning("Failed to persist Veo usage: %s", e)
     
     return {
         "usd": round(total_cost_usd, 6),

@@ -175,19 +175,19 @@ export default function TransactionsPage() {
     return (
       <div className="flex justify-center items-center py-20">
         <div className="admin-spinner" />
-        <span className="ml-3 text-[var(--admin-text-secondary)]">Loading transactions...</span>
+        <span className="ml-3 text-(--admin-text-secondary)">Loading transactions...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="admin-card border-[var(--admin-error)] bg-[var(--admin-error)]/10">
+      <div className="admin-card border-(--admin-error) bg-(--admin-error)/10">
         <div className="flex items-center gap-3">
-          <MdError size={24} className="text-[var(--admin-error)]" />
+          <MdError size={24} className="text-(--admin-error)" />
           <div>
-            <h3 className="font-semibold text-[var(--admin-error)]">Error Loading Transactions</h3>
-            <p className="text-sm text-[var(--admin-text-secondary)]">{error}</p>
+            <h3 className="font-semibold text-(--admin-error)">Error Loading Transactions</h3>
+            <p className="text-sm text-(--admin-text-secondary)">{error}</p>
           </div>
           <button
             onClick={() => {
@@ -211,22 +211,22 @@ export default function TransactionsPage() {
       {/* Header with Alert */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <MdPayment size={28} className="text-[var(--admin-primary)]" />
+          <MdPayment size={28} className="text-(--admin-primary)" />
           <div>
             <h1 className="text-2xl font-bold">Transaction Monitor</h1>
-            <p className="text-sm text-[var(--admin-text-secondary)]">
+            <p className="text-sm text-(--admin-text-secondary)">
               Monitor pending and failed payments
             </p>
           </div>
           {needsAttention > 0 && (
-            <span className="px-3 py-1 bg-[var(--admin-warning)]/20 text-[var(--admin-warning)] rounded-full text-sm font-medium animate-pulse">
+            <span className="px-3 py-1 bg-(--admin-warning)/20 text-(--admin-warning) rounded-full text-sm font-medium animate-pulse">
               {needsAttention} needs attention
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-[var(--admin-text-secondary)]">
+          <label className="flex items-center gap-2 text-sm text-(--admin-text-secondary)">
             <input
               type="checkbox"
               checked={autoRefresh}
@@ -251,19 +251,19 @@ export default function TransactionsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="metric-card">
             <span className="metric-label flex items-center gap-1">
-              <MdSchedule size={16} className="text-[var(--admin-warning)]" />
+              <MdSchedule size={16} className="text-(--admin-warning)" />
               Pending Subscriptions
             </span>
-            <p className={`metric-value ${stats.pendingSubscriptions > 0 ? 'text-[var(--admin-warning)]' : ''}`}>
+            <p className={`metric-value ${stats.pendingSubscriptions > 0 ? 'text-(--admin-warning)' : ''}`}>
               {stats.pendingSubscriptions}
             </p>
           </div>
           <div className="metric-card">
             <span className="metric-label flex items-center gap-1">
-              <MdError size={16} className="text-[var(--admin-error)]" />
+              <MdError size={16} className="text-(--admin-error)" />
               Failed Payments
             </span>
-            <p className={`metric-value ${stats.failedPayments > 0 ? 'text-[var(--admin-error)]' : ''}`}>
+            <p className={`metric-value ${stats.failedPayments > 0 ? 'text-(--admin-error)' : ''}`}>
               {stats.failedPayments}
             </p>
           </div>
@@ -292,8 +292,8 @@ export default function TransactionsPage() {
             onClick={() => setStatusFilter(filter)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === filter
-                ? 'bg-[var(--admin-primary)] text-white'
-                : 'bg-[var(--admin-surface-2)] hover:bg-[var(--admin-border)]'
+                ? 'bg-(--admin-primary) text-white'
+                : 'bg-(--admin-surface-2) hover:bg-(--admin-border)'
             }`}
           >
             {filter.charAt(0).toUpperCase() + filter.slice(1)}
@@ -304,13 +304,13 @@ export default function TransactionsPage() {
       {/* Transactions Table */}
       <div className="admin-card overflow-x-auto">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <MdWarning size={20} className="text-[var(--admin-warning)]" />
+          <MdWarning size={20} className="text-(--admin-warning)" />
           Transactions Requiring Attention
         </h3>
 
         {allTransactions.length === 0 ? (
-          <div className="text-center py-12 text-[var(--admin-text-muted)]">
-            <MdCheckCircle size={48} className="mx-auto mb-3 text-[var(--admin-success)]" />
+          <div className="text-center py-12 text-(--admin-text-muted)">
+            <MdCheckCircle size={48} className="mx-auto mb-3 text-(--admin-success)" />
             <p>All transactions are healthy!</p>
             <p className="text-sm mt-1">No pending or failed payments found.</p>
           </div>
@@ -329,16 +329,16 @@ export default function TransactionsPage() {
             </thead>
             <tbody>
               {allTransactions.map((tx) => (
-                <tr key={tx.id} className={tx.errorDetails ? 'bg-[var(--admin-warning)]/5' : ''}>
+                <tr key={tx.id} className={tx.errorDetails ? 'bg-(--admin-warning)/5' : ''}>
                   <td>
-                    <span className="text-xs font-medium px-2 py-1 rounded bg-[var(--admin-surface-2)]">
+                    <span className="text-xs font-medium px-2 py-1 rounded bg-(--admin-surface-2)">
                       {tx.type === 'subscription' ? 'Subscription' : 'Credit Pack'}
                     </span>
                   </td>
                   <td>
                     <div>
                       <p className="font-medium">{tx.userEmail || tx.userId.slice(0, 12) + '...'}</p>
-                      <p className="text-xs text-[var(--admin-text-muted)]">{tx.userId.slice(0, 8)}...</p>
+                      <p className="text-xs text-(--admin-text-muted)">{tx.userId.slice(0, 8)}...</p>
                     </div>
                   </td>
                   <td>
@@ -346,7 +346,7 @@ export default function TransactionsPage() {
                       <div className="text-sm">
                         <span className="font-medium">{tx.tier}</span>
                         {tx.nextBilling && (
-                          <p className="text-xs text-[var(--admin-text-muted)]">
+                          <p className="text-xs text-(--admin-text-muted)">
                             Next: {formatDate(tx.nextBilling)}
                           </p>
                         )}
@@ -354,7 +354,7 @@ export default function TransactionsPage() {
                     ) : (
                       <div className="text-sm">
                         <span className="font-medium">{tx.packSize}</span>
-                        <p className="text-xs text-[var(--admin-text-muted)]">
+                        <p className="text-xs text-(--admin-text-muted)">
                           {tx.credits?.toLocaleString()} credits
                         </p>
                       </div>
@@ -363,19 +363,19 @@ export default function TransactionsPage() {
                   <td>
                     {getStatusBadge(tx.status)}
                     {tx.retryCount !== undefined && tx.retryCount > 0 && (
-                      <span className="block text-xs text-[var(--admin-warning)] mt-1">
+                      <span className="block text-xs text-(--admin-warning) mt-1">
                         Retry #{tx.retryCount}
                       </span>
                     )}
                   </td>
                   <td>
                     {tx.errorDetails ? (
-                      <p className="text-xs text-[var(--admin-warning)] max-w-xs">{tx.errorDetails}</p>
+                      <p className="text-xs text-(--admin-warning) max-w-xs">{tx.errorDetails}</p>
                     ) : (
-                      <span className="text-[var(--admin-text-muted)]">—</span>
+                      <span className="text-(--admin-text-muted)">—</span>
                     )}
                   </td>
-                  <td className="text-sm text-[var(--admin-text-secondary)]">
+                  <td className="text-sm text-(--admin-text-secondary)">
                     {formatDate(tx.createdAt)}
                   </td>
                   <td>
@@ -385,7 +385,7 @@ export default function TransactionsPage() {
                           <button
                             onClick={() => handleAction('retry_payment', tx.id, tx.userId)}
                             disabled={actionLoading === tx.id}
-                            className="text-xs px-2 py-1 rounded bg-[var(--admin-primary)] text-white hover:opacity-80 disabled:opacity-50 flex items-center gap-1"
+                            className="text-xs px-2 py-1 rounded bg-(--admin-primary) text-white hover:opacity-80 disabled:opacity-50 flex items-center gap-1"
                           >
                             <MdReplay size={14} />
                             Retry
@@ -395,7 +395,7 @@ export default function TransactionsPage() {
                           <button
                             onClick={() => handleAction('reactivate', tx.id, tx.userId, 'Manual activation')}
                             disabled={actionLoading === tx.id}
-                            className="text-xs px-2 py-1 rounded bg-[var(--admin-success)] text-white hover:opacity-80 disabled:opacity-50 flex items-center gap-1"
+                            className="text-xs px-2 py-1 rounded bg-(--admin-success) text-white hover:opacity-80 disabled:opacity-50 flex items-center gap-1"
                           >
                             <MdPlayArrow size={14} />
                             Activate
@@ -405,7 +405,7 @@ export default function TransactionsPage() {
                           <button
                             onClick={() => handleAction('clear_failure', tx.id, tx.userId)}
                             disabled={actionLoading === tx.id}
-                            className="text-xs px-2 py-1 rounded bg-[var(--admin-surface-2)] hover:bg-[var(--admin-border)] flex items-center gap-1"
+                            className="text-xs px-2 py-1 rounded bg-(--admin-surface-2) hover:bg-(--admin-border) flex items-center gap-1"
                           >
                             <MdClear size={14} />
                             Clear
@@ -419,7 +419,7 @@ export default function TransactionsPage() {
                               }
                             }}
                             disabled={actionLoading === tx.id}
-                            className="text-xs px-2 py-1 rounded bg-[var(--admin-error)] text-white hover:opacity-80 disabled:opacity-50 flex items-center gap-1"
+                            className="text-xs px-2 py-1 rounded bg-(--admin-error) text-white hover:opacity-80 disabled:opacity-50 flex items-center gap-1"
                           >
                             <MdCancel size={14} />
                             Cancel
@@ -439,27 +439,27 @@ export default function TransactionsPage() {
       {recentPayments.length > 0 && (
         <div className="admin-card">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <MdCheckCircle size={20} className="text-[var(--admin-success)]" />
+            <MdCheckCircle size={20} className="text-(--admin-success)" />
             Recent Successful Payments
           </h3>
           <div className="grid gap-2">
             {recentPayments.slice(0, 5).map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between p-3 bg-[var(--admin-surface-2)] rounded-lg"
+                className="flex items-center justify-between p-3 bg-(--admin-surface-2) rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <MdCheckCircle size={18} className="text-[var(--admin-success)]" />
+                  <MdCheckCircle size={18} className="text-(--admin-success)" />
                   <div>
                     <p className="text-sm font-medium">
                       {p.type} — R{(p.amount / 100).toFixed(2)}
                     </p>
-                    <p className="text-xs text-[var(--admin-text-muted)]">
+                    <p className="text-xs text-(--admin-text-muted)">
                       PayFast ID: {p.pfPaymentId}
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-[var(--admin-text-secondary)]">
+                <p className="text-xs text-(--admin-text-secondary)">
                   {formatDate(p.processedAt)}
                 </p>
               </div>

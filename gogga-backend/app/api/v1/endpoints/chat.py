@@ -36,6 +36,9 @@ class TieredChatRequest(BaseModel):
     context_tokens: int = Field(default=0, description="Token count for JIGGA thinking mode")
     force_layer: str | None = None
     force_tool: str | None = Field(default=None, description="ToolShed: Force a specific tool by name")
+    # Personality & Language parameters for GOGGA voice
+    personality_mode: str = Field(default="goody", description="User's personality preference: system/dark/goody")
+    detected_language: str = Field(default="en", description="Detected user language code (en/af/zu/xh/etc.)")
 
 
 @router.post("", response_model=ChatResponse)
@@ -177,11 +180,21 @@ def _resolve_force_layer(
     force_layer: str | None, 
     user_tier: UserTier
 ) -> CognitiveLayer | None:
-    """Resolve force_layer string to CognitiveLayer enum."""
+    """Resolve force_layer string to CognitiveLayer enum.
+    
+    Button mappings (frontend sends these):
+    - "32b" → JIVE_TEXT/JIGGA_THINK (Cerebras Qwen 32B with thinking)
+    - "235b" → JIVE_COMPLEX/JIGGA_COMPLEX (Qwen 235B)
+    - "auto" → None (let router decide)
+    """
     if not force_layer:
         return None
     
     force_lower = force_layer.lower()
+    
+    # "auto" means no force - let the router decide
+    if force_lower == "auto":
+        return None
     
     # FREE tier layers
     if user_tier == UserTier.FREE:
@@ -189,22 +202,18 @@ def _resolve_force_layer(
     
     # JIVE tier layers
     if user_tier == UserTier.JIVE:
-        if "reasoning" in force_lower or "complex" in force_lower:
-            return CognitiveLayer.JIVE_REASONING
-        return CognitiveLayer.JIVE_SPEED
+        # Force 235B complex model
+        if "235" in force_lower or "complex" in force_lower or "reasoning" in force_lower:
+            return CognitiveLayer.JIVE_COMPLEX
+        # Default to 32B text model
+        return CognitiveLayer.JIVE_TEXT
     
-    # JIGGA tier layers
+    # JIGGA tier layers  
     if user_tier == UserTier.JIGGA:
-        # User toggle: Force 235B multilingual model
-        if "235b" in force_lower or "235" in force_lower or "multilingual" in force_lower:
-            return CognitiveLayer.JIGGA_MULTILINGUAL
-        # User toggle: Force 32B model
-        if "32b" in force_lower or "32" in force_lower:
-            return CognitiveLayer.JIGGA_THINK
-        # Legacy: fast mode
-        if "fast" in force_lower or "quick" in force_lower:
-            return CognitiveLayer.JIGGA_FAST
-        # Default to thinking mode
+        # Force 235B complex model
+        if "235" in force_lower or "complex" in force_lower or "multilingual" in force_lower:
+            return CognitiveLayer.JIGGA_COMPLEX
+        # Force 32B thinking model (or default)
         return CognitiveLayer.JIGGA_THINK
     
     return None

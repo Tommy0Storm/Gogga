@@ -19,10 +19,12 @@ import {
   MdGeneratingTokens,
   MdKey,
   MdPayment,
+  MdInsights,
 } from 'react-icons/md';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: MdDashboard },
+  { href: '/usage', label: 'Usage Analytics', icon: MdInsights },
   { href: '/services', label: 'Services', icon: MdCloud },
   { href: '/api-keys', label: 'API Keys', icon: MdKey },
   { href: '/terminal', label: 'Terminal', icon: MdTerminal },
@@ -42,16 +44,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="min-h-screen bg-[var(--admin-bg)]">
+    <div className="min-h-screen bg-(--admin-bg)">
       {/* Sidebar - fixed position */}
       <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-[var(--admin-surface)] border-r border-[var(--admin-border)] transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-(--admin-surface) border-r border-(--admin-border) transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--admin-border)]">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-(--admin-border)">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[var(--admin-surface-2)] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-(--admin-surface-2) flex items-center justify-center">
               <span className="text-lg font-bold">G</span>
             </div>
             <span className="text-lg font-bold tracking-tight">GOGGA Admin</span>
@@ -69,8 +71,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive
-                    ? 'bg-[var(--admin-surface-2)] text-[var(--admin-text)]'
-                    : 'text-[var(--admin-text-secondary)] hover:bg-[var(--admin-surface-2)] hover:text-[var(--admin-text)]'
+                    ? 'bg-(--admin-surface-2) text-(--admin-text)'
+                    : 'text-(--admin-text-secondary) hover:bg-(--admin-surface-2) hover:text-(--admin-text)'
                   }`}
               >
                 <Icon size={20} />
@@ -81,8 +83,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[var(--admin-border)]">
-          <div className="text-xs text-[var(--admin-text-muted)]">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-(--admin-border)">
+          <div className="text-xs text-(--admin-text-muted)">
             <p>GOGGA Admin v1.0.0</p>
             <p className="mt-1">Port 3100</p>
           </div>
@@ -95,10 +97,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         style={{ marginLeft: sidebarOpen ? '256px' : '0' }}
       >
         {/* Header */}
-        <header className="sticky top-0 z-20 h-16 bg-[var(--admin-bg)] border-b border-[var(--admin-border)] flex items-center px-4">
+        <header className="sticky top-0 z-20 h-16 bg-(--admin-bg) border-b border-(--admin-border) flex items-center px-4">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-lg hover:bg-[var(--admin-surface)] transition-colors"
+            className="p-2 rounded-lg hover:bg-(--admin-surface) transition-colors"
           >
             <MdMenu size={24} />
           </button>

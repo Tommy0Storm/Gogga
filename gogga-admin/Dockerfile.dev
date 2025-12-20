@@ -3,17 +3,20 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install Docker CLI, curl, and OpenSSL for Prisma
-RUN apk add --no-cache docker-cli curl openssl openssl-dev
+# Install Docker CLI, curl, OpenSSL for Prisma, and build tools for native modules (better-sqlite3)
+RUN apk add --no-cache docker-cli curl openssl openssl-dev python3 make g++ gcc libc-dev
 
-# Install pnpm
-RUN corepack enable pnpm
+# Install pnpm and configure to allow build scripts
+RUN corepack enable pnpm && \
+    pnpm config set enable-pre-post-scripts true
 
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
 
-# Install dependencies
-RUN pnpm i
+# Install dependencies with build scripts allowed for native modules
+RUN pnpm i --config.allow-scripts=better-sqlite3 && \
+    cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && \
+    npm run build-release
 
 # Copy prisma schema
 COPY prisma ./prisma
@@ -32,4 +35,5 @@ EXPOSE 3100
 
 # Run prisma generate on startup to handle volume mount overwriting node_modules
 # CI=true prevents pnpm from prompting for TTY
-CMD ["sh", "-c", "CI=true pnpm i && npx prisma generate && pnpm dev"]
+# Rebuild better-sqlite3 native module since volume mount overwrites it
+CMD ["sh", "-c", "CI=true pnpm i --config.allow-scripts=better-sqlite3 && cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && npm run build-release 2>/dev/null || true && cd /app && npx prisma generate && pnpm dev"]

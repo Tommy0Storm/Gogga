@@ -1,8 +1,9 @@
 /**
  * LanguageBadge - Subtle language indicator for chat messages
  * 
- * Shows detected SA language with a small flag/icon.
+ * Shows detected SA language with a small graphical flag.
  * Non-intrusive, tooltip shows full language name.
+ * Uses CSS flags instead of emojis for consistency.
  */
 
 'use client';
@@ -17,19 +18,19 @@ interface LanguageBadgeProps {
   showForEnglish?: boolean; // Show badge even for English (for user messages)
 }
 
-// Language flag emojis (using closest available)
-const LANGUAGE_FLAGS: Record<SALanguage, string> = {
-  en: '🇬🇧',
-  af: '🇿🇦',
-  zu: '🇿🇦',
-  xh: '🇿🇦',
-  nso: '🇿🇦',
-  tn: '🇿🇦',
-  st: '🇿🇦',
-  ts: '🇿🇦',
-  ss: '🇿🇦',
-  ve: '🇿🇦',
-  nr: '🇿🇦',
+// Language colors for visual differentiation (no emojis)
+const LANGUAGE_COLORS: Record<SALanguage, string> = {
+  en: 'bg-blue-500',      // English - Blue
+  af: 'bg-orange-500',    // Afrikaans - Orange
+  zu: 'bg-green-600',     // Zulu - Green
+  xh: 'bg-cyan-500',      // Xhosa - Cyan
+  nso: 'bg-yellow-500',   // Northern Sotho - Yellow
+  tn: 'bg-purple-500',    // Tswana - Purple
+  st: 'bg-red-500',       // Sotho - Red
+  ts: 'bg-pink-500',      // Tsonga - Pink
+  ss: 'bg-indigo-500',    // Swati - Indigo
+  ve: 'bg-teal-500',      // Venda - Teal
+  nr: 'bg-amber-500',     // Ndebele - Amber
 };
 
 // Short codes for display
@@ -55,7 +56,7 @@ export function LanguageBadge({
   showForEnglish = false 
 }: LanguageBadgeProps) {
   const langInfo = SA_LANGUAGES[language];
-  const flag = LANGUAGE_FLAGS[language];
+  const colorClass = LANGUAGE_COLORS[language];
   const shortCode = SHORT_CODES[language];
   
   // Only show badge for non-English languages unless showForEnglish is true
@@ -68,7 +69,8 @@ export function LanguageBadge({
       className={`inline-flex items-center gap-1 text-xs text-gray-500 ${className}`}
       title={`${langInfo.name}${confidence ? ` (${confidence}% confidence)` : ''}`}
     >
-      <span className="text-[10px]">{flag}</span>
+      {/* Color dot indicator instead of flag emoji */}
+      <span className={`w-2 h-2 rounded-full ${colorClass}`} />
       <span className="font-medium text-gray-600">{shortCode}</span>
       {showName && (
         <span className="text-gray-400 hidden sm:inline">

@@ -235,10 +235,10 @@ async def payfast_itn(request: Request):
     # Get client IP for source verification
     client_ip = request.client.host if request.client else "unknown"
     
-    # In production, verify the source IP
-    # if not await payfast_service.verify_itn_source(client_ip):
-    #     logger.warning(f"⚠️ ITN from invalid IP: {client_ip}")
-    #     raise HTTPException(status_code=403, detail="Invalid source")
+    # Verify the source IP is from PayFast's servers
+    if not await payfast_service.verify_itn_source(client_ip):
+        logger.warning(f"⚠️ ITN from invalid IP: {client_ip}")
+        raise HTTPException(status_code=403, detail="Invalid source")
     
     # Verify the signature
     if not payfast_service.verify_itn_signature(data.copy()):

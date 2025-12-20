@@ -13,6 +13,7 @@ const nextConfig = {
     'localhost',
     '127.0.0.1',
     '10.241.135.171',
+    '192.168.0.130',
     '192.168.0.168',
     '192.168.0.101',
     '192.168.0.102',
@@ -36,6 +37,11 @@ const nextConfig = {
       {
         source: '/backend/health',
         destination: `${BACKEND_URL}/health`,
+      },
+      // Full backend proxy for admin API
+      {
+        source: '/backend/api/:path*',
+        destination: `${BACKEND_URL}/api/:path*`,
       },
     ];
   },

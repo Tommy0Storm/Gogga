@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.v1.endpoints import chat, payments, images, prompts, tools, gogga_talk
+from app.api.v1.endpoints import chat, payments, images, prompts, tools, gogga_talk, media, admin
 from app.services.posthog_service import posthog_service
 from app.services.scheduler_service import scheduler_service
 from app.core.exceptions import (
@@ -43,6 +43,16 @@ async def lifespan(app: FastAPI):
     logger.info("FREE Tier: OpenRouter Qwen 3 235B")
     logger.info("JIVE Tier: Cerebras %s (thinking)", settings.MODEL_JIVE)
     logger.info("JIGGA Tier: Cerebras %s (general) + %s (complex/legal)", settings.MODEL_JIGGA, settings.MODEL_JIGGA_235B)
+    
+    # Performance: Increase thread pool for Cerebras SDK blocking calls (Dec 2025 Audit)
+    # Default is 8 workers - under load, requests queue in thread pool
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    loop.set_default_executor(
+        concurrent.futures.ThreadPoolExecutor(max_workers=64, thread_name_prefix="gogga_worker")
+    )
+    logger.info("ThreadPoolExecutor configured: 64 workers")
     
     # Start the scheduler for subscription management
     scheduler_service.start()
@@ -157,6 +167,8 @@ app.include_router(images.router, prefix=settings.API_V1_STR)
 app.include_router(prompts.router, prefix=settings.API_V1_STR)
 app.include_router(tools.router, prefix=f"{settings.API_V1_STR}/tools")
 app.include_router(gogga_talk.router, prefix=f"{settings.API_V1_STR}/voice")
+app.include_router(media.router, prefix=settings.API_V1_STR)
+app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["admin"])
 
 
 # Root endpoint
@@ -287,9 +299,12 @@ async def health_check():
                 },
                 "tiers_affected": ["free", "all (prompt enhancement)"]
             },
-            "deepinfra": {
-                "status": "configured" if settings.DEEPINFRA_API_KEY else "unconfigured",
-                "model": settings.DEEPINFRA_IMAGE_MODEL,
+            "vertex_ai": {
+                "status": "configured" if settings.VERTEX_PROJECT_ID else "unconfigured",
+                "models": {
+                    "imagen": settings.IMAGEN_V3_MODEL,
+                    "veo": settings.VEO_MODEL
+                },
                 "tiers_affected": ["jive", "jigga"]
             }
         },
@@ -304,12 +319,12 @@ async def health_check():
             },
             "jive": {
                 "text": f"Cerebras {settings.MODEL_JIVE} (general/math) + {settings.MODEL_JIGGA_235B} (complex/legal/extended)",
-                "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIVE]}/month)",
+                "images": f"Imagen 3.0 ({IMAGE_LIMITS[UserTier.JIVE]}/month)",
                 "cost": "Subscription"
             },
             "jigga": {
                 "text": f"Cerebras {settings.MODEL_JIGGA} (general/math) + {settings.MODEL_JIGGA_235B} (complex/legal/extended)",
-                "images": f"FLUX 1.1 Pro ({IMAGE_LIMITS[UserTier.JIGGA]}/month)",
+                "images": f"Imagen 3.0 ({IMAGE_LIMITS[UserTier.JIGGA]}/month)",
                 "cost": "Premium"
             }
         },

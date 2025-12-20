@@ -8,7 +8,7 @@ JIVE/JIGGA Tier (via tool calling):
     AI calls generate_image tool → Pollinations.ai → Image
     
 GOGGA PRO (Image Button - Paid Subscribers):
-    User → Qwen 235B FREE (enhance) → FLUX 1.1 Pro → Premium Image
+    User → Qwen 235B FREE (enhance) → Vertex AI Imagen 3.0 → Premium Image
 
 Prompt enhancement is ALWAYS via OpenRouter Qwen 3 235B FREE.
 
@@ -39,7 +39,6 @@ AI_HORDE_POLL_INTERVAL: Final[float] = 2.0  # seconds between status checks
 AI_HORDE_TIMEOUT: Final[float] = 30.0  # Reasonable timeout for registered users
 
 # Constants
-DEEPINFRA_API_URL: Final[str] = "https://api.deepinfra.com/v1/openai/images/generations"
 DEFAULT_IMAGE_SIZE: Final[str] = "1024x1024"
 
 
@@ -67,31 +66,27 @@ class ImageService:
     """
     Tier-based image generation service.
     
-    FREE: OpenRouter LongCat Flash (free, unlimited-ish)
-    JIVE: DeepInfra FLUX 1.1 Pro (capped at 200/month)
-    JIGGA: DeepInfra FLUX 1.1 Pro (capped at 1000/month)
+    FREE: Pollinations.ai + AI Horde (free, community-powered)
+    JIVE: Vertex AI Imagen 3.0 (capped at 50/month)
+    JIGGA: Vertex AI Imagen 3.0 (capped at 200/month)
     
     Prompt enhancement is ALWAYS via Qwen 3 235B FREE.
     """
     
     def __init__(self) -> None:
-        self._flux_client: httpx.AsyncClient | None = None
         self._horde_client: httpx.AsyncClient | None = None
         self._settings = get_settings()
+        # Lazy import Imagen service to avoid circular imports
+        self._imagen_service: 'ImagenService | None' = None
     
     @property
-    def flux_client(self) -> httpx.AsyncClient:
-        """Lazy initialization of FLUX HTTP client."""
-        if self._flux_client is None:
-            self._flux_client = httpx.AsyncClient(
-                timeout=120.0,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self._settings.DEEPINFRA_API_KEY}",
-                }
-            )
-        return self._flux_client
-
+    def imagen_service(self) -> 'ImagenService':
+        """Lazy initialization of Imagen service."""
+        if self._imagen_service is None:
+            from app.services.imagen_service import imagen_service
+            self._imagen_service = imagen_service
+        return self._imagen_service
+    
     @property
     def horde_client(self) -> httpx.AsyncClient:
         """Lazy initialization of AI Horde HTTP client."""
@@ -120,15 +115,15 @@ class ImageService:
         
         FREE: Qwen 235B → Pollinations.ai (free)
         JIVE/JIGGA (tool call): Pollinations.ai (free)
-        JIVE/JIGGA (button, use_premium=True): GOGGA Pro (FLUX 1.1)
+        JIVE/JIGGA (button, use_premium=True): Vertex AI Imagen 3.0
         
         Args:
             prompt: Image description
             user_id: User identifier
             user_tier: User's subscription tier
-            size: Image dimensions (GOGGA Pro only)
+            size: Image dimensions (Imagen supports aspect ratios)
             enhance_prompt: Whether to enhance prompt first
-            use_premium: Use GOGGA Pro (FLUX) instead of Pollinations
+            use_premium: Use Imagen 3.0 instead of Pollinations
             
         Returns:
             ImageGenerationResponse with image data
@@ -136,8 +131,8 @@ class ImageService:
         if user_tier == UserTier.FREE:
             return await self._generate_free(prompt, user_id, enhance_prompt)
         elif use_premium:
-            # GOGGA Pro - Premium FLUX generation (image button)
-            return await self._generate_flux(prompt, user_id, user_tier, size, enhance_prompt)
+            # GOGGA Pro - Premium Imagen 3.0 generation (image button)
+            return await self._generate_imagen(prompt, user_id, user_tier, size, enhance_prompt)
         else:
             # Default to Pollinations for tool calling
             return await self._generate_free(prompt, user_id, enhance_prompt)
@@ -342,7 +337,7 @@ class ImageService:
             }
         )
     
-    async def _generate_flux(
+    async def _generate_imagen(
         self,
         prompt: str,
         user_id: str | None,
@@ -351,25 +346,27 @@ class ImageService:
         enhance_prompt: bool
     ) -> ImageGenerationResponse:
         """
-        GOGGA PRO: Premium image generation with FLUX 1.1 Pro.
+        GOGGA PRO: Premium image generation with Vertex AI Imagen 3.0.
         
         Named after Irma Stern, pioneering SA expressionist painter.
-        Uses OpenRouter for enhancement, DeepInfra for generation.
+        Uses OpenRouter for enhancement, Vertex AI Imagen for generation.
         Cost: $0.04 per image (JIVE/JIGGA subscribers only)
         """
+        from app.services.imagen_service import ImagenRequest, ImagenOperation
+        
         start_time = time.perf_counter()
         original_prompt = prompt
         enhancement_meta = {}
         
         logger.info(
-            "GOGGA PRO (FLUX) | user=%s | tier=%s | size=%s | enhance=%s",
+            "GOGGA PRO (Imagen 3.0) | user=%s | tier=%s | size=%s | enhance=%s",
             user_id or "anonymous",
             user_tier.value,
             size,
             enhance_prompt
         )
         
-        # Step 1: Enhance prompt with Llama FREE (if enabled)
+        # Step 1: Enhance prompt with Qwen 235B FREE (if enabled)
         if enhance_prompt:
             try:
                 enhancement = await openrouter_service.enhance_prompt(prompt)
@@ -384,36 +381,41 @@ class ImageService:
                 logger.warning("Prompt enhancement failed: %s", e)
                 enhancement_meta = {"error": str(e)}
         
-        # Step 2: Generate with FLUX 1.1 Pro (premium quality)
-        payload = {
-            "model": self._settings.DEEPINFRA_IMAGE_MODEL,
-            "prompt": prompt,
-            "size": size,
-            "n": 1,
-            "response_format": "b64_json",
-        }
+        # Convert size to aspect ratio for Imagen
+        aspect_ratio = "1:1"  # Default square
+        if size == "1024x1792" or size == "768x1344":
+            aspect_ratio = "9:16"
+        elif size == "1792x1024" or size == "1344x768":
+            aspect_ratio = "16:9"
+        elif size == "1024x1024":
+            aspect_ratio = "1:1"
         
-        if user_id:
-            payload["user"] = user_id
-        
+        # Step 2: Generate with Vertex AI Imagen 3.0 (premium quality)
         try:
-            response = await self.flux_client.post(DEEPINFRA_API_URL, json=payload)
-            response.raise_for_status()
+            imagen_request = ImagenRequest(
+                prompt=prompt,
+                operation=ImagenOperation.CREATE,
+                aspect_ratio=aspect_ratio,
+                sample_count=1,
+            )
             
-            data = response.json()
+            response = await self.imagen_service.generate(
+                request=imagen_request,
+                user_id=user_id,
+                user_tier=user_tier,
+            )
             
-            if not data.get("data") or len(data["data"]) == 0:
-                raise ValueError("No image data in response")
+            if not response.success or not response.images:
+                raise ValueError(response.error or "Imagen generation failed")
             
-            image_data = data["data"][0]
             total_latency = time.perf_counter() - start_time
             
-            # Track image cost ($0.04 per FLUX image)
+            # Track image cost ($0.04 per Imagen image)
             cost_data = await track_image_usage(
                 user_id=user_id or "anonymous",
                 tier=user_tier.value,
-                generator="flux",
-                image_count=1
+                generator="imagen",
+                image_count=len(response.images)
             )
             
             logger.info(
@@ -424,18 +426,21 @@ class ImageService:
                 cost_data["usd"]
             )
             
+            # Convert base64 to data URL for display
+            image_data = f"data:image/png;base64,{response.images[0]}"
+            
             return ImageGenerationResponse(
                 success=True,
                 original_prompt=original_prompt,
                 enhanced_prompt=prompt,
-                image_data=image_data.get("b64_json", ""),
+                image_data=image_data,
                 size=size,
                 meta={
                     "tier": user_tier.value,
                     "pipeline": "gogga-pro",
-                    "generator": "GOGGA Pro (FLUX 1.1)",
+                    "generator": "GOGGA Pro (Imagen 3.0)",
                     "enhancement": enhancement_meta,
-                    "generation_model": self._settings.DEEPINFRA_IMAGE_MODEL,
+                    "generation_model": response.meta.get("model", "imagen-3.0-generate-002"),
                     "latency_seconds": round(total_latency, 3),
                     "cost_usd": cost_data["usd"],
                     "cost_zar": cost_data["zar"],
@@ -443,22 +448,12 @@ class ImageService:
                 }
             )
             
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                "GOGGA PRO API error | status=%d | response=%s",
-                e.response.status_code,
-                e.response.text[:200]
-            )
-            raise
         except Exception as e:
             logger.exception("GOGGA PRO generation failed: %s", str(e))
             raise
     
     async def close(self) -> None:
         """Close HTTP clients."""
-        if self._flux_client:
-            await self._flux_client.aclose()
-            self._flux_client = None
         if self._horde_client:
             await self._horde_client.aclose()
             self._horde_client = None

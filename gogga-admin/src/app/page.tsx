@@ -89,23 +89,23 @@ export default function DashboardPage() {
       return <div className="admin-spinner" />;
     }
     if (state === 'online') {
-      return <MdCloud size={24} className="text-[var(--admin-success)]" />;
+      return <MdCloud size={24} className="text-(--admin-success)" />;
     }
-    return <MdCloudOff size={24} className="text-[var(--admin-error)]" />;
+    return <MdCloudOff size={24} className="text-(--admin-error)" />;
   };
 
   return (
     <div className="space-y-6">
       {/* System Status */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--admin-text-secondary)] uppercase tracking-wider mb-4">
+        <h2 className="text-sm font-semibold text-(--admin-text-secondary) uppercase tracking-wider mb-4">
           System Status
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Backend API */}
           <div className="admin-card flex items-center justify-between">
             <div>
-              <p className="text-sm text-[var(--admin-text-secondary)]">Backend API</p>
+              <p className="text-sm text-(--admin-text-secondary)">Backend API</p>
               <p className="text-lg font-semibold mt-1">Port 8000</p>
             </div>
             <StatusIcon state={status.backend} />
@@ -114,7 +114,7 @@ export default function DashboardPage() {
           {/* CePO Service */}
           <div className="admin-card flex items-center justify-between">
             <div>
-              <p className="text-sm text-[var(--admin-text-secondary)]">CePO Sidecar</p>
+              <p className="text-sm text-(--admin-text-secondary)">CePO Sidecar</p>
               <p className="text-lg font-semibold mt-1">Port 8080</p>
             </div>
             <StatusIcon state={status.cepo} />
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           {/* Database */}
           <div className="admin-card flex items-center justify-between">
             <div>
-              <p className="text-sm text-[var(--admin-text-secondary)]">SQLite Database</p>
+              <p className="text-sm text-(--admin-text-secondary)">SQLite Database</p>
               <p className="text-lg font-semibold mt-1">Prisma ORM</p>
             </div>
             <StatusIcon state={status.database} />
@@ -133,7 +133,7 @@ export default function DashboardPage() {
 
       {/* Quick Stats */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--admin-text-secondary)] uppercase tracking-wider mb-4">
+        <h2 className="text-sm font-semibold text-(--admin-text-secondary) uppercase tracking-wider mb-4">
           Platform Metrics
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -141,7 +141,7 @@ export default function DashboardPage() {
           <div className="metric-card">
             <div className="flex items-center justify-between">
               <span className="metric-label">Total Users</span>
-              <MdPeople size={20} className="text-[var(--admin-text-muted)]" />
+              <MdPeople size={20} className="text-(--admin-text-muted)" />
             </div>
             <p className="metric-value">{loading ? '—' : stats.totalUsers}</p>
           </div>
@@ -150,7 +150,7 @@ export default function DashboardPage() {
           <div className="metric-card">
             <div className="flex items-center justify-between">
               <span className="metric-label">Active Subs</span>
-              <MdReceipt size={20} className="text-[var(--admin-text-muted)]" />
+              <MdReceipt size={20} className="text-(--admin-text-muted)" />
             </div>
             <p className="metric-value">{loading ? '—' : stats.activeSubscriptions}</p>
           </div>
@@ -159,7 +159,7 @@ export default function DashboardPage() {
           <div className="metric-card">
             <div className="flex items-center justify-between">
               <span className="metric-label">Active Vouchers</span>
-              <MdCardGiftcard size={20} className="text-[var(--admin-text-muted)]" />
+              <MdCardGiftcard size={20} className="text-(--admin-text-muted)" />
             </div>
             <p className="metric-value">{loading ? '—' : stats.pendingVouchers}</p>
           </div>
@@ -168,7 +168,7 @@ export default function DashboardPage() {
           <div className="metric-card">
             <div className="flex items-center justify-between">
               <span className="metric-label">Recent Errors</span>
-              <MdWarning size={20} className="text-[var(--admin-text-muted)]" />
+              <MdWarning size={20} className="text-(--admin-text-muted)" />
             </div>
             <p className="metric-value">{loading ? '—' : stats.recentErrors}</p>
             {stats.recentErrors > 0 && (
@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
       {/* Quick Actions */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--admin-text-secondary)] uppercase tracking-wider mb-4">
+        <h2 className="text-sm font-semibold text-(--admin-text-secondary) uppercase tracking-wider mb-4">
           Quick Actions
         </h2>
         <div className="admin-card">
@@ -203,7 +203,7 @@ export default function DashboardPage() {
 
       {/* Recent Activity */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--admin-text-secondary)] uppercase tracking-wider mb-4">
+        <h2 className="text-sm font-semibold text-(--admin-text-secondary) uppercase tracking-wider mb-4">
           Recent Activity
         </h2>
         <div className="admin-card">
@@ -218,10 +218,10 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               <tr>
-                <td className="text-[var(--admin-text-secondary)]">—</td>
+                <td className="text-(--admin-text-secondary)">—</td>
                 <td>—</td>
                 <td>—</td>
-                <td className="text-[var(--admin-text-muted)]">No recent activity</td>
+                <td className="text-(--admin-text-muted)">No recent activity</td>
               </tr>
             </tbody>
           </table>

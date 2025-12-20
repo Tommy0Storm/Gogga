@@ -148,7 +148,7 @@ export default function DebugSubmissionsPage() {
                 <button
                     onClick={loadSubmissions}
                     disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--admin-surface-2)] rounded-lg hover:bg-[var(--admin-surface)] transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 bg-(--admin-surface-2) rounded-lg hover:bg-(--admin-surface) transition-colors disabled:opacity-50"
                 >
                     <MdRefresh size={18} className={loading ? 'animate-spin' : ''} />
                     Refresh
@@ -169,8 +169,8 @@ export default function DebugSubmissionsPage() {
                                 setSelectedId(null);
                             }}
                             className={`px-4 py-2 rounded-lg capitalize transition-colors ${filter === f
-                                    ? 'bg-[var(--admin-accent)] text-white'
-                                    : 'bg-[var(--admin-surface)] text-[var(--admin-text-secondary)] hover:text-[var(--admin-text)]'
+                                    ? 'bg-(--admin-accent) text-white'
+                                    : 'bg-(--admin-surface) text-(--admin-text-secondary) hover:text-(--admin-text)'
                                 }`}
                         >
                             {f.replace('_', ' ')}
@@ -186,17 +186,17 @@ export default function DebugSubmissionsPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* List Panel */}
-                <div className="bg-[var(--admin-surface)] rounded-xl border border-[var(--admin-border)] overflow-hidden">
-                    <div className="p-4 border-b border-[var(--admin-border)]">
+                <div className="bg-(--admin-surface) rounded-xl border border-(--admin-border) overflow-hidden">
+                    <div className="p-4 border-b border-(--admin-border)">
                         <h2 className="font-semibold">Submissions</h2>
                     </div>
-                    <div className="divide-y divide-[var(--admin-border)] max-h-[600px] overflow-y-auto">
+                    <div className="divide-y divide-(--admin-border) max-h-[600px] overflow-y-auto">
                         {loading ? (
-                            <div className="p-8 text-center text-[var(--admin-text-muted)]">
+                            <div className="p-8 text-center text-(--admin-text-muted)">
                                 Loading...
                             </div>
                         ) : submissions.length === 0 ? (
-                            <div className="p-8 text-center text-[var(--admin-text-muted)]">
+                            <div className="p-8 text-center text-(--admin-text-muted)">
                                 No submissions found
                             </div>
                         ) : (
@@ -211,18 +211,18 @@ export default function DebugSubmissionsPage() {
                                             setExpandedLogs(false);
                                             setExpandedNetwork(false);
                                         }}
-                                        className={`w-full p-4 text-left hover:bg-[var(--admin-surface-2)] transition-colors ${selectedId === sub.id ? 'bg-[var(--admin-surface-2)]' : ''
+                                        className={`w-full p-4 text-left hover:bg-(--admin-surface-2) transition-colors ${selectedId === sub.id ? 'bg-(--admin-surface-2)' : ''
                                             }`}
                                     >
                                         <div className="flex justify-between items-start gap-4">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <MdPerson size={14} className="text-[var(--admin-text-muted)]" />
+                                                    <MdPerson size={14} className="text-(--admin-text-muted)" />
                                                     <span className="text-sm font-medium truncate">
                                                         {sub.user?.email || 'Anonymous'}
                                                     </span>
                                                 </div>
-                                                <p className="text-sm text-[var(--admin-text-secondary)] line-clamp-2">
+                                                <p className="text-sm text-(--admin-text-secondary) line-clamp-2">
                                                     {sub.reason}
                                                 </p>
                                             </div>
@@ -233,7 +233,7 @@ export default function DebugSubmissionsPage() {
                                                 {sub.status.replace('_', ' ')}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-2 mt-2 text-xs text-[var(--admin-text-muted)]">
+                                        <div className="flex items-center gap-2 mt-2 text-xs text-(--admin-text-muted)">
                                             <MdAccessTime size={12} />
                                             {new Date(sub.createdAt).toLocaleString()}
                                         </div>
@@ -246,12 +246,12 @@ export default function DebugSubmissionsPage() {
 
                 {/* Detail Panel */}
                 {selected ? (
-                    <div className="bg-[var(--admin-surface)] rounded-xl border border-[var(--admin-border)] overflow-hidden">
-                        <div className="p-4 border-b border-[var(--admin-border)] flex justify-between items-center">
+                    <div className="bg-(--admin-surface) rounded-xl border border-(--admin-border) overflow-hidden">
+                        <div className="p-4 border-b border-(--admin-border) flex justify-between items-center">
                             <h2 className="font-semibold">Details</h2>
                             <button
                                 onClick={() => setSelectedId(null)}
-                                className="text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+                                className="text-(--admin-text-muted) hover:text-(--admin-text)"
                             >
                                 ✕
                             </button>
@@ -259,12 +259,12 @@ export default function DebugSubmissionsPage() {
                         <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto">
                             {/* User & Reason */}
                             <div>
-                                <label className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wider">User</label>
+                                <label className="text-xs text-(--admin-text-muted) uppercase tracking-wider">User</label>
                                 <p className="text-sm">{selected.user?.email || 'Anonymous'}</p>
                             </div>
                             <div>
-                                <label className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wider">Reason</label>
-                                <p className="text-sm bg-[var(--admin-surface-2)] p-3 rounded-lg mt-1">
+                                <label className="text-xs text-(--admin-text-muted) uppercase tracking-wider">Reason</label>
+                                <p className="text-sm bg-(--admin-surface-2) p-3 rounded-lg mt-1">
                                     {selected.reason}
                                 </p>
                             </div>
@@ -272,18 +272,18 @@ export default function DebugSubmissionsPage() {
                             {/* Context */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wider flex items-center gap-1">
+                                    <label className="text-xs text-(--admin-text-muted) uppercase tracking-wider flex items-center gap-1">
                                         <MdLink size={12} /> URL
                                     </label>
-                                    <p className="text-xs text-[var(--admin-text-secondary)] truncate mt-1">
+                                    <p className="text-xs text-(--admin-text-secondary) truncate mt-1">
                                         {selected.url}
                                     </p>
                                 </div>
                                 <div>
-                                    <label className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wider flex items-center gap-1">
+                                    <label className="text-xs text-(--admin-text-muted) uppercase tracking-wider flex items-center gap-1">
                                         <MdComputer size={12} /> Screen
                                     </label>
-                                    <p className="text-xs text-[var(--admin-text-secondary)] mt-1">
+                                    <p className="text-xs text-(--admin-text-secondary) mt-1">
                                         {selected.screenSize || 'Unknown'}
                                     </p>
                                 </div>
@@ -292,7 +292,7 @@ export default function DebugSubmissionsPage() {
                             {/* Error Stack */}
                             {selected.errorStack && (
                                 <div>
-                                    <label className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wider">
+                                    <label className="text-xs text-(--admin-text-muted) uppercase tracking-wider">
                                         Last Error
                                     </label>
                                     <pre className="text-xs bg-red-500/10 text-red-400 p-3 rounded-lg mt-1 overflow-auto max-h-32 font-mono">
@@ -305,13 +305,13 @@ export default function DebugSubmissionsPage() {
                             <div>
                                 <button
                                     onClick={() => setExpandedLogs(!expandedLogs)}
-                                    className="flex items-center justify-between w-full text-xs text-[var(--admin-text-muted)] uppercase tracking-wider hover:text-[var(--admin-text)]"
+                                    className="flex items-center justify-between w-full text-xs text-(--admin-text-muted) uppercase tracking-wider hover:text-(--admin-text)"
                                 >
                                     <span>Console Logs ({consoleLogs.length})</span>
                                     {expandedLogs ? <MdExpandLess size={16} /> : <MdExpandMore size={16} />}
                                 </button>
                                 {expandedLogs && (
-                                    <pre className="text-xs bg-[var(--admin-surface-2)] p-3 rounded-lg mt-1 overflow-auto max-h-48 font-mono">
+                                    <pre className="text-xs bg-(--admin-surface-2) p-3 rounded-lg mt-1 overflow-auto max-h-48 font-mono">
                                         {consoleLogs.length > 0
                                             ? consoleLogs
                                                 .map(
@@ -329,7 +329,7 @@ export default function DebugSubmissionsPage() {
                                 <div>
                                     <button
                                         onClick={() => setExpandedNetwork(!expandedNetwork)}
-                                        className="flex items-center justify-between w-full text-xs text-[var(--admin-text-muted)] uppercase tracking-wider hover:text-[var(--admin-text)]"
+                                        className="flex items-center justify-between w-full text-xs text-(--admin-text-muted) uppercase tracking-wider hover:text-(--admin-text)"
                                     >
                                         <span>Failed Network ({networkLogs.length})</span>
                                         {expandedNetwork ? <MdExpandLess size={16} /> : <MdExpandMore size={16} />}
@@ -349,13 +349,13 @@ export default function DebugSubmissionsPage() {
 
                             {/* Admin Notes */}
                             <div>
-                                <label className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wider flex items-center gap-1">
+                                <label className="text-xs text-(--admin-text-muted) uppercase tracking-wider flex items-center gap-1">
                                     <MdNotes size={12} /> Admin Notes
                                 </label>
                                 <textarea
                                     value={adminNotes}
                                     onChange={(e) => setAdminNotes(e.target.value)}
-                                    className="w-full mt-1 p-3 bg-[var(--admin-surface-2)] border border-[var(--admin-border)] rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]"
+                                    className="w-full mt-1 p-3 bg-(--admin-surface-2) border border-(--admin-border) rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-(--admin-accent)"
                                     rows={3}
                                     placeholder="Add notes about this issue..."
                                 />
@@ -363,14 +363,14 @@ export default function DebugSubmissionsPage() {
 
                             {/* Resolved Info */}
                             {selected.resolvedAt && (
-                                <div className="text-xs text-[var(--admin-text-muted)] bg-green-500/10 p-2 rounded">
+                                <div className="text-xs text-(--admin-text-muted) bg-green-500/10 p-2 rounded">
                                     Resolved by {selected.resolvedBy} on{' '}
                                     {new Date(selected.resolvedAt).toLocaleString()}
                                 </div>
                             )}
 
                             {/* Actions */}
-                            <div className="flex gap-2 pt-4 border-t border-[var(--admin-border)]">
+                            <div className="flex gap-2 pt-4 border-t border-(--admin-border)">
                                 {selected.status !== 'in_progress' && (
                                     <button
                                         onClick={() => updateStatus(selected.id, 'in_progress')}
@@ -399,7 +399,7 @@ export default function DebugSubmissionsPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="bg-[var(--admin-surface)] rounded-xl border border-[var(--admin-border)] flex items-center justify-center text-[var(--admin-text-muted)]">
+                    <div className="bg-(--admin-surface) rounded-xl border border-(--admin-border) flex items-center justify-center text-(--admin-text-muted)">
                         <div className="text-center p-8">
                             <MdBugReport size={48} className="mx-auto mb-4 opacity-50" />
                             <p>Select a submission to view details</p>

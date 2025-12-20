@@ -249,3 +249,231 @@ async def image_health() -> dict:
             }
         }
     }
+
+
+# =============================================================================
+# Imagen Edit/Upscale Endpoints (JIVE/JIGGA Only)
+# =============================================================================
+
+class ImageEditRequest(BaseModel):
+    """Request body for image editing (inpaint/outpaint)."""
+    prompt: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Edit instruction (what to add/remove/change)"
+    )
+    source_image: str = Field(
+        ...,
+        description="Base64-encoded source image"
+    )
+    mask_image: str | None = Field(
+        default=None,
+        description="Base64-encoded mask (white=edit area, black=preserve)"
+    )
+    edit_mode: str = Field(
+        default="EDIT_MODE_INPAINT_INSERTION",
+        description="Edit mode: EDIT_MODE_INPAINT_INSERTION, EDIT_MODE_INPAINT_REMOVAL, EDIT_MODE_OUTPAINT, EDIT_MODE_BGSWAP"
+    )
+    user_id: str | None = Field(default=None)
+    user_tier: UserTier = Field(default=UserTier.JIVE)
+    idempotency_key: str | None = Field(
+        default=None,
+        description="UUID v4 for request deduplication"
+    )
+
+
+class ImageEditResponse(BaseModel):
+    """Response body for image editing."""
+    success: bool = True
+    edited_images: list[str] = Field(
+        default_factory=list,
+        description="Base64-encoded edited images"
+    )
+    prompt: str
+    edit_mode: str
+    meta: dict[str, Any] = {}
+    error: str | None = None
+
+
+class ImageUpscaleRequest(BaseModel):
+    """Request body for image upscaling."""
+    source_image: str = Field(
+        ...,
+        description="Base64-encoded source image"
+    )
+    upscale_factor: str = Field(
+        default="x2",
+        pattern=r"^x[234]$",
+        description="Upscale factor: x2, x3, or x4"
+    )
+    user_id: str | None = Field(default=None)
+    user_tier: UserTier = Field(default=UserTier.JIVE)
+    idempotency_key: str | None = Field(
+        default=None,
+        description="UUID v4 for request deduplication"
+    )
+
+
+class ImageUpscaleResponse(BaseModel):
+    """Response body for image upscaling."""
+    success: bool = True
+    upscaled_image: str = Field(
+        default="",
+        description="Base64-encoded upscaled image"
+    )
+    upscale_factor: str
+    meta: dict[str, Any] = {}
+    error: str | None = None
+
+
+@router.post(
+    "/edit",
+    response_model=ImageEditResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Edit an image using Imagen 3.0 (JIVE/JIGGA only)"
+)
+async def edit_image(request: ImageEditRequest) -> ImageEditResponse:
+    """
+    Edit an existing image using Vertex AI Imagen 3.0.
+    
+    **Requires JIVE or JIGGA tier.**
+    
+    **Edit Modes:**
+    - EDIT_MODE_INPAINT_INSERTION: Add new elements to masked areas
+    - EDIT_MODE_INPAINT_REMOVAL: Remove objects from masked areas
+    - EDIT_MODE_OUTPAINT: Extend image canvas
+    - EDIT_MODE_BGSWAP: Replace background
+    
+    **Usage:**
+    1. Generate a mask (white = areas to edit, black = preserve)
+    2. Provide source image + mask + prompt
+    3. Imagen will edit only the masked regions
+    
+    **Limits:**
+    - JIVE: 20 edits/month
+    - JIGGA: 100 edits/month
+    """
+    from app.services.imagen_service import ImagenService, ImagenRequest, ImagenOperation
+    
+    # Require paid tier
+    if request.user_tier == UserTier.FREE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Image editing requires JIVE or JIGGA subscription"
+        )
+    
+    try:
+        imagen = ImagenService()
+        imagen_request = ImagenRequest(
+            prompt=request.prompt,
+            operation=ImagenOperation.EDIT,
+            source_image=request.source_image,
+            mask_image=request.mask_image,
+            edit_mode=request.edit_mode,
+            idempotency_key=request.idempotency_key,
+        )
+        
+        response = await imagen.edit(
+            request=imagen_request,
+            user_id=request.user_id,
+            user_tier=request.user_tier,
+        )
+        
+        if not response.success:
+            return ImageEditResponse(
+                success=False,
+                prompt=request.prompt,
+                edit_mode=request.edit_mode,
+                error=response.error,
+            )
+        
+        return ImageEditResponse(
+            success=True,
+            edited_images=response.images,
+            prompt=request.prompt,
+            edit_mode=request.edit_mode,
+            meta=response.meta,
+        )
+        
+    except Exception as e:
+        logger.exception("Image edit error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image editing failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/upscale",
+    response_model=ImageUpscaleResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Upscale an image using Imagen (JIVE/JIGGA only)"
+)
+async def upscale_image(request: ImageUpscaleRequest) -> ImageUpscaleResponse:
+    """
+    Upscale an image using Vertex AI Imagen.
+    
+    **Requires JIVE or JIGGA tier.**
+    
+    **Upscale Factors:**
+    - x2: 2x resolution (e.g., 512x512 → 1024x1024)
+    - x3: 3x resolution (JIGGA only)
+    - x4: 4x resolution (JIGGA only)
+    
+    **Limits:**
+    - JIVE: 20 upscales/month (x2 only)
+    - JIGGA: 50 upscales/month (x2, x3, x4)
+    """
+    from app.services.imagen_service import ImagenService, ImagenRequest, ImagenOperation
+    
+    # Require paid tier
+    if request.user_tier == UserTier.FREE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Image upscaling requires JIVE or JIGGA subscription"
+        )
+    
+    # x3 and x4 require JIGGA
+    if request.upscale_factor in ("x3", "x4") and request.user_tier != UserTier.JIGGA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Upscale factor {request.upscale_factor} requires JIGGA subscription"
+        )
+    
+    try:
+        imagen = ImagenService()
+        imagen_request = ImagenRequest(
+            prompt="upscale",  # Placeholder, not used for upscaling
+            operation=ImagenOperation.UPSCALE,
+            source_image=request.source_image,
+            upscale_factor=request.upscale_factor,
+            idempotency_key=request.idempotency_key,
+        )
+        
+        response = await imagen.upscale(
+            request=imagen_request,
+            user_id=request.user_id,
+            user_tier=request.user_tier,
+        )
+        
+        if not response.success:
+            return ImageUpscaleResponse(
+                success=False,
+                upscale_factor=request.upscale_factor,
+                error=response.error,
+            )
+        
+        return ImageUpscaleResponse(
+            success=True,
+            upscaled_image=response.images[0] if response.images else "",
+            upscale_factor=request.upscale_factor,
+            meta=response.meta,
+        )
+        
+    except Exception as e:
+        logger.exception("Image upscale error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image upscaling failed: {str(e)}"
+        )

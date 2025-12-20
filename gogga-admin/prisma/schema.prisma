@@ -361,6 +361,36 @@ model CreditAdjustment {
   @@index([createdAt])
 }
 
+// Tool usage analytics - tracks which AI tools are used most
+model ToolUsage {
+  id              String   @id @default(cuid())
+  
+  // Time period
+  date            DateTime // Day of usage (stored as start of day)
+  
+  // Tool identification
+  toolName        String   // e.g., "generate_image", "search_web", "math_statistics"
+  tier            String   // FREE, JIVE, JIGGA
+  
+  // Usage metrics
+  callCount       Int      @default(0)
+  successCount    Int      @default(0)
+  failureCount    Int      @default(0)
+  totalDurationMs Int      @default(0)
+  avgDurationMs   Int      @default(0)
+  
+  // User distribution (optional aggregation)
+  uniqueUsers     Int      @default(0)
+  
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([date, toolName, tier])
+  @@index([date])
+  @@index([toolName])
+  @@index([tier])
+  @@index([callCount])
+}
+
 // Idempotent usage events (prevents double-billing)
 model UsageEvent {
   id            String   @id @default(cuid())

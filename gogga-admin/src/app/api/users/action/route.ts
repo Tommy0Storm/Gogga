@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
 interface ActionRequest {
   userId: string;
@@ -9,7 +9,9 @@ interface ActionRequest {
 }
 
 // Admin email check (simple version - should be enhanced with proper auth)
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim());
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
+  .split(",")
+  .map((e) => e.trim());
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,31 +19,34 @@ export async function POST(request: NextRequest) {
     const { userId, action, tier, credits } = body;
 
     if (!userId || !action) {
-      return NextResponse.json({ error: 'userId and action are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: "userId and action are required" },
+        { status: 400 }
+      );
     }
 
     // Find user first
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { subscription: true },
+      include: { Subscription: true },
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Handle actions
     switch (action) {
-      case 'override_tier':
-        if (!tier || !['FREE', 'JIVE', 'JIGGA'].includes(tier)) {
-          return NextResponse.json({ error: 'Invalid tier' }, { status: 400 });
+      case "override_tier":
+        if (!tier || !["FREE", "JIVE", "JIGGA"].includes(tier)) {
+          return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
         }
-        if (user.subscription) {
+        if (user.Subscription) {
           await prisma.subscription.update({
             where: { userId },
             data: {
               tier,
-              status: 'active',
+              status: "active",
               updatedAt: new Date(),
             },
           });
@@ -50,21 +55,28 @@ export async function POST(request: NextRequest) {
             data: {
               userId,
               tier,
-              status: 'active',
-              monthlyCredits: tier === 'JIGGA' ? 500000 : tier === 'JIVE' ? 200000 : 0,
-              imagesLimit: tier === 'JIGGA' ? 1000 : tier === 'JIVE' ? 200 : 50,
+              status: "active",
+              monthlyCredits:
+                tier === "JIGGA" ? 500000 : tier === "JIVE" ? 200000 : 0,
+              imagesLimit: tier === "JIGGA" ? 1000 : tier === "JIVE" ? 200 : 50,
             },
           });
         }
         // Log admin action
-        await logAdminAction('subscription_override', user.email, { fromTier: user.subscription?.tier, toTier: tier });
+        await logAdminAction("subscription_override", user.email, {
+          fromTier: user.Subscription?.tier,
+          toTier: tier,
+        });
         break;
 
-      case 'grant_credits':
+      case "grant_credits":
         if (!credits || credits <= 0) {
-          return NextResponse.json({ error: 'Invalid credits amount' }, { status: 400 });
+          return NextResponse.json(
+            { error: "Invalid credits amount" },
+            { status: 400 }
+          );
         }
-        if (user.subscription) {
+        if (user.Subscription) {
           await prisma.subscription.update({
             where: { userId },
             data: {
@@ -72,11 +84,11 @@ export async function POST(request: NextRequest) {
             },
           });
         }
-        await logAdminAction('credits_granted', user.email, { credits });
+        await logAdminAction("credits_granted", user.email, { credits });
         break;
 
-      case 'reset_monthly':
-        if (user.subscription) {
+      case "reset_monthly":
+        if (user.Subscription) {
           await prisma.subscription.update({
             where: { userId },
             data: {
@@ -86,26 +98,26 @@ export async function POST(request: NextRequest) {
             },
           });
         }
-        await logAdminAction('monthly_reset', user.email);
+        await logAdminAction("monthly_reset", user.email);
         break;
 
-      case 'cancel_subscription':
-        if (user.subscription) {
+      case "cancel_subscription":
+        if (user.Subscription) {
           // If there's a PayFast token, we should also cancel with PayFast
           // For now just update local status
           await prisma.subscription.update({
             where: { userId },
             data: {
-              status: 'cancelled',
-              tier: 'FREE',
+              status: "cancelled",
+              tier: "FREE",
               payfastToken: null,
             },
           });
         }
-        await logAdminAction('subscription_cancelled', user.email);
+        await logAdminAction("subscription_cancelled", user.email);
         break;
 
-      case 'toggle_admin':
+      case "toggle_admin":
         await prisma.user.update({
           where: { id: userId },
           data: {
@@ -114,23 +126,25 @@ export async function POST(request: NextRequest) {
         });
         // Use raw SQL since isAdmin might not be in generated types yet
         await prisma.$executeRaw`UPDATE User SET isAdmin = NOT isAdmin WHERE id = ${userId}`;
-        await logAdminAction('admin_toggle', user.email);
+        await logAdminAction("admin_toggle", user.email);
         break;
 
-      case 'send_login_email':
+      case "send_login_email":
         // Would need to integrate with email service
-        await logAdminAction('login_email_sent', user.email);
-        return NextResponse.json({ message: 'Login email would be sent (not implemented)' });
+        await logAdminAction("login_email_sent", user.email);
+        return NextResponse.json({
+          message: "Login email would be sent (not implemented)",
+        });
 
       default:
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, action });
   } catch (error) {
-    console.error('User action error:', error);
+    console.error("User action error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
@@ -144,7 +158,7 @@ async function logAdminAction(
   try {
     await prisma.adminLog.create({
       data: {
-        adminEmail: 'admin@vcb-ai.online', // Should come from session
+        adminEmail: "admin@vcb-ai.online", // Should come from session
         action,
         targetUser,
         meta: meta ? JSON.stringify(meta) : null,
@@ -152,6 +166,6 @@ async function logAdminAction(
     });
   } catch {
     // AdminLog table might not exist yet
-    console.log('Admin action logged:', action, targetUser, meta);
+    console.log("Admin action logged:", action, targetUser, meta);
   }
 }

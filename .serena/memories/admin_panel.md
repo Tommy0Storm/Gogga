@@ -185,7 +185,59 @@ Filters:
 - Action type
 - User email
 
-### 7. User Lookup
+### 7. Usage Analytics (NEW - Dec 2025)
+Comprehensive usage monitoring dashboard at `/usage`.
+
+**Ticker Cards:**
+- Total Tokens (prompt + completion breakdown)
+- Total Requests (with daily average)
+- Active Users (with requests/user ratio)
+- Estimated Cost (ZAR + USD)
+
+**Visualizations:**
+- **Line Chart**: Daily usage trend (tokens + requests, last 30 days)
+- **Pie Chart**: Usage breakdown by tier (FREE/JIVE/JIGGA)
+- **Bar Chart**: Provider breakdown (Cerebras, OpenRouter, etc.)
+- **Table**: Tool usage with columns:
+  - Tool name
+  - Call count
+  - Success rate (color-coded: green >95%, yellow >80%, red <80%)
+  - Average duration
+  - Usage bar (relative to most-used tool)
+
+**Features:**
+- Period selector: Today, Last 7 days, This month, This year, All time
+- Auto-refresh toggle (30-second interval)
+- Real-time data aggregation
+
+**API Endpoints:**
+- `GET /api/usage?period=month` - Returns comprehensive usage stats
+- `POST /api/usage` - Records tool usage events (from frontend)
+
+**Prisma Model:**
+```prisma
+model ToolUsage {
+  id              String   @id @default(cuid())
+  date            DateTime // Day of usage (start of day)
+  toolName        String   // e.g., "generate_image", "search_web"
+  tier            String   // FREE, JIVE, JIGGA
+  callCount       Int      @default(0)
+  successCount    Int      @default(0)
+  failureCount    Int      @default(0)
+  totalDurationMs Int      @default(0)
+  avgDurationMs   Int      @default(0)
+  uniqueUsers     Int      @default(0)
+  updatedAt       DateTime @updatedAt
+
+  @@unique([date, toolName, tier])
+  @@index([date])
+  @@index([toolName])
+  @@index([tier])
+  @@index([callCount])
+}
+```
+
+### 8. User Lookup
 Search by email shows:
 - Account info
 - Subscription details
@@ -201,7 +253,7 @@ Admin Actions:
 - Apply voucher to user
 - Toggle isAdmin flag
 
-### 8. System Settings (Read Only)
+### 9. System Settings (Read Only)
 - Running mode: sandbox/production
 - Environment variables (redacted)
 - Service versions

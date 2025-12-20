@@ -9,6 +9,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { StatCards } from './StatCards';
 import { AlertCards } from './AlertCards';
 import { DataTable } from './DataTable';
@@ -90,13 +91,16 @@ export function MathResultDisplay({ result, showTitle = true, showTerminal = tru
     );
   }
 
-  // Terminal toggle button
+  // Terminal toggle button with Lucide icons
   const TerminalToggle = () => (
     <button
       onClick={() => setShowLogs(!showLogs)}
       className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 mb-2 transition-colors"
     >
-      <span className="font-mono text-green-500">{showLogs ? '▼' : '▶'}</span>
+      {showLogs 
+        ? <ChevronDown size={14} className="text-green-500" /> 
+        : <ChevronRight size={14} className="text-green-500" />
+      }
       <span className="font-mono">{showLogs ? 'Hide' : 'Show'} Execution Log</span>
       <span className="text-gray-600">({terminalLines.length} lines)</span>
     </button>

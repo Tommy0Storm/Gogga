@@ -7,10 +7,11 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { Trash2, FileText, File, FileCode, FileImage, Upload, X, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import type { ContextDocument } from './types';
 import { TierBadge } from './StatCard';
-import { db, SUPPORTED_RAG_FORMATS, isSupportedFormat, RAG_LIMITS, checkStorageLimits } from '@/lib/db';
+import { db, SUPPORTED_RAG_FORMATS, isSupportedFormat, RAG_LIMITS, checkStorageLimits, generateId } from '@/lib/db';
 import { removeDocument as ragRemoveDocument } from '@/lib/rag';
 
 // ============================================================================
@@ -22,7 +23,7 @@ interface DocumentManagerProps {
   tier: 'free' | 'jive' | 'jigga';
   sessionId: string;
   onDocumentAdd?: (doc: ContextDocument) => void;
-  onDocumentRemove?: (docId: number) => void;
+  onDocumentRemove?: (docId: string) => void;
   onRefresh?: () => void;
   maxDocs?: number;
   compact?: boolean;
@@ -75,9 +76,12 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   maxDocs,
   compact = false,
 }) => {
-  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const { data: authSession } = useSession();
+  const userId = authSession?.user?.id ?? authSession?.user?.email ?? 'anonymous';
+  
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [showConfirm, setShowConfirm] = useState<number | null>(null);
+  const [showConfirm, setShowConfirm] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -90,7 +94,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const canUpload = tier !== 'free' && documents.length < effectiveMaxDocs;
 
   const handleDelete = useCallback(
-    async (docId: number) => {
+    async (docId: string) => {
       try {
         setIsDeleting(docId);
         // Get the document's sessionId for proper removal
@@ -174,10 +178,12 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         }
 
         // Save to database with session-scoped fields (v8)
-        const now = new Date();
+        const now = new Date().toISOString(); // RxDB requires ISO strings, not Date objects
         const docId = await db.documents.add({
+          // RxDB requires id to be provided
+          id: generateId(),
           // Session-Scoped RAG fields
-          userId: 'current_user', // TODO: Get from auth context
+          userId, // From NextAuth session
           originSessionId: sessionId,
           activeSessions: [sessionId], // Initially active only in upload session
           accessCount: 0,
@@ -198,6 +204,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         // Save chunks
         await db.chunks.bulkAdd(
           chunks.map((text, index) => ({
+            id: generateId(),
             documentId: docId,
             sessionId,
             chunkIndex: index,
@@ -510,7 +517,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 interface QuickDocListProps {
   documents: ContextDocument[];
   onSelect?: (doc: ContextDocument) => void;
-  selectedIds?: number[];
+  selectedIds?: string[];
 }
 
 export const QuickDocList: React.FC<QuickDocListProps> = ({
@@ -525,7 +532,7 @@ export const QuickDocList: React.FC<QuickDocListProps> = ({
           key={doc.id}
           onClick={() => onSelect?.(doc)}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors
-            ${selectedIds.includes(doc.id!) 
+            ${selectedIds.includes(doc.id) 
               ? 'bg-primary-200 text-primary-900' 
               : 'hover:bg-primary-100 text-primary-700'
             }

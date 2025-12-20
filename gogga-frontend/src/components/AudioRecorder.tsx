@@ -14,6 +14,20 @@ export default function AudioRecorder({ onAudioReady }: AudioRecorderProps) {
 
   const startRecording = async () => {
     try {
+      // Check for secure context - getUserMedia requires HTTPS (except localhost)
+      if (!navigator.mediaDevices?.getUserMedia) {
+        const isLocalhost = typeof window !== 'undefined' && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const isSecure = typeof window !== 'undefined' && window.isSecureContext;
+        
+        if (!isSecure && !isLocalhost) {
+          alert('Voice recording requires HTTPS. Please access via https:// instead of http://');
+          return;
+        }
+        alert('Microphone API not available. Please use a modern browser.');
+        return;
+      }
+      
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 

@@ -1,6 +1,14 @@
 ignoredBuiltDependencies:
+  - '@firebase/util'
   - '@prisma/engines'
+  - core-js
+  - esbuild
+  - onnxruntime-node
   - prisma
+  - protobufjs
+  - rxdb
+  - sharp
+  - unrs-resolver
 
 onlyBuiltDependencies:
   - '@firebase/util'

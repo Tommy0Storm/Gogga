@@ -7,6 +7,7 @@
 
 # ============================================================
 # DEFAULT RESOURCE ANCHORS (reusable across services)
+# Optimized for 8GB RAM MacBook Pro - based on actual usage Dec 2025
 # ============================================================
 x-default-resources: &default-resources
   deploy:
@@ -22,11 +23,11 @@ x-node-resources: &node-resources
   deploy:
     resources:
       limits:
-        cpus: '0.5'
-        memory: 512M
+        cpus: '1.0'
+        memory: 2G
       reservations:
-        cpus: '0.1'
-        memory: 256M
+        cpus: '0.25'
+        memory: 512M
 
 x-ai-resources: &ai-resources
   deploy:
@@ -50,7 +51,7 @@ x-minimal-resources: &minimal-resources
 
 # Default environment for Node.js containers
 x-node-env: &node-env
-  NODE_OPTIONS: --max-old-space-size=256
+  NODE_OPTIONS: --max-old-space-size=1536
   NEXT_TELEMETRY_DISABLED: "1"
 
 # ============================================================
@@ -68,8 +69,12 @@ services:
       - ./gogga-backend/.env
     environment:
       - PAYFAST_ENV=sandbox
+      # Use gcloud ADC for Vertex AI authentication
+      - CLOUDSDK_CONFIG=/root/.config/gcloud
     volumes:
       - ./gogga-backend:/app
+      # Mount gcloud config for Vertex AI authentication (Imagen, Veo)
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
     networks:
       - gogga_network
     restart: unless-stopped
@@ -81,31 +86,72 @@ services:
       start_period: 30s
     <<: *default-resources
 
+  # GOGGA Frontend - Development Configuration
+  # Uses Dockerfile.dev with node:20-alpine for full shell support
+  # Uses Docker Compose watch for file sync (NOT bind mounts for node_modules)
   frontend:
     build:
       context: ./gogga-frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: gogga_ui
     entrypoint: []
     ports:
       - "3002:3000"
     environment:
       <<: *node-env
+      DATABASE_URL: file:/app/prisma/dev.db
+      NEXTAUTH_URL: https://192.168.0.130:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-secret-change-in-production}
+      BACKEND_URL: http://backend:8000
+      CEPO_URL: http://cepo:8000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-admin-internal-key-dev}
       NEXT_PUBLIC_API_URL: ""
-    command: sh -c "npm install && ./node_modules/.bin/prisma generate && npm run dev:http"
+      WATCHPACK_POLLING: "true"
+      NODE_ENV: development
     volumes:
       - ./gogga-frontend:/app
-      - ./gogga-frontend/certs:/app/certs
+      - ./gogga-frontend/prisma:/app/prisma
+      - ./gogga-frontend/certs:/app/certs:ro
       - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
     depends_on:
       - backend
     networks:
       - gogga_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Docker Compose watch for development hot reload
+    # Run with: docker compose up --watch frontend
+    develop:
+      watch:
+        # Sync source files (triggers Next.js hot reload)
+        - action: sync
+          path: ./gogga-frontend/src
+          target: /app/src
+          ignore:
+            - "**/*.test.*"
+            - "**/__tests__/**"
+        # Sync public assets
+        - action: sync
+          path: ./gogga-frontend/public
+          target: /app/public
+        # Rebuild on package.json change
+        - action: rebuild
+          path: ./gogga-frontend/package.json
+        # Rebuild on config changes
+        - action: rebuild
+          path: ./gogga-frontend/next.config.js
+        - action: rebuild
+          path: ./gogga-frontend/tailwind.config.js
     <<: *node-resources
 
   # Network Proxy - Workaround for Next.js 16 network access bug
-  # Forwards external connections on port 3001 to frontend:3000
+  # Forwards external HTTPS connections on port 3001 to frontend:3000 (HTTPS)
   proxy:
     build:
       context: ./gogga-proxy
@@ -113,13 +159,22 @@ services:
     container_name: gogga_proxy
     ports:
       - "3001:3001"
+    environment:
+      TARGET_HOST: frontend
+      USE_TLS: "true"
+      SERVE_TLS: "true"
+      TLS_KEY: /app/certs/key.pem
+      TLS_CERT: /app/certs/cert.pem
+    volumes:
+      - ./gogga-frontend/certs:/app/certs:ro
+      - ./gogga-proxy/proxy.js:/app/proxy.js:ro
     depends_on:
       - frontend
     networks:
       - gogga_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:3002/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -136,10 +191,12 @@ services:
       - "3100:3100"
     environment:
       <<: *node-env
-      NODE_OPTIONS: --max-old-space-size=192
+      NODE_OPTIONS: --max-old-space-size=768
       DATABASE_URL: file:/app/prisma/dev.db
       BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_BACKEND_URL: http://192.168.0.130:8000
       FRONTEND_URL: http://frontend:3000
+      CEPO_URL: http://cepo:8000
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-admin-internal-key-dev}
       ADMIN_EMAILS: admin@vcb-ai.online
       PAYFAST_ENV: sandbox
@@ -151,41 +208,42 @@ services:
     depends_on:
       - backend
       - frontend
+      - cepo
     networks:
       - gogga_network
     restart: unless-stopped
-    <<: *default-resources
+    <<: *node-resources
 
   # CePO Sidecar - OptiLLM with Cerebras Planning and Optimization
-  # Routes JIVE/JIGGA requests through 4-step CePO pipeline + Best of N selection
-  # Provides +10-20% accuracy improvement on reasoning tasks
+  # Routes JIVE/JIGGA requests through enhanced reasoning pipeline
+  # Provides +10-15% accuracy improvement on reasoning tasks
+  # Uses ReRead + CoT Reflection (Cerebras-compatible, n=1 only)
   cepo:
     build:
       context: ./gogga-cepo
       dockerfile: Dockerfile
     container_name: gogga_cepo
     ports:
-      - "8080:8080"
+      - "8080:8000"
     env_file:
       - ./gogga-backend/.env
     environment:
-      # CePO pipeline configuration
-      OPTILLM_APPROACH: "cepo"
-      CEPO_BESTOFN_N: "3"
-      CEPO_PLANNING_N: "3"
-      CEPO_PLANNING_M: "6"
-      CEPO_BESTOFN_RATING_TYPE: "absolute"
-      OPTILLM_CEPO_USE_REASONING_FALLBACK: "false"  # Cerebras doesn't support reasoning_effort
-      # Planning temperature gradient (0.55 → 0.25 → 0.1 → 0.0)
-      CEPO_TEMP_INITIAL_PLAN: "0.55"
-      CEPO_TEMP_INITIAL_SOLUTION: "0.25"
-      CEPO_TEMP_REFINED_PLAN: "0.1"
-      CEPO_TEMP_FINAL_SOLUTION: "0.0"
+      # Use re2&cot_reflection - ReRead + CoT with Reflection
+      # Cerebras-compatible: no reasoning_effort, no n>1
+      # re2: processes query twice for better reasoning
+      # cot_reflection: structured <thinking> <reflection> <output>
+      OPTILLM_APPROACH: "re2&cot_reflection"
+      OPTILLM_PORT: "8000"
+      # Model for base completions
+      OPTILLM_MODEL: "qwen-3-32b"
+      # Enhanced logging for debugging
+      OPTILLM_LOG_LEVEL: "DEBUG"
+      PYTHONUNBUFFERED: "1"
     networks:
       - gogga_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -197,5 +255,8 @@ networks:
     driver: bridge
 
 volumes:
-  frontend_node_modules:
+  # Admin node_modules volume - needed for native module rebuild on startup
   admin_node_modules:
+  # Frontend volumes - prevent node_modules corruption
+  frontend_node_modules:
+  frontend_next:

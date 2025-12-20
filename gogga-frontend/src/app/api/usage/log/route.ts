@@ -3,26 +3,45 @@
  * 
  * Logs detailed token usage for every AI request.
  * Called by the backend after each chat/enhance/image request.
+ * 
+ * Now includes OptiLLM-adjusted tokens and reasoning token tracking.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { randomUUID } from 'crypto'
 
-// Cost per 1M tokens in cents (ZAR)
-const MODEL_COSTS: Record<string, number> = {
-    'llama-3.3-70b': 35,        // $0.35/1M → ~R6.50/1M
-    'llama-3.1-8b': 10,         // $0.10/1M → ~R1.85/1M
-    'qwen-3-32b': 20,           // $0.20/1M → ~R3.70/1M
-    'qwen3-32b': 20,            // Alias
-    'meta-llama/llama-3.3-70b-instruct': 35,
-    'meta-llama/llama-3.1-8b-instruct': 10,
-    'qwen/qwen3-32b': 20,
+// Pricing per 1M tokens in USD (synchronized with backend config.py)
+const MODEL_PRICING_USD: Record<string, { input: number; output: number }> = {
+    // Cerebras Qwen 32B (JIVE/JIGGA)
+    'qwen-3-32b': { input: 0.10, output: 0.10 },
+    'qwen3-32b': { input: 0.10, output: 0.10 },
+    'qwen/qwen3-32b': { input: 0.10, output: 0.10 },
+    // OpenRouter Qwen 235B (complex queries)
+    'qwen-3-235b': { input: 0.80, output: 1.10 },
+    'qwen3-235b': { input: 0.80, output: 1.10 },
+    'qwen/qwen3-235b-a22b': { input: 0.80, output: 1.10 },
+    // Legacy models
+    'llama-3.3-70b': { input: 0.35, output: 0.35 },
+    'llama-3.1-8b': { input: 0.10, output: 0.10 },
+    'meta-llama/llama-3.3-70b-instruct': { input: 0.35, output: 0.35 },
+    'meta-llama/llama-3.1-8b-instruct': { input: 0.10, output: 0.10 },
 }
 
-function calculateCost(model: string, tokens: number): number {
+// Exchange rate ZAR/USD (December 2025)
+const ZAR_USD_RATE = 18.50
+
+function calculateCostCents(model: string, inputTokens: number, outputTokens: number): number {
     const normalizedModel = model.toLowerCase()
-    const costPer1M = MODEL_COSTS[normalizedModel] || 50 // Default 50 cents/1M
-    return Math.ceil((tokens / 1_000_000) * costPer1M)
+    const pricing = MODEL_PRICING_USD[normalizedModel] || { input: 0.50, output: 0.50 } // Default 50c/1M
+    
+    // Calculate cost in USD
+    const inputCostUsd = (inputTokens / 1_000_000) * pricing.input
+    const outputCostUsd = (outputTokens / 1_000_000) * pricing.output
+    const totalCostUsd = inputCostUsd + outputCostUsd
+    
+    // Convert to ZAR cents (1 ZAR = 100 cents)
+    const totalCostZar = totalCostUsd * ZAR_USD_RATE
+    return Math.ceil(totalCostZar * 100) // Return in ZAR cents
 }
 
 export async function POST(request: NextRequest) {
@@ -33,11 +52,15 @@ export async function POST(request: NextRequest) {
             userId,
             promptTokens = 0,
             completionTokens = 0,
+            adjustedCompletionTokens,
+            reasoningTokens = 0,
             totalTokens = promptTokens + completionTokens,
             model,
             provider,
             endpoint,
             tier,
+            optillmLevel,
+            optillmMultiplier,
             conversationId,
             requestId,
             durationMs,
@@ -50,22 +73,27 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // Calculate cost
-        const costCents = calculateCost(model, totalTokens)
+        // Use adjusted tokens for cost calculation if provided, otherwise use raw
+        const tokensForCost = adjustedCompletionTokens ?? completionTokens
+        const costCents = calculateCostCents(model, promptTokens, tokensForCost)
 
-        // Create usage record
+        // Create usage record with OptiLLM fields
         const usage = await prisma.usage.create({
             data: {
                 id: randomUUID(),
                 userId,
                 promptTokens,
                 completionTokens,
+                adjustedCompletionTokens: adjustedCompletionTokens ?? null,
+                reasoningTokens: reasoningTokens || null,
                 totalTokens,
                 costCents,
                 model,
                 provider,
                 endpoint,
                 tier,
+                optillmLevel: optillmLevel ?? null,
+                optillmMultiplier: optillmMultiplier ?? null,
                 conversationId,
                 requestId,
                 durationMs,

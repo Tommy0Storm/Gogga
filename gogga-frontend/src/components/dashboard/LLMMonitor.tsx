@@ -585,7 +585,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => formatTokenCount(value)}
+                    formatter={(value: number | undefined) => formatTokenCount(value ?? 0)}
                   />
                 </PieChart>
               </ClientResponsiveContainer>
@@ -633,7 +633,7 @@ export const LLMMonitor: React.FC<LLMMonitorProps> = ({ timeRange: externalTimeR
                   tickFormatter={(v) => `R${v.toFixed(0)}`}
                 />
                 <Tooltip 
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value: number | undefined) => formatCurrency(value ?? 0)}
                   labelFormatter={(label) => label}
                 />
                 <Bar 

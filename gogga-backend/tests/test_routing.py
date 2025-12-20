@@ -47,10 +47,8 @@ class TestTierRouter:
             assert layer == CognitiveLayer.FREE_IMAGE, f"Expected FREE_IMAGE for '{msg}', got '{layer}'"
     
     def test_jive_uses_jive_text(self):
-        """JIVE tier should use JIVE_TEXT (Qwen 32B with thinking)."""
+        """JIVE tier should use JIVE_TEXT for general queries (not legal/complex)."""
         messages = [
-            "What does POPIA say about data retention?",
-            "Explain the Constitution Chapter 2",
             "Write a Python function to parse JSON",
             "Hi there!",
             "What's the weather?",
@@ -60,6 +58,18 @@ class TestTierRouter:
         for msg in messages:
             layer = tier_router.classify_intent(msg, UserTier.JIVE)
             assert layer == CognitiveLayer.JIVE_TEXT, f"Expected JIVE_TEXT for '{msg}', got '{layer}'"
+    
+    def test_jive_complex_routes_to_235b(self):
+        """JIVE tier should route legal/complex queries to JIVE_COMPLEX (235B)."""
+        messages = [
+            "What does POPIA say about data retention?",
+            "Is this constitutional?",
+            "What are the litigation options here?",
+        ]
+        
+        for msg in messages:
+            layer = tier_router.classify_intent(msg, UserTier.JIVE)
+            assert layer == CognitiveLayer.JIVE_COMPLEX, f"Expected JIVE_COMPLEX for '{msg}', got '{layer}'"
     
     def test_jigga_default_uses_thinking(self):
         """JIGGA tier should default to JIGGA_THINK for general queries."""

@@ -1,21 +1,27 @@
 # GOGGA Frontend Development Dockerfile
+# Uses node:20-alpine for full shell support and native module compilation
 FROM node:20-alpine
 
 WORKDIR /app
 
+# Install build dependencies for native modules (better-sqlite3, sharp, etc.)
+# Install pnpm globally and wget for healthchecks
+RUN apk update && apk add --no-cache python3 make g++ wget && \
+    corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies (will use volume in docker-compose)
+RUN pnpm install --frozen-lockfile
+
 # Set backend URL for Docker networking
 ENV BACKEND_URL=http://backend:8000
-
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm install --force && \
-    npm install next@16.0.7 react@19.1.0 react-dom@19.1.0 --force
-
-# Copy source code
-COPY . .
+ENV NODE_ENV=development
 
 # Expose port
 EXPOSE 3000
 
-# Start development server
-CMD ["npm", "run", "dev"]
+# Start development server with HTTPS
+# Generate Prisma client first, then start Next.js on 0.0.0.0 (all interfaces)
+CMD ["sh", "-c", "pnpm prisma generate && next dev -H 0.0.0.0 -p 3000"]

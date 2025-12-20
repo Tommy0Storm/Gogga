@@ -160,7 +160,9 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
   // Get all data keys for multi-series charts
   const dataKeys = useMemo(() => {
     if (series && series.length > 0) {
-      return series.map(s => s.dataKey);
+      const keys = series.map(s => s.dataKey);
+      console.log('[ChartRenderer] Using series-defined dataKeys:', keys);
+      return keys;
     }
     // Auto-detect numeric keys from data
     if (processedData.length > 0) {
@@ -172,11 +174,18 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
       );
       // Return all numeric keys found (supports multi-series like value, value2, etc.)
       if (numericKeys.length > 0) {
+        console.log('[ChartRenderer] Auto-detected dataKeys:', numericKeys);
         return numericKeys;
       }
     }
+    console.log('[ChartRenderer] Fallback to default dataKey: value');
     return ['value'];
   }, [series, processedData]);
+  
+  // Check if chart type is suitable for current data
+  const isMultiSeriesType = ['line', 'smoothLine', 'stackedLine', 'area', 'stackedArea', 'multiArea'].includes(currentChartType);
+  const hasMultipleSeries = dataKeys.length > 1;
+  const isSingleSeriesWarning = isMultiSeriesType && !hasMultipleSeries && processedData.length > 1;
   
   // Determine legend position based on chart type
   const getLegendProps = () => {
@@ -563,7 +572,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               </Pie>
               <Tooltip 
                 contentStyle={tooltipStyle}
-                formatter={(value: number, name: string) => [`${value} (${name})`, '']}
+                formatter={(value?: number, name?: string) => [`${value ?? 0} (${name ?? ''})`, '']}
               />
               <Legend 
                 layout="horizontal"
@@ -599,7 +608,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
               </Pie>
               <Tooltip 
                 contentStyle={tooltipStyle}
-                formatter={(value: number, name: string) => [`${value} (${name})`, '']}
+                formatter={(value?: number, name?: string) => [`${value ?? 0} (${name ?? ''})`, '']}
               />
               <Legend 
                 layout="horizontal"
@@ -1075,6 +1084,18 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData, classNa
           </div>
         </div>
       </div>
+      
+      {/* Warning for incompatible data structure */}
+      {isSingleSeriesWarning && (
+        <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+          <span className="text-amber-600 text-sm">⚠️</span>
+          <span className="text-xs text-amber-700" style={{ fontFamily: 'Quicksand, sans-serif' }}>
+            This data shows {processedData.length} categories as a single series. 
+            For multi-line comparison, the AI should use value, value2 format. 
+            Try switching to Bar chart for better visualization.
+          </span>
+        </div>
+      )}
       
       {/* Chart Area */}
       <div ref={chartRef} className="p-4 bg-white overflow-hidden">

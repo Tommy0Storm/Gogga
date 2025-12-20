@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "./scripts/clean-next.sh",
     "dev": "next dev -H 0.0.0.0 -p 3100",
     "build": "npx prisma generate && next build",
     "start": "next start -p 3100",
@@ -13,10 +14,10 @@
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.1.0",
     "@prisma/client": "^7.1.0",
-    "better-sqlite3": "^12.5.0",
-    "dotenv": "^16.5.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^16.5.0",
     "next": "^16.0.7",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -35,8 +37,8 @@
     "eslint-config-next": "16.0.7",
     "postcss": "^8.4.32",
     "prisma": "^7.1.0",
-    "@types/better-sqlite3": "^7.6.13",
     "tailwindcss": "^4.1.17",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.2"
   }
 }

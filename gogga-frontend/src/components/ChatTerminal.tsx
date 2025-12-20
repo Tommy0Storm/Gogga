@@ -55,32 +55,32 @@ export function ChatTerminal({
   const getLevelStyles = (level: TerminalLog['level']) => {
     switch (level) {
       case 'success':
-        return 'text-green-400';
+        return 'text-success';
       case 'error':
-        return 'text-red-400';
+        return 'text-error';
       case 'warning':
-        return 'text-amber-400';
+        return 'text-warning';
       case 'debug':
-        return 'text-gray-500';
+        return 'text-primary-500';
       case 'info':
       default:
-        return 'text-gray-300';
+        return 'text-info';
     }
   };
 
   const getLevelIcon = (level: TerminalLog['level']) => {
     switch (level) {
       case 'success':
-        return <Check size={12} className="text-green-400" />;
+        return <Check size={14} className="text-success" />;
       case 'error':
-        return <AlertCircle size={12} className="text-red-400" />;
+        return <AlertCircle size={14} className="text-error" />;
       case 'warning':
-        return <AlertCircle size={12} className="text-amber-400" />;
+        return <AlertCircle size={14} className="text-warning" />;
       case 'debug':
-        return <span className="text-gray-500 text-xs">•</span>;
+        return <span className="text-primary-500 text-xs">•</span>;
       case 'info':
       default:
-        return <Info size={12} className="text-gray-400" />;
+        return <Info size={14} className="text-info" />;
     }
   };
 
@@ -88,33 +88,33 @@ export function ChatTerminal({
   if (logs.length === 0 && !isActive) return null;
 
   return (
-    <div className="w-full space-y-2">
+    <div className="w-full space-y-3">
       {/* Collapsible Thinking Block (above terminal) */}
       {(thinkingContent || isThinking) && (
-        <div className="rounded-lg overflow-hidden border border-gray-600 bg-gray-800">
+        <div className="rounded-xl overflow-hidden border border-primary-300 bg-primary-800 shadow-soft">
           <button
             onClick={() => setThinkingExpanded(!thinkingExpanded)}
-            className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-primary-700 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Brain size={14} className="text-purple-400" />
-              <span className="text-xs font-medium text-gray-300">AI Thinking</span>
+              <Brain size={16} className="text-accent-gold" />
+              <span className="text-sm font-medium text-primary-100">AI Thinking</span>
               {isThinking && (
                 <div className="flex items-center gap-1.5">
-                  <Activity size={12} className="text-purple-400 animate-pulse" />
-                  <span className="text-xs text-purple-400">Processing...</span>
+                  <Activity size={14} className="text-accent-gold animate-pulse" />
+                  <span className="text-xs text-accent-gold">Processing...</span>
                 </div>
               )}
             </div>
             {thinkingExpanded ? (
-              <ChevronUp size={14} className="text-gray-400" />
+              <ChevronUp size={16} className="text-primary-400" />
             ) : (
-              <ChevronDown size={14} className="text-gray-400" />
+              <ChevronDown size={16} className="text-primary-400" />
             )}
           </button>
           {thinkingExpanded && thinkingContent && (
-            <div className="px-3 py-2 border-t border-gray-700 max-h-40 overflow-y-auto">
-              <p className="text-xs text-gray-400 font-mono whitespace-pre-wrap">
+            <div className="px-4 py-3 border-t border-primary-600 max-h-48 overflow-y-auto">
+              <p className="text-sm text-primary-300 font-mono whitespace-pre-wrap">
                 {thinkingContent}
               </p>
             </div>
@@ -123,31 +123,31 @@ export function ChatTerminal({
       )}
 
       {/* GoggaSolve Terminal */}
-      <div className="rounded-lg overflow-hidden border border-gray-700 bg-gray-900 shadow-lg">
+      <div className="rounded-xl overflow-hidden border border-primary-300 bg-primary-900 shadow-elevated">
         {/* Terminal Header */}
-        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center justify-between px-4 py-2 bg-primary-800 border-b border-primary-600">
           <div className="flex items-center gap-2">
-            <Terminal size={14} className="text-primary-400" />
-            <span className="text-xs font-medium text-primary-300">GoggaSolve</span>
+            <Terminal size={16} className="text-accent-teal" />
+            <span className="text-sm font-medium text-primary-100">GoggaSolve</span>
             {isActive && (
               <div className="flex items-center gap-1.5">
-                <Activity size={12} className="text-green-400 animate-pulse" />
-                <span className="text-xs text-green-400">Live</span>
+                <Activity size={14} className="text-accent-teal animate-pulse" />
+                <span className="text-xs text-accent-teal">Live</span>
               </div>
             )}
             {!isActive && logs.length > 0 && (
-              <span className="text-xs text-gray-500">Complete</span>
+              <span className="text-xs text-primary-500">Complete</span>
             )}
           </div>
           <div className="flex items-center gap-2">
             {toolsRunning.length > 0 && (
-              <div className="flex items-center gap-1 px-2 py-0.5 bg-gray-700 rounded text-xs">
-                <Sparkles size={10} className="text-primary-400" />
-                <span className="text-gray-300">{toolsRunning.join(', ')}</span>
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary-700 rounded-lg text-xs">
+                <Sparkles size={12} className="text-accent-gold" />
+                <span className="text-primary-200">{toolsRunning.join(', ')}</span>
               </div>
             )}
             {toolCount > 0 && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-primary-500">
                 {toolCount} calc{toolCount > 1 ? 's' : ''}
               </span>
             )}
@@ -159,7 +159,7 @@ export function ChatTerminal({
                     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
                   }
                 }}
-                className="text-xs text-primary-400 hover:text-primary-300 px-1"
+                className="text-xs text-accent-gold hover:text-accent-gold-dark px-1"
               >
                 ↓ Jump to bottom
               </button>
@@ -171,20 +171,20 @@ export function ChatTerminal({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="p-3 h-40 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900"
-          style={{ backgroundColor: '#0d1117' }}
+          className="p-4 h-48 overflow-y-auto font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-primary-600 scrollbar-track-primary-900"
+          style={{ backgroundColor: 'var(--color-dark-bg)' }}
         >
           {logs.length === 0 ? (
-            <div className="flex items-center gap-2 text-gray-500">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-pulse"></span>
-                <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-pulse delay-100"></span>
-                <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-pulse delay-200"></span>
+            <div className="flex items-center gap-3 text-primary-500">
+              <div className="flex gap-1.5">
+                <span className="w-2 h-2 bg-accent-gold rounded-full animate-pulse"></span>
+                <span className="w-2 h-2 bg-accent-gold rounded-full animate-pulse delay-100"></span>
+                <span className="w-2 h-2 bg-accent-gold rounded-full animate-pulse delay-200"></span>
               </div>
               <span>Initializing GoggaSolve...</span>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {logs.map((log, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <span className="flex-shrink-0 mt-0.5 select-none">{getLevelIcon(log.level)}</span>
@@ -192,8 +192,8 @@ export function ChatTerminal({
                 </div>
               ))}
               {isActive && (
-                <div className="flex items-center gap-2 text-gray-500 mt-1">
-                  <span className="inline-block w-2 h-3 bg-gray-400 animate-pulse"></span>
+                <div className="flex items-center gap-2 text-primary-500 mt-2">
+                  <span className="inline-block w-2 h-3 bg-accent-teal animate-pulse"></span>
                 </div>
               )}
             </div>
@@ -201,7 +201,7 @@ export function ChatTerminal({
         </div>
 
         {/* Terminal Footer - Status bar */}
-        <div className="flex items-center justify-between px-3 py-1 bg-gray-800 border-t border-gray-700 text-xs text-gray-500">
+        <div className="flex items-center justify-between px-4 py-2 bg-primary-800 border-t border-primary-600 text-sm text-primary-500">
           <span>{logs.length} log entries</span>
           <span>{isActive ? 'Calculating...' : 'Ready'}</span>
         </div>

@@ -8,7 +8,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Info } from 'lucide-react';
+import { Info, TrendingUp, TrendingDown } from 'lucide-react';
 
 // ============================================================================
 // Animation Helpers
@@ -187,7 +187,10 @@ export const StatCard: React.FC<StatCardProps> = ({
           )}
           {trend && (
             <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${trend.isPositive ? 'text-sa-green' : 'text-sa-red'} transition-colors duration-300`}>
-              <span className={trend.isPositive ? 'animate-bounce-subtle' : ''}>{trend.isPositive ? '↑' : '↓'}</span>
+              {trend.isPositive 
+                ? <TrendingUp size={14} className="animate-bounce-subtle" /> 
+                : <TrendingDown size={14} />
+              }
               <span>{Math.abs(trend.value)}%</span>
               <span className="text-primary-400 font-normal">vs last hour</span>
             </div>
@@ -452,12 +455,12 @@ export const PrivacyBadge: React.FC<PrivacyBadgeProps> = ({
   if (variant === 'detailed') {
     return (
       <div 
-        className={`bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 rounded-xl p-4 ${className}`}
+        className={`bg-linear-to-r from-primary-50 to-primary-100 border border-primary-200 rounded-xl p-4 ${className}`}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-start gap-3 cursor-pointer">
           <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-            <span className="text-xl">🔒</span>
+            <span className="material-icons text-primary-700">lock</span>
           </div>
           <div className="flex-1">
             <h4 className="text-sm font-semibold text-primary-800">Your Data Stays Private</h4>

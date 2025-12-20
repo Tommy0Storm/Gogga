@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
-import { GoggaTalkButton } from '@/components/GoggaTalkButton';
+import { GoggaTalkButton, ScreenShareButton } from '@/components/GoggaTalkButton';
 import { GoggaTalkTerminal } from '@/components/GoggaTalkTerminal';
 import AdminPanel from '@/components/AdminPanel';
 import PromptManager from '@/components/PromptManager';
@@ -61,6 +61,14 @@ import {
   Hash,
   Terminal,
   Bug,
+  Paperclip,
+  Copy,
+  Wrench,
+  ArrowUpCircle,
+  MessageSquare,
+  Scale,
+  Code,
+  Languages,
 } from 'lucide-react';
 import axios from 'axios';
 import { useBuddySystem } from '@/hooks/useBuddySystem';
@@ -78,6 +86,7 @@ import { RightSidePanel } from '@/components/RightSidePanel';
 import { ExportModal, ExportButton } from '@/components/ExportModal';
 import { useGoggaSmart } from '@/hooks/useGoggaSmart';
 import { GoggaSmartButton, GoggaSmartModal, FeedbackButtons } from '@/components/GoggaSmartUI';
+import { useRightPanel } from '@/hooks/useRightPanel';
 
 // Extended message with image and thinking support
 interface ChatMessage extends Message {
@@ -120,6 +129,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(
     new Set()
   ); // Selected sessions for bulk delete
+  const [historySearch, setHistorySearch] = useState(''); // Search filter for chat history
   // Live terminal state for math tool execution
   const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>([]);
   const [terminalActive, setTerminalActive] = useState(false);
@@ -171,6 +181,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     getMaxDocsPerSession,
     getRemainingDocsSlots,
     initSemanticSearch,
+    // RAG Store (persistent, cross-session)
+    ragStoreDocuments,
+    uploadToRAGStore,
+    removeFromRAGStore,
+    clearRAGStore,
   } = useRAG(tier);
 
   // Chat history hook (JIVE/JIGGA only)
@@ -222,8 +237,9 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     getLocationContext,
   } = useLocation(true); // Auto-prompt for location on first load
 
-  // BuddySystem hook (language detection, relationship tracking)
+  // BuddySystem hook (language detection, relationship tracking, personality)
   const {
+    profile,
     processMessage: processBuddyMessage,
     detectLanguage: detectMessageLanguage,
     getAIContext: getBuddyContext,
@@ -249,6 +265,9 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   // ToolShed hook (tool forcing for JIVE/JIGGA)
   const { forcedTool, fetchTools, clearForcedTool } = useToolShed();
 
+  // RightSidePanel hook (for triggering Tools/Docs/Weather panel)
+  const { togglePanel: toggleRightPanel, isOpen: isRightPanelOpen } = useRightPanel();
+
   // Document store sync (for RightSidePanel)
   // Use selectors to get stable function references
   const syncDocumentState = useDocumentStore((state) => state.syncState);
@@ -256,6 +275,12 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const setRemoveHandler = useDocumentStore((state) => state.setRemoveHandler);
   const setSelectHandler = useDocumentStore((state) => state.setSelectHandler);
   const setLoadAllHandler = useDocumentStore((state) => state.setLoadAllHandler);
+  // RAG Store handlers
+  const setRAGUploadHandler = useDocumentStore((state) => state.setRAGUploadHandler);
+  const setRAGRemoveHandler = useDocumentStore((state) => state.setRAGRemoveHandler);
+  const setClearAllRAGHandler = useDocumentStore((state) => state.setClearAllRAGHandler);
+  const setSessionDocuments = useDocumentStore((state) => state.setSessionDocuments);
+  const setRAGDocuments = useDocumentStore((state) => state.setRAGDocuments);
 
   // Fetch tools when tier changes or on mount for paid tiers
   useEffect(() => {
@@ -278,14 +303,22 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       canUpload,
       maxDocsPerSession: getMaxDocsPerSession(),
     });
-  }, [syncDocumentState, documents, selectedDocIds, allDocuments, ragLoading, isEmbedding, storageUsage, tier, isRAGEnabled, canUpload, getMaxDocsPerSession]);
+    // Sync session vs RAG documents separately
+    setSessionDocuments(documents);
+    setRAGDocuments(ragStoreDocuments);
+  }, [syncDocumentState, documents, selectedDocIds, allDocuments, ragLoading, isEmbedding, storageUsage, tier, isRAGEnabled, canUpload, getMaxDocsPerSession, setSessionDocuments, setRAGDocuments, ragStoreDocuments]);
 
   // Set up action handlers for document store
   useEffect(() => {
+    // Session document handlers
     setUploadHandler(uploadDocument);
     setRemoveHandler(removeDocument);
     setSelectHandler(selectDocuments);
     setLoadAllHandler(loadAllDocuments);
+    // RAG Store handlers
+    setRAGUploadHandler(uploadToRAGStore);
+    setRAGRemoveHandler(removeFromRAGStore);
+    setClearAllRAGHandler(clearRAGStore);
 
     return () => {
       // Cleanup handlers on unmount
@@ -293,13 +326,16 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       setRemoveHandler(null);
       setSelectHandler(null);
       setLoadAllHandler(null);
+      setRAGUploadHandler(null);
+      setRAGRemoveHandler(null);
+      setClearAllRAGHandler(null);
       // Synergy: Abort any in-flight streaming request to save API costs
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
     };
-  }, [setUploadHandler, setRemoveHandler, setSelectHandler, setLoadAllHandler, uploadDocument, removeDocument, selectDocuments, loadAllDocuments]);
+  }, [setUploadHandler, setRemoveHandler, setSelectHandler, setLoadAllHandler, uploadDocument, removeDocument, selectDocuments, loadAllDocuments, setRAGUploadHandler, setRAGRemoveHandler, setClearAllRAGHandler, uploadToRAGStore, removeFromRAGStore, clearRAGStore]);
 
   // Local messages for FREE tier (not persisted)
   const [freeMessages, setFreeMessages] = useState<ChatMessage[]>([]);
@@ -348,23 +384,52 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     });
   }, [displayMessages, isPersistenceEnabled]);
 
-  // Load saved tier from localStorage (and fix any corrupted values)
+  // Load tier from localStorage, with session tier as fallback
+  // localStorage is trusted because it can be updated via PayFast flow
+  // before the session is refreshed
   useEffect(() => {
+    const validTiers: Tier[] = ['free', 'jive', 'jigga'];
+    const tierRank = { free: 0, jive: 1, jigga: 2 };
+    
+    // Get localStorage tier
     const rawTier = localStorage.getItem('gogga_tier');
-    const savedTier = rawTier?.trim() as Tier | null;
-    if (savedTier && ['free', 'jive', 'jigga'].includes(savedTier)) {
-      setTier(savedTier);
+    const localTier = rawTier?.trim().toLowerCase() as Tier | null;
+    
+    // Get session tier (normalized to lowercase)
+    const sessionTier = userTier?.toLowerCase().trim() as Tier;
+    
+    // Use localStorage tier if valid, else use session tier
+    if (localTier && validTiers.includes(localTier)) {
+      // localStorage is set - use it if it's >= session tier
+      // This handles the case where localStorage is updated by PayFast
+      // before the session is refreshed
+      if (!sessionTier || !validTiers.includes(sessionTier) ||
+          tierRank[localTier] >= tierRank[sessionTier]) {
+        setTier(localTier);
+        console.log('[GOGGA] Using localStorage tier:', localTier);
+      } else {
+        // Session tier is higher - upgrade localStorage
+        setTier(sessionTier);
+        localStorage.setItem('gogga_tier', sessionTier);
+        console.log('[GOGGA] Upgraded tier from session:', sessionTier);
+      }
       // Fix corrupted value if it had whitespace
-      if (rawTier !== savedTier) {
-        localStorage.setItem('gogga_tier', savedTier);
+      if (rawTier !== localTier) {
+        localStorage.setItem('gogga_tier', localTier);
         console.log('[GOGGA] Fixed corrupted tier value in localStorage');
       }
+    } else if (sessionTier && validTiers.includes(sessionTier)) {
+      // No valid localStorage tier - use session tier
+      setTier(sessionTier);
+      localStorage.setItem('gogga_tier', sessionTier);
+      console.log('[GOGGA] Initialized tier from session:', sessionTier);
     } else if (rawTier) {
       // Invalid tier value - reset to free
+      setTier('free');
       localStorage.setItem('gogga_tier', 'free');
       console.log('[GOGGA] Reset invalid tier value to free');
     }
-  }, []);
+  }, [userTier]);
 
   // Auto-initialize semantic engine for JIGGA tier (preload model)
   useEffect(() => {
@@ -390,11 +455,18 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     }
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom only when message count changes
+  const prevMessageCountRef = useRef(displayMessages.length);
   useEffect(() => {
-    if (scrollRef.current) {
+    // Only scroll if message count changed (new message added)
+    // Skip if user is focused on input to prevent scroll during typing
+    const messageCountChanged = prevMessageCountRef.current !== displayMessages.length;
+    const isInputFocused = document.activeElement === textareaRef.current;
+    
+    if (scrollRef.current && messageCountChanged && !isInputFocused) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
+    prevMessageCountRef.current = displayMessages.length;
   }, [displayMessages]);
 
   const sendMessage = async (text: string) => {
@@ -556,6 +628,10 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         content: msg.content,
       }));
 
+      // Detect language from user message for backend routing
+      const langDetection = detectMessageLanguage(text);
+      console.log('[GOGGA] Language detection:', langDetection.language, 'confidence:', langDetection.confidence);
+
       const requestPayload = {
         message: messageToSend,
         user_id: userEmail || 'anonymous',
@@ -564,9 +640,13 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         force_layer:
           tier === 'jigga' && forceModel !== 'auto' ? forceModel : undefined,
         force_tool: forcedTool?.tool.name || undefined, // ToolShed: Force specific tool
+        // GOGGA Voice: Personality and language for authentic SA experience
+        personality_mode: profile?.personalityMode || 'goody',
+        detected_language: langDetection.language,
       };
       console.log('[GOGGA] Request payload:', JSON.stringify(requestPayload));
       console.log('[GOGGA] History messages:', historyForAPI.length);
+      console.log('[GOGGA] Personality mode:', profile?.personalityMode || 'goody');
       if (forcedTool) {
         console.log('[GOGGA] Forced tool:', forcedTool.tool.name);
       }
@@ -700,18 +780,32 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
 
                 case 'content':
                   accumulatedContent += eventData.content || '';
-                  // Check for <think> tags in content and extract
-                  if (accumulatedContent.includes('<think>')) {
+                  // Check for reasoning tags in content (think, thinking, reflection, plan)
+                  const reasoningOpenTags = ['<think>', '<thinking>', '<reflection>', '<plan>'];
+                  const reasoningCloseTags = ['</think>', '</thinking>', '</reflection>', '</plan>'];
+                  const hasOpenTag = reasoningOpenTags.some(tag => accumulatedContent.includes(tag));
+                  const hasCloseTag = reasoningCloseTags.some(tag => accumulatedContent.includes(tag));
+                  
+                  if (hasOpenTag && !isStreamingThinking) {
                     setIsStreamingThinking(true);
                   }
-                  if (accumulatedContent.includes('</think>')) {
+                  if (hasCloseTag && isStreamingThinking) {
                     setIsStreamingThinking(false);
-                    // Extract thinking from content
-                    const thinkMatch = accumulatedContent.match(
-                      /<think>([\s\S]*?)<\/think>/
-                    );
-                    if (thinkMatch) {
-                      accumulatedThinking = thinkMatch[1] ?? '';
+                    // Extract all reasoning sections from content
+                    const thinkingPatterns = [
+                      /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi,
+                      /<reflection>([\s\S]*?)<\/reflection>/gi,
+                      /<plan>([\s\S]*?)<\/plan>/gi,
+                    ];
+                    let extractedThinking = '';
+                    for (const pattern of thinkingPatterns) {
+                      const matches = accumulatedContent.matchAll(pattern);
+                      for (const match of matches) {
+                        extractedThinking += (match[1] || '') + '\n\n';
+                      }
+                    }
+                    if (extractedThinking.trim()) {
+                      accumulatedThinking = extractedThinking.trim();
                       setStreamingThinking(accumulatedThinking);
                     }
                   }
@@ -771,12 +865,27 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         setLastGoggaSolveLogs(collectedLogs);
         setLastGoggaSolveThinking(accumulatedThinking);
 
-        // Clean thinking tags from content - handle all variations
+        // Clean all reasoning/thinking tags from content - handle all OptiLLM/CePO variations
         let cleanContent = accumulatedContent
-          .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '') // Complete blocks
-          .replace(/<think(?:ing)?>([\s\S]*)$/gi, '') // Unclosed tags at end
-          .replace(/<\/think(?:ing)?>/gi, '') // Orphaned closing tags
-          .replace(/<think(?:ing)?>/gi, '') // Orphaned opening tags
+          // Complete blocks for all reasoning tag types
+          .replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '')
+          .replace(/<reflection>([\s\S]*?)<\/reflection>/gi, '')
+          .replace(/<plan>([\s\S]*?)<\/plan>/gi, '')
+          .replace(/<output>([\s\S]*?)<\/output>/gi, (_, content) => content) // Keep output content, remove tags
+          // Unclosed tags at end
+          .replace(/<think(?:ing)?>([\s\S]*)$/gi, '')
+          .replace(/<reflection>([\s\S]*)$/gi, '')
+          .replace(/<plan>([\s\S]*)$/gi, '')
+          // Orphaned closing tags
+          .replace(/<\/think(?:ing)?>/gi, '')
+          .replace(/<\/reflection>/gi, '')
+          .replace(/<\/plan>/gi, '')
+          .replace(/<\/output>/gi, '')
+          // Orphaned opening tags
+          .replace(/<think(?:ing)?>/gi, '')
+          .replace(/<reflection>/gi, '')
+          .replace(/<plan>/gi, '')
+          .replace(/<output>/gi, '')
           .trim();
 
         // DEBUG: Log what we accumulated vs what we cleaned
@@ -939,7 +1048,9 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           }
 
           // Execute the tool calls on the frontend
-          const toolResults = await executeToolCalls(normalizedToolCalls);
+          // Use `tier` (localStorage state) for consistency with chat API requests
+          // This ensures the same tier is used for both the chat and tool execution
+          const toolResults = await executeToolCalls(normalizedToolCalls, tier);
           console.log('[GOGGA] Tool results:', toolResults);
 
           // Add tool execution info to the message (no label for images)
@@ -1024,6 +1135,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             ? { math_tool_count: data.meta.math_tool_count as number }
             : {}),
       });
+
+      // Set thinking content for display in ChatTerminal (for non-streaming CePO responses)
+      if (data.thinking) {
+        setLastGoggaSolveThinking(data.thinking);
+      }
 
       // Save bot message to persistence
       if (isPersistenceEnabled) {
@@ -1260,7 +1376,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     setShowDocSelector(true);
   };
 
-  const handleSelectDoc = async (docId: number) => {
+  const handleSelectDoc = async (docId: string) => {
     const newSelected = selectedDocIds.includes(docId)
       ? selectedDocIds.filter((id) => id !== docId)
       : [...selectedDocIds, docId];
@@ -1548,6 +1664,88 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       return <div>{elements}</div>;
     }
 
+    // Check for tool-generated video results
+    if (msg.content.includes('__TOOL_VIDEO__:')) {
+      const parts = msg.content.split('__TOOL_VIDEO__:');
+      const elements: React.ReactNode[] = [];
+
+      parts.forEach((part, idx) => {
+        if (idx === 0 && part.trim()) {
+          elements.push(
+            <MarkdownRenderer
+              key={`text-${idx}`}
+              content={part.trim()}
+              variant={isUser ? 'user' : 'assistant'}
+            />
+          );
+        } else if (idx > 0) {
+          const newlineIdx = part.indexOf('\n');
+          const jsonStr = newlineIdx > 0 ? part.slice(0, newlineIdx) : part;
+          const textAfter =
+            newlineIdx > 0 ? part.slice(newlineIdx + 1).trim() : '';
+
+          try {
+            const videoData = JSON.parse(jsonStr);
+            elements.push(
+              <div key={`video-${idx}`} className="my-3 p-4 bg-primary-50 rounded-xl border border-primary-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 bg-primary-200 rounded-full flex items-center justify-center">
+                    🎬
+                  </div>
+                  <div>
+                    <div className="font-bold text-primary-900">Video Generation</div>
+                    <div className="text-sm text-primary-600">
+                      {videoData.status === 'pending' || videoData.status === 'processing'
+                        ? 'Processing... This takes 30-60 seconds'
+                        : videoData.status === 'completed'
+                        ? 'Ready to play'
+                        : videoData.status === 'failed'
+                        ? 'Generation failed'
+                        : videoData.message || 'Status unknown'}
+                    </div>
+                  </div>
+                </div>
+                {videoData.video_url && (
+                  <video
+                    src={videoData.video_url}
+                    controls
+                    className="w-full max-w-lg rounded-lg shadow-md"
+                    style={{ maxHeight: '400px' }}
+                  />
+                )}
+                {videoData.status === 'failed' && videoData.message && (
+                  <div className="mt-2 text-sm text-red-600">{videoData.message}</div>
+                )}
+                {videoData.job_id && videoData.status !== 'completed' && videoData.status !== 'failed' && (
+                  <div className="mt-2 text-xs text-primary-400">Job ID: {videoData.job_id}</div>
+                )}
+              </div>
+            );
+          } catch {
+            elements.push(
+              <MarkdownRenderer
+                key={`fallback-${idx}`}
+                content={part}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+
+          if (textAfter) {
+            elements.push(
+              <MarkdownRenderer
+                key={`textafter-${idx}`}
+                content={textAfter}
+                variant={isUser ? 'user' : 'assistant'}
+              />
+            );
+          }
+        }
+      });
+
+      return <div>{elements}</div>;
+    }
+
     // Check for inline base64 image (FREE tier)
     if (msg.content.includes('![Generated Image](data:image')) {
       const match = msg.content.match(
@@ -1635,38 +1833,46 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* New Chat Button */}
-          <button
-            onClick={handleNewChat}
-            className="header-btn"
-            title="New chat session"
-          >
-            <Plus size={16} />
-            <span>New</span>
-          </button>
-
-          {/* History Button (JIVE/JIGGA only) */}
-          {isPersistenceEnabled && (
+          {/* ═══ Chat Actions Group ═══ */}
+          <div className="flex items-center gap-1.5">
+            {/* New Chat Button */}
             <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`header-btn ${showHistory ? 'bg-primary-500' : ''}`}
-              title="Chat history"
+              onClick={handleNewChat}
+              className="header-btn"
+              title="New chat session (Ctrl+Shift+N)"
             >
-              <History size={16} />
-              <span>{sessions.length}</span>
+              <Plus size={16} />
+              <span>New</span>
             </button>
-          )}
 
-          {/* Export PDF Button (JIVE/JIGGA only) */}
-          {isPersistenceEnabled && (
-            <ExportButton
-              onClick={() => setShowExportModal(true)}
-              disabled={!chatSessionId}
-            />
-          )}
+            {/* History Button (JIVE/JIGGA only) */}
+            {isPersistenceEnabled && (
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className={`header-btn ${showHistory ? 'bg-primary-500' : ''}`}
+                title="Chat history (Ctrl+H)"
+              >
+                <History size={16} />
+                <span>{sessions.length}</span>
+              </button>
+            )}
 
-          {/* Location Badge */}
-          <LocationBadge
+            {/* Export PDF Button (JIVE/JIGGA only) */}
+            {isPersistenceEnabled && (
+              <ExportButton
+                onClick={() => setShowExportModal(true)}
+                disabled={!chatSessionId}
+              />
+            )}
+          </div>
+
+          {/* ═══ Separator ═══ */}
+          <div className="w-px h-6 bg-primary-600/30" />
+
+          {/* ═══ Context Group ═══ */}
+          <div className="flex items-center gap-1.5">
+            {/* Location Badge */}
+            <LocationBadge
             location={userLocation}
             weather={weatherData}
             onClick={() => {
@@ -1686,59 +1892,101 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             onClear={clearLocation}
           />
 
-          {/* Token Count Display */}
-          <div
-            className="header-btn bg-primary-700/50 cursor-default"
-            title={`Today: ${formatTokenCount(
-              tokenStats.today.totalTokens
-            )} tokens | All time: ${formatTokenCount(
-              tokenStats.allTime.totalTokens
-            )} tokens`}
-          >
-            <Hash size={14} className="text-primary-300" />
-            <span className="text-sm font-medium">
-              {tokenStats.isLoading
-                ? '...'
-                : formatTokenCount(tokenStats.allTime.totalTokens)}
-            </span>
+            {/* Token Count Display */}
+            <div
+              className="header-btn bg-primary-700/50 cursor-default"
+              title={`Today: ${formatTokenCount(
+                tokenStats.today.totalTokens
+              )} tokens | All time: ${formatTokenCount(
+                tokenStats.allTime.totalTokens
+              )} tokens`}
+            >
+              <Hash size={14} className="text-primary-300" />
+              <span className="text-sm font-medium">
+                {tokenStats.isLoading
+                  ? '...'
+                  : formatTokenCount(tokenStats.allTime.totalTokens)}
+              </span>
+            </div>
           </div>
 
-          {/* Account Menu (replaces simple tier badge) */}
-          {userEmail ? (
-            <AccountMenu
-              userEmail={userEmail}
-              currentTier={userTier as 'FREE' | 'JIVE' | 'JIGGA'}
-            />
-          ) : (
-            <div className={`header-btn font-bold ${TIER_DISPLAY[tier].color}`}>
-              <TierIcon size={16} />
-              <span>{TIER_DISPLAY[tier].name}</span>
+          {/* ═══ Separator ═══ */}
+          <div className="w-px h-6 bg-primary-600/30" />
+
+          {/* ═══ Tools & Features Group ═══ */}
+          <div className="flex items-center gap-1.5">
+            {/* Tools/Docs/Weather Panel Toggle (JIVE/JIGGA) */}
+            {tier !== 'free' && (
+              <button
+                onClick={() => toggleRightPanel('tools')}
+                className={`header-btn ${isRightPanelOpen ? 'bg-primary-500' : ''}`}
+                title="Open Tools, Documents & Weather panel"
+              >
+                <Wrench size={14} />
+                <span className="hidden sm:inline">Tools</span>
+              </button>
+            )}
+
+            {/* GoggaSmart Button (JIVE/JIGGA only) */}
+            {isGoggaSmartEnabled && (
+              <GoggaSmartButton
+                isEnabled={isGoggaSmartEnabled}
+                stats={goggaSmartStats}
+                onClick={() => setShowGoggaSmartModal(true)}
+              />
+            )}
+          </div>
+
+          {/* ═══ Separator ═══ */}
+          <div className="w-px h-6 bg-primary-600/30" />
+
+          {/* ═══ Account Group ═══ */}
+          <div className="flex items-center gap-1.5">
+            {/* Upgrade CTA for FREE tier */}
+            {tier === 'free' && userEmail && (
+              <a
+                href="/upgrade"
+                className="header-btn bg-linear-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 border border-primary-400/30"
+                title="Upgrade to JIVE or JIGGA for more features"
+              >
+                <ArrowUpCircle size={14} />
+                <span className="text-xs font-semibold">Upgrade</span>
+              </a>
+            )}
+
+            {/* Account Menu (replaces simple tier badge) */}
+            {userEmail ? (
+              <AccountMenu
+                userEmail={userEmail}
+                currentTier={userTier as 'FREE' | 'JIVE' | 'JIGGA'}
+              />
+            ) : (
+              <div className={`header-btn font-bold ${TIER_DISPLAY[tier].color}`}>
+                <TierIcon size={16} />
+                <span>{TIER_DISPLAY[tier].name}</span>
+              </div>
+            )}
+          </div>
+
+          {/* ═══ Tester/Beta badges ═══ */}
+          {(isTester || true) && (
+            <div className="flex items-center gap-1">
+              {/* Report Issue button (testers only) */}
+              {isTester && (
+                <button
+                  onClick={() => setShowReportIssue(true)}
+                  className="header-btn bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
+                  title="Report an issue (Tester)"
+                >
+                  <Bug size={14} />
+                  <span className="text-xs">Report</span>
+                </button>
+              )}
+              <span className="header-btn bg-primary-600/50 text-[10px] cursor-default">
+                Beta v1.0
+              </span>
             </div>
           )}
-
-          {/* GoggaSmart Button (JIVE/JIGGA only) */}
-          {isGoggaSmartEnabled && (
-            <GoggaSmartButton
-              isEnabled={isGoggaSmartEnabled}
-              stats={goggaSmartStats}
-              onClick={() => setShowGoggaSmartModal(true)}
-            />
-          )}
-
-          {/* Report Issue button (testers only) */}
-          {isTester && (
-            <button
-              onClick={() => setShowReportIssue(true)}
-              className="header-btn bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
-              title="Report an issue (Tester)"
-            >
-              <Bug size={14} />
-              <span className="text-xs">Report</span>
-            </button>
-          )}
-          <span className="header-btn bg-primary-600/50 text-[10px]">
-            Beta v1.0
-          </span>
         </div>
       </header>
 
@@ -1796,6 +2044,22 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
               </div>
             </div>
 
+            {/* Search box for history */}
+            {sessions.length > 3 && (
+              <div className="p-2 border-b border-primary-100">
+                <div className="relative">
+                  <FileSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-primary-400" />
+                  <input
+                    type="text"
+                    placeholder="Search chats..."
+                    value={historySearch}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-primary-50 border border-primary-200 rounded-lg focus:outline-none focus:border-primary-400 transition-colors"
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Bulk delete bar (when in select mode with selections) */}
             {historySelectMode && selectedSessions.size > 0 && (
               <div className="p-2 bg-red-50 border-b border-red-200 flex items-center justify-between">
@@ -1834,7 +2098,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
 
             {/* Session list */}
             <div className="flex-1 overflow-y-auto divide-y divide-primary-100">
-              {sessions.map((session) => (
+              {sessions
+                .filter((session) => 
+                  !historySearch || session.title.toLowerCase().includes(historySearch.toLowerCase())
+                )
+                .map((session) => (
                 <div
                   key={session.id}
                   className={`group relative flex items-stretch hover:bg-primary-50 transition-colors ${session.id === chatSessionId ? 'bg-primary-100' : ''
@@ -1914,7 +2182,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         <div className="flex-1 flex flex-col">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {displayMessages.length === 0 && (
-              <div className="text-center text-primary-400 mt-16 animate-fadeIn">
+              <div className="text-center text-primary-400 mt-12 animate-fadeIn max-w-2xl mx-auto">
                 <div className="mb-6">
                   <GoggaLogo size="xl" variant="animated" className="mx-auto" />
                 </div>
@@ -1924,48 +2192,90 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                 <p className="text-base text-primary-500 mb-1">
                   How can I help you today?
                 </p>
-                <p className="text-sm text-primary-400 mb-8">
+                <p className="text-sm text-primary-400 mb-6">
                   Legal questions, code, translations, or just a lekker chat.
                 </p>
 
-                <div className="flex justify-center gap-6 flex-wrap">
-                  <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm border border-primary-200 min-w-[140px] hover-lift">
-                    <div className="p-2 bg-primary-100 rounded-lg">
-                      <Zap size={20} className="text-primary-600" />
+                {/* Quick Suggestion Prompts */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 text-left">
+                  <button
+                    onClick={() => setInput('Explain my rights under CCMA for unfair dismissal')}
+                    className="flex items-start gap-3 p-3 bg-white rounded-xl border border-primary-200 hover:border-primary-400 hover:shadow-md transition-all text-left group"
+                  >
+                    <Scale size={18} className="text-primary-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="text-sm font-medium text-primary-700 group-hover:text-primary-800">CCMA Rights</span>
+                      <p className="text-xs text-primary-400 mt-0.5">Unfair dismissal & labour law</p>
                     </div>
-                    <span className="text-sm font-bold text-primary-700">
-                      FREE
-                    </span>
-                    <span className="text-xs text-primary-500">Llama 3.3</span>
+                  </button>
+                  <button
+                    onClick={() => setInput('Write a Python function to validate SA ID numbers')}
+                    className="flex items-start gap-3 p-3 bg-white rounded-xl border border-primary-200 hover:border-primary-400 hover:shadow-md transition-all text-left group"
+                  >
+                    <Code size={18} className="text-primary-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="text-sm font-medium text-primary-700 group-hover:text-primary-800">SA ID Validator</span>
+                      <p className="text-xs text-primary-400 mt-0.5">Python code for ID validation</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setInput('Translate "How much does this cost?" to Zulu, Xhosa, and Sotho')}
+                    className="flex items-start gap-3 p-3 bg-white rounded-xl border border-primary-200 hover:border-primary-400 hover:shadow-md transition-all text-left group"
+                  >
+                    <Languages size={18} className="text-primary-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="text-sm font-medium text-primary-700 group-hover:text-primary-800">Translate</span>
+                      <p className="text-xs text-primary-400 mt-0.5">11 SA languages supported</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setInput('What documents do I need for a SASSA grant application?')}
+                    className="flex items-start gap-3 p-3 bg-white rounded-xl border border-primary-200 hover:border-primary-400 hover:shadow-md transition-all text-left group"
+                  >
+                    <MessageSquare size={18} className="text-primary-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="text-sm font-medium text-primary-700 group-hover:text-primary-800">SASSA Help</span>
+                      <p className="text-xs text-primary-400 mt-0.5">Grant applications & more</p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Tier Cards */}
+                <div className="flex justify-center gap-4 flex-wrap mb-6">
+                  <div className={`flex flex-col items-center gap-2 p-3 bg-white rounded-xl shadow-sm border min-w-28 hover-lift ${tier === 'free' ? 'border-primary-400 ring-2 ring-primary-200' : 'border-primary-200'}`}>
+                    <div className="p-2 bg-primary-100 rounded-lg">
+                      <Zap size={18} className="text-primary-600" />
+                    </div>
+                    <span className="text-xs font-bold text-primary-700">FREE</span>
+                    <span className="text-[10px] text-primary-500">Llama 3.3</span>
                   </div>
-                  <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm border border-primary-200 min-w-[140px] hover-lift">
+                  <div className={`flex flex-col items-center gap-2 p-3 bg-white rounded-xl shadow-sm border min-w-28 hover-lift ${tier === 'jive' ? 'border-primary-400 ring-2 ring-primary-200' : 'border-primary-200'}`}>
                     <div className="p-2 bg-primary-100 rounded-lg">
-                      <Brain size={20} className="text-primary-600" />
+                      <Brain size={18} className="text-primary-600" />
                     </div>
-                    <span className="text-sm font-bold text-primary-700">
-                      JIVE
-                    </span>
-                    <span className="text-xs text-primary-500">
-                      Cerebras + CePO
-                    </span>
+                    <span className="text-xs font-bold text-primary-700">JIVE</span>
+                    <span className="text-[10px] text-primary-500">Cerebras + CePO</span>
                   </div>
-                  <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm border border-primary-200 min-w-[140px] hover-lift">
+                  <div className={`flex flex-col items-center gap-2 p-3 bg-white rounded-xl shadow-sm border min-w-28 hover-lift ${tier === 'jigga' ? 'border-primary-400 ring-2 ring-primary-200' : 'border-primary-200'}`}>
                     <div className="p-2 bg-primary-100 rounded-lg">
-                      <Sparkles size={20} className="text-primary-600" />
+                      <Sparkles size={18} className="text-primary-600" />
                     </div>
-                    <span className="text-sm font-bold text-primary-700">
-                      JIGGA
-                    </span>
-                    <span className="text-xs text-primary-500">
-                      Qwen 3 32B + RAG
-                    </span>
+                    <span className="text-xs font-bold text-primary-700">JIGGA</span>
+                    <span className="text-[10px] text-primary-500">Qwen 32B + RAG</span>
                   </div>
                 </div>
 
                 {tier !== 'free' && (
-                  <p className="text-xs text-primary-400 mt-6 flex items-center justify-center gap-1">
+                  <p className="text-xs text-primary-400 flex items-center justify-center gap-1">
                     <Database size={12} />
                     Chat history saved for {tier.toUpperCase()} tier
+                  </p>
+                )}
+
+                {tier === 'free' && (
+                  <p className="text-xs text-primary-500">
+                    <a href="/upgrade" className="underline hover:text-primary-700 font-medium">Upgrade to JIVE or JIGGA</a>
+                    {' '}for document uploads, chat history & advanced AI
                   </p>
                 )}
               </div>
@@ -1983,7 +2293,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                 >
                   {/* Avatar - clean with no background for bot */}
                   <div
-                    className={`flex-shrink-0 flex items-center justify-center ${m.role === 'user'
+                    className={`shrink-0 flex items-center justify-center ${m.role === 'user'
                         ? 'w-8 h-8 rounded-full bg-primary-800'
                         : 'w-10 h-10'
                       }`}
@@ -1996,7 +2306,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                   </div>
 
                   <div
-                    className={`message-bubble ${m.role === 'user'
+                    className={`message-bubble group ${m.role === 'user'
                         ? 'message-bubble-user'
                         : 'message-bubble-assistant'
                       }`}
@@ -2031,20 +2341,17 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                       </div>
                     )}
 
-                    {/* Metadata Display - Clean button indicators */}
+                    {/* Metadata Display - Clean badge indicators (semantic spans, not buttons) */}
                     {m.meta && (
                       <div className="message-meta">
                         {m.meta.tier && (
-                          <button
-                            type="button"
-                            className="meta-badge meta-badge-tier"
-                          >
+                          <span className="meta-badge meta-badge-tier">
                             {m.meta.tier}
-                          </button>
+                          </span>
                         )}
                         {/* Layer badge - different display for each tier */}
                         {m.meta.layer && (
-                          <button type="button" className="meta-badge">
+                          <span className="meta-badge">
                             {m.meta.layer === 'jive_speed' ? (
                               <>
                                 <Zap size={12} />
@@ -2076,48 +2383,41 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                                 <span>{m.meta.layer}</span>
                               </>
                             )}
-                          </button>
+                          </span>
                         )}
                         {m.meta.latency_seconds && (
-                          <button type="button" className="meta-badge">
+                          <span className="meta-badge">
                             <Clock size={12} />
                             <span>{m.meta.latency_seconds.toFixed(2)}s</span>
-                          </button>
+                          </span>
                         )}
                         {/* Timestamp display */}
                         {m.meta.timestamp && (
-                          <button
-                            type="button"
+                          <span
                             className="meta-badge text-[10px] opacity-60"
                             title={new Date(m.meta.timestamp).toLocaleString()}
                           >
-                            <span>
-                              {new Date(m.meta.timestamp).toLocaleTimeString(
-                                [],
-                                { hour: '2-digit', minute: '2-digit' }
-                              )}
-                            </span>
-                          </button>
+                            {new Date(m.meta.timestamp).toLocaleTimeString(
+                              [],
+                              { hour: '2-digit', minute: '2-digit' }
+                            )}
+                          </span>
                         )}
                         {m.meta.cost_zar !== undefined &&
                           m.meta.cost_zar > 0 && (
-                            <button type="button" className="meta-badge">
-                              <span>R{m.meta.cost_zar.toFixed(4)}</span>
-                            </button>
+                            <span className="meta-badge">
+                              R{m.meta.cost_zar.toFixed(4)}
+                            </span>
                           )}
                         {m.meta.rag_context && (
-                          <button
-                            type="button"
-                            className="meta-badge meta-badge-rag"
-                          >
+                          <span className="meta-badge meta-badge-rag">
                             <Database size={12} />
                             <span>RAG</span>
-                          </button>
+                          </span>
                         )}
                         {m.meta.math_tool_count &&
                           m.meta.math_tool_count > 0 && (
-                            <button
-                              type="button"
+                            <span
                               className="meta-badge bg-primary-100 text-primary-700"
                               title={`GoggaSolve: ${m.meta.math_tools_executed?.join(', ') ||
                                 'calculations'
@@ -2125,35 +2425,50 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                             >
                               <Terminal size={12} />
                               <span>GoggaSolve×{m.meta.math_tool_count}</span>
-                            </button>
+                            </span>
                           )}
+                        {/* Copy to clipboard button - actual interactive element */}
+                        {m.role === 'assistant' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(m.content);
+                              // Brief visual feedback could be added with state
+                            }}
+                            className="meta-badge hover:bg-primary-200 cursor-pointer transition-colors"
+                            title="Copy response to clipboard"
+                          >
+                            <Copy size={12} />
+                          </button>
+                        )}
                       </div>
                     )}
 
-                    {/* GoggaSmart Feedback Buttons (JIVE/JIGGA only) */}
+                    {/* GoggaSmart Feedback Buttons (JIVE/JIGGA only) - Show on hover */}
                     {m.role === 'assistant' && isGoggaSmartEnabled && m.content && (
-                      <FeedbackButtons
-                        onFeedback={async (feedback) => {
-                          // Get skill IDs that were used in this response
-                          const usedIds = getUsedSkillIds();
-                          if (usedIds.length > 0) {
-                            await applyGoggaSmartFeedback(usedIds, feedback);
-                          }
-                        }}
-                      />
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 mt-2">
+                        <FeedbackButtons
+                          onFeedback={async (feedback) => {
+                            // Get skill IDs that were used in this response
+                            const usedIds = getUsedSkillIds();
+                            if (usedIds.length > 0) {
+                              await applyGoggaSmartFeedback(usedIds, feedback);
+                            }
+                          }}
+                        />
+                      </div>
                     )}
 
-                    {/* GoggaSolve Terminal for completed messages with math tools */}
+                    {/* GoggaSolve Terminal for completed messages with math tools OR thinking content */}
                     {m.role === 'assistant' &&
-                      m.meta?.math_tool_count &&
-                      m.meta.math_tool_count > 0 &&
-                      lastGoggaSolveLogs.length > 0 &&
+                      ((m.meta?.math_tool_count && m.meta.math_tool_count > 0 && lastGoggaSolveLogs.length > 0) ||
+                       lastGoggaSolveThinking) &&
                       i === displayMessages.length - 1 && (
                         <div className="mt-3">
                           <ChatTerminal
                             logs={lastGoggaSolveLogs}
                             isActive={false}
-                            toolCount={m.meta.math_tool_count}
+                            toolCount={m.meta?.math_tool_count || 0}
                             thinkingContent={lastGoggaSolveThinking}
                             isThinking={false}
                           />
@@ -2168,7 +2483,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
               <>
                 <div className="flex justify-start chat-bubble">
                   <div className="flex gap-3 w-full max-w-2xl">
-                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
+                    <div className="shrink-0 w-10 h-10 flex items-center justify-center">
                       <GoggaCricket size="md" />
                     </div>
                     <div className="flex-1 space-y-3">
@@ -2177,9 +2492,9 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                           <span className="text-sm text-primary-400">Processing...</span>
                         </div>
                       </div>
-                      {/* GoggaSolve Terminal (JIVE/JIGGA only) - always visible once triggered */}
+                      {/* GoggaSolve Terminal (JIVE/JIGGA only) - shows for math tools OR AI thinking */}
                       {(tier === 'jive' || tier === 'jigga') &&
-                        (terminalActive || terminalLogs.length > 0) && (
+                        (terminalActive || terminalLogs.length > 0 || isStreamingThinking || streamingThinking) && (
                           <ChatTerminal
                             logs={terminalLogs}
                             isActive={terminalActive}
@@ -2197,22 +2512,13 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
               </>
             )}
 
-            {/* GoggaTalk Voice Terminal - dedicated voice chat interface */}
+            {/* GoggaTalk Voice Terminal - Now a centered modal */}
             {goggaTalkVisible && (
-              <div className="flex justify-start chat-bubble">
-                <div className="flex gap-3 w-full max-w-2xl">
-                  <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
-                    <GoggaCricket size="md" />
-                  </div>
-                  <div className="flex-1">
-                    <GoggaTalkTerminal
-                      isVisible={goggaTalkVisible}
-                      onClose={() => setGoggaTalkVisible(false)}
-                      userTier={userTier}
-                    />
-                  </div>
-                </div>
-              </div>
+              <GoggaTalkTerminal
+                isVisible={goggaTalkVisible}
+                onClose={() => setGoggaTalkVisible(false)}
+                userTier={userTier}
+              />
             )}
             <div ref={scrollRef} />
           </div>
@@ -2222,42 +2528,45 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             {/* RAG Mode Toggle - JIVE/JIGGA tiers */}
             {canUpload && (
               <div className="max-w-4xl mx-auto mb-2 flex items-center gap-2 flex-wrap">
-                {/* JIGGA Model Toggle - 32B/235B */}
+                {/* JIGGA Model Toggle - 32B/235B with descriptive label */}
                 {tier === 'jigga' && (
-                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-                    <button
-                      onClick={() => setForceModel('auto')}
-                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === 'auto'
-                          ? 'bg-white text-primary-700 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      title="Auto: Routes based on language/complexity"
-                    >
-                      <Zap size={12} />
-                      <span>Auto</span>
-                    </button>
-                    <button
-                      onClick={() => setForceModel('32b')}
-                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '32b'
-                          ? 'bg-white text-primary-700 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      title="Qwen 32B: Fast thinking mode (8k output)"
-                    >
-                      <Brain size={12} />
-                      <span>32B</span>
-                    </button>
-                    <button
-                      onClick={() => setForceModel('235b')}
-                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '235b'
-                          ? 'bg-white text-primary-700 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      title="Qwen 235B: Multilingual mode (40k output)"
-                    >
-                      <Sparkles size={12} />
-                      <span>235B</span>
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">AI Power:</span>
+                    <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                      <button
+                        onClick={() => setForceModel('auto')}
+                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === 'auto'
+                            ? 'bg-white text-primary-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        title="Auto: Smart routing based on language & complexity. Best for most queries."
+                      >
+                        <Zap size={12} />
+                        <span>Auto</span>
+                      </button>
+                      <button
+                        onClick={() => setForceModel('32b')}
+                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '32b'
+                            ? 'bg-white text-primary-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        title="Qwen 32B: Fast &amp; efficient. Deep thinking mode with 8k output. Great for code & reasoning."
+                      >
+                        <Brain size={12} />
+                        <span>Fast</span>
+                      </button>
+                      <button
+                        onClick={() => setForceModel('235b')}
+                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '235b'
+                            ? 'bg-white text-primary-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        title="Qwen 235B: Most powerful. 40k output, best for SA languages, legal & complex analysis."
+                      >
+                        <Sparkles size={12} />
+                        <span>Max</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -2334,15 +2643,19 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             <div className="max-w-4xl mx-auto flex items-center gap-2">
               {/* Left buttons - aligned center with 48px height */}
               <div className="flex items-center gap-2 h-12">
-                {/* GoggaTalk - SA Flag Speech Button for voice chat */}
-                <GoggaTalkButton
-                  onClick={() => {
-                    console.log('🦗 GoggaTalk button clicked!');
-                    // Toggle GoggaTalk terminal visibility
-                    setGoggaTalkVisible(prev => !prev);
-                  }}
-                  disabled={isLoading}
-                />
+                {/* GoggaTalk - SA Flag Speech Button for voice chat with label */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <GoggaTalkButton
+                    onClick={() => {
+                      console.log('🦗 GoggaTalk button clicked!');
+                      // Toggle GoggaTalk terminal visibility
+                      setGoggaTalkVisible(prev => !prev);
+                    }}
+                    disabled={isLoading}
+                    size="sm"
+                  />
+                  <span className="text-[9px] text-primary-500 font-medium">Voice</span>
+                </div>
 
                 {/* File Upload (JIVE/JIGGA) */}
                 {tier !== 'free' && (
@@ -2358,11 +2671,18 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
               {/* Input Container with Wand inside */}
               <div className="flex-1 relative">
                 <textarea
+                  id="chat-message-input"
+                  name="chat-message-input"
                   ref={textareaRef}
                   value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
-                    // Auto-resize
+                    // Auto-resize without causing scroll jumps
+                    // Store current scroll position
+                    const scrollContainer = e.target.closest('.overflow-y-auto');
+                    const scrollTop = scrollContainer?.scrollTop ?? 0;
+                    
+                    // Set to auto to measure content, then set actual height
                     e.target.style.height = 'auto';
                     const maxHeight = window.innerHeight * 0.5;
                     e.target.style.height =
@@ -2371,6 +2691,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                     if (!e.target.value.trim()) {
                       e.target.style.height = '48px';
                     }
+                    
+                    // Restore scroll position to prevent jump
+                    if (scrollContainer) {
+                      scrollContainer.scrollTop = scrollTop;
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
@@ -2378,7 +2703,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                       sendMessage(input);
                     }
                   }}
-                  className="input-field pr-14 h-12 min-h-[48px] max-h-[50vh] resize-none overflow-y-auto py-3"
+                  className="input-field pr-14 h-12 min-h-12 max-h-[50vh] resize-none overflow-y-auto py-3"
                   placeholder={
                     tier === 'jigga' && documents.length > 0
                       ? `Ask about your documents (${ragMode} mode)...`
@@ -2433,6 +2758,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                   disabled={!input.trim() || isLoading || isGeneratingImage}
                   className="action-btn h-12 w-12 bg-primary-800 text-white hover:bg-primary-700 disabled:bg-primary-300"
                   aria-label="Send message"
+                  title="Send message (Enter)"
                 >
                   <SendArrowIcon size={20} />
                 </button>

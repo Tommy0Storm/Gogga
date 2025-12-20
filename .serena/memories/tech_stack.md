@@ -63,8 +63,17 @@ asyncpg>=0.29.0
 }
 ```
 
+## Browser LLM Performance Optimizations
+- **WebGPU auto-detection**: 10-50x faster inference when available
+- **Adaptive quantization**: q4 for WebGPU, q8 for WASM
+- **Singleton pipeline**: Load model once, reuse across requests
+- **Browser Cache API**: Persist ~50MB model between sessions
+- **Batched processing**: 3 docs at a time with `requestIdlePromise()`
+- See `browser_rag_llm_performance.md` for full details
+
 ## Turbopack Configuration Notes
 The frontend uses Turbopack (Next.js 16 default). Key configuration for browser-only ML libraries:
 - Node.js modules (`fs`, `path`, `crypto`) aliased to `./src/empty.ts` 
 - `sharp` and `onnxruntime-node` also aliased to empty module
 - `@huggingface/transformers` uses browser-specific build via `{ browser: '...' }` condition
+

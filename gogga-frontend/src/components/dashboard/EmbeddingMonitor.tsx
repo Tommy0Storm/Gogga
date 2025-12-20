@@ -65,7 +65,7 @@ import { ragManager } from '@/lib/ragManager';
 interface EmbeddingOperation {
   id: string;
   timestamp: Date;
-  docId?: number;
+  docId?: string;
   docName?: string;
   chunkCount: number;
   latencyMs: number;
@@ -728,8 +728,8 @@ export const EmbeddingMonitor: React.FC = () => {
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
                   }}
-                  formatter={(value: number, name: string) => [
-                    name === 'chunks' ? value : `${value.toFixed(0)} ms`,
+                  formatter={(value?: number, name?: string) => [
+                    name === 'chunks' ? (value ?? 0) : `${(value ?? 0).toFixed(0)} ms`,
                     name === 'chunks' ? 'Chunks' : 'Avg Latency',
                   ]}
                 />

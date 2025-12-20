@@ -1,369 +1,164 @@
-Gemini live
-GeminiLiveVoiceAgent #
-Bases: BaseVoiceAgent
+"""
+## Documentation
+Quickstart: https://github.com/google-gemini/cookbook/blob/main/quickstarts/Get_started_LiveAPI.py
 
-Gemini Live Voice Agent.
+## Setup
 
-Source code in llama_index/voice_agents/gemini_live/base.py
+To install the dependencies for this script, run:
 
-class GeminiLiveVoiceAgent(BaseVoiceAgent):
-    """
-    Gemini Live Voice Agent.
-    """
+```
+pip install google-genai opencv-python pyaudio pillow mss
+```
+"""
 
-    def __init__(
-        self,
-        model: Optional[str] = None,
-        interface: Optional[GeminiLiveVoiceAgentInterface] = None,
-        api_key: Optional[str] = None,
-        tools: Optional[List[BaseTool]] = None,
-    ):
-        self.model: str = model or DEFAULT_MODEL
-        self._client: Optional[Client] = None
-        self.session: Optional[AsyncSession] = None
-        self._quitflag: bool = False
-        interface = interface or GeminiLiveVoiceAgentInterface()
-        super().__init__(api_key=api_key, tools=tools, interface=interface)
-        if self.tools is not None:
-            self.gemini_tools: List[Dict[str, List[Dict[str, str]]]] = (
-                tools_to_gemini_tools(tools)
-            )
-            self._functions_dict: Dict[
-                str, Callable[[Dict[str, Any], str, str], types.FunctionResponse]
-            ] = tools_to_functions_dict(self.tools)
-        else:
-            self.gemini_tools = []
-            self._functions_dict = {}
+import os
+import asyncio
+import base64
+import io
+import traceback
 
-    @property
-    def client(self) -> Client:
-        if not self._client:
-            self._client = Client(
-                api_key=self.api_key, http_options={"api_version": "v1beta"}
-            )
-        return self._client
+import cv2
+import pyaudio
+import PIL.Image
+import mss
 
-    def _signal_exit(self):
-        logging.info("Preparing exit...")
-        self._quitflag = True
+import argparse
 
-    @override
-    async def _start(self, session: AsyncSession) -> None:
-        """
-        Start the voice agent.
-        """
-        self.interface.start(session=session)
+from google import genai
+from google.genai import types
 
-    async def _run_loop(self) -> None:
-        logging.info("The agent is ready for the conversation")
-        logging.info("Type q and press enter to stop the conversation at any time")
-        while not self._quitflag:
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+SEND_SAMPLE_RATE = 16000
+RECEIVE_SAMPLE_RATE = 24000
+CHUNK_SIZE = 1024
+
+MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+
+DEFAULT_MODE = "camera"
+
+client = genai.Client(
+    http_options={"api_version": "v1beta"},
+    api_key=os.environ.get("GEMINI_API_KEY"),
+)
+
+
+CONFIG = types.LiveConnectConfig(
+    response_modalities=[
+        "AUDIO",
+    ],
+    media_resolution="MEDIA_RESOLUTION_MEDIUM",
+    speech_config=types.SpeechConfig(
+        voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Zephyr")
+        )
+    ),
+    context_window_compression=types.ContextWindowCompressionConfig(
+        trigger_tokens=25600,
+        sliding_window=types.SlidingWindow(target_tokens=12800),
+    ),
+)
+
+pya = pyaudio.PyAudio()
+
+
+class AudioLoop:
+    def __init__(self, video_mode=DEFAULT_MODE):
+        self.video_mode = video_mode
+
+        self.audio_in_queue = None
+        self.out_queue = None
+
+        self.session = None
+
+        self.send_text_task = None
+        self.receive_audio_task = None
+        self.play_audio_task = None
+
+    async def send_text(self):
+        while True:
             text = await asyncio.to_thread(
                 input,
-                "",
+                "message > ",
             )
-            if text == "q":
-                self._signal_exit()
+            if text.lower() == "q":
+                break
             await self.session.send(input=text or ".", end_of_turn=True)
-        logging.info("Session has been successfully closed")
-        await self.interrupt()
-        await self.stop()
 
-    async def send(self) -> None:
-        """
-        Send audio to the websocket underlying the voice agent.
-        """
+    def _get_frame(self, cap):
+        # Read the frameq
+        ret, frame = cap.read()
+        # Check if the frame was read successfully
+        if not ret:
+            return None
+        # Fix: Convert BGR to RGB color space
+        # OpenCV captures in BGR but PIL expects RGB format
+        # This prevents the blue tint in the video feed
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = PIL.Image.fromarray(frame_rgb)  # Now using RGB frame
+        img.thumbnail([1024, 1024])
+
+        image_io = io.BytesIO()
+        img.save(image_io, format="jpeg")
+        image_io.seek(0)
+
+        mime_type = "image/jpeg"
+        image_bytes = image_io.read()
+        return {"mime_type": mime_type, "data": base64.b64encode(image_bytes).decode()}
+
+    async def get_frames(self):
+        # This takes about a second, and will block the whole program
+        # causing the audio pipeline to overflow if you don't to_thread it.
+        cap = await asyncio.to_thread(
+            cv2.VideoCapture, 0
+        )  # 0 represents the default camera
+
         while True:
-            msg = await self.interface.out_queue.get()
+            frame = await asyncio.to_thread(self._get_frame, cap)
+            if frame is None:
+                break
+
+            await asyncio.sleep(1.0)
+
+            await self.out_queue.put(frame)
+
+        # Release the VideoCapture object
+        cap.release()
+
+    def _get_screen(self):
+        sct = mss.mss()
+        monitor = sct.monitors[0]
+
+        i = sct.grab(monitor)
+
+        mime_type = "image/jpeg"
+        image_bytes = mss.tools.to_png(i.rgb, i.size)
+        img = PIL.Image.open(io.BytesIO(image_bytes))
+
+        image_io = io.BytesIO()
+        img.save(image_io, format="jpeg")
+        image_io.seek(0)
+
+        image_bytes = image_io.read()
+        return {"mime_type": mime_type, "data": base64.b64encode(image_bytes).decode()}
+
+    async def get_screen(self):
+
+        while True:
+            frame = await asyncio.to_thread(self._get_screen)
+            if frame is None:
+                break
+
+            await asyncio.sleep(1.0)
+
+            await self.out_queue.put(frame)
+
+    async def send_realtime(self):
+        while True:
+            msg = await self.out_queue.get()
             await self.session.send(input=msg)
 
-    @override
-    async def handle_message(self) -> Any:
-        """
-        Handle incoming message.
-
-        Args:
-            message (Any): incoming message (should be dict, but it is kept open also for other types).
-            *args: Can take any positional argument.
-            **kwargs: Can take any keyword argument.
-
-        Returns:
-            out (Any): This function can return any output.
-
-        """
-        while True:
-            turn = self.session.receive()
-            async for response in turn:
-                if response.server_content:
-                    if data := response.data:
-                        await self.interface.receive(data=data)
-                        self._messages.append(
-                            ChatMessage(
-                                role="assistant", blocks=[AudioBlock(audio=data)]
-                            )
-                        )
-                        self._events.append(
-                            AudioReceivedEvent(type_t="audio_received", data=data)
-                        )
-                        continue
-                    if text := response.text:
-                        self._messages.append(
-                            ChatMessage(role="assistant", blocks=[TextBlock(text=text)])
-                        )
-                        self._events.append(
-                            TextReceivedEvent(type_t="text_received", text=text)
-                        )
-                elif tool_call := response.tool_call:
-                    function_responses: List[types.FunctionResponse] = []
-                    for fn_call in tool_call.function_calls:
-                        self._events.append(
-                            ToolCallEvent(
-                                type_t="tool_call",
-                                tool_name=fn_call.name,
-                                tool_args=fn_call.args,
-                            )
-                        )
-                        result = self._functions_dict[fn_call.name](
-                            fn_call.args, fn_call.id, fn_call.name
-                        )
-                        self._events.append(
-                            ToolCallResultEvent(
-                                type_t="tool_call_result",
-                                tool_name=result.name,
-                                tool_result=result.response,
-                            )
-                        )
-                        function_responses.append(result)
-                    await self.session.send_tool_response(
-                        function_responses=function_responses
-                    )
-            while not self.interface.audio_in_queue.empty():
-                await self.interrupt()
-
-    async def start(self):
-        try:
-            async with (
-                self.client.aio.live.connect(
-                    model=self.model,
-                    config={
-                        "response_modalities": ["AUDIO"],
-                        "tools": self.gemini_tools,
-                    },
-                ) as session,
-                asyncio.TaskGroup() as tg,
-            ):
-                self.session = session
-                await self._start(session=session)
-
-                _run_loop = tg.create_task(self._run_loop())
-                tg.create_task(self.send())
-                tg.create_task(self.interface._microphone_callback())
-                tg.create_task(self.handle_message())
-                tg.create_task(self.interface.output())
-
-                await _run_loop
-                raise asyncio.CancelledError("User requested exit")
-
-        except asyncio.CancelledError:
-            pass
-        except ExceptionGroup as EG:
-            await self.stop()
-
-    async def interrupt(self) -> None:
-        """
-        Interrupt the input/output audio flow.
-
-        Args:
-            None
-        Returns:
-            out (None): This function does not return anything.
-
-        """
-        self.interface.interrupt()
-
-    async def stop(self) -> None:
-        """
-        Stop the conversation with the voice agent.
-
-        Args:
-            None
-        Returns:
-            out (None): This function does not return anything.
-
-        """
-        self.interface.stop()
-send async #
-
-send() -> None
-Send audio to the websocket underlying the voice agent.
-
-Source code in llama_index/voice_agents/gemini_live/base.py
-
-async def send(self) -> None:
-    """
-    Send audio to the websocket underlying the voice agent.
-    """
-    while True:
-        msg = await self.interface.out_queue.get()
-        await self.session.send(input=msg)
-handle_message async #
-
-handle_message() -> Any
-Handle incoming message.
-
-Parameters:
-
-Name	Type	Description	Default
-message	Any	incoming message (should be dict, but it is kept open also for other types).	required
-*args		Can take any positional argument.	required
-**kwargs		Can take any keyword argument.	required
-Returns:
-
-Name	Type	Description
-out	Any	This function can return any output.
-Source code in llama_index/voice_agents/gemini_live/base.py
-
-@override
-async def handle_message(self) -> Any:
-    """
-    Handle incoming message.
-
-    Args:
-        message (Any): incoming message (should be dict, but it is kept open also for other types).
-        *args: Can take any positional argument.
-        **kwargs: Can take any keyword argument.
-
-    Returns:
-        out (Any): This function can return any output.
-
-    """
-    while True:
-        turn = self.session.receive()
-        async for response in turn:
-            if response.server_content:
-                if data := response.data:
-                    await self.interface.receive(data=data)
-                    self._messages.append(
-                        ChatMessage(
-                            role="assistant", blocks=[AudioBlock(audio=data)]
-                        )
-                    )
-                    self._events.append(
-                        AudioReceivedEvent(type_t="audio_received", data=data)
-                    )
-                    continue
-                if text := response.text:
-                    self._messages.append(
-                        ChatMessage(role="assistant", blocks=[TextBlock(text=text)])
-                    )
-                    self._events.append(
-                        TextReceivedEvent(type_t="text_received", text=text)
-                    )
-            elif tool_call := response.tool_call:
-                function_responses: List[types.FunctionResponse] = []
-                for fn_call in tool_call.function_calls:
-                    self._events.append(
-                        ToolCallEvent(
-                            type_t="tool_call",
-                            tool_name=fn_call.name,
-                            tool_args=fn_call.args,
-                        )
-                    )
-                    result = self._functions_dict[fn_call.name](
-                        fn_call.args, fn_call.id, fn_call.name
-                    )
-                    self._events.append(
-                        ToolCallResultEvent(
-                            type_t="tool_call_result",
-                            tool_name=result.name,
-                            tool_result=result.response,
-                        )
-                    )
-                    function_responses.append(result)
-                await self.session.send_tool_response(
-                    function_responses=function_responses
-                )
-        while not self.interface.audio_in_queue.empty():
-            await self.interrupt()
-interrupt async #
-
-interrupt() -> None
-Interrupt the input/output audio flow.
-
-Returns: out (None): This function does not return anything.
-
-Source code in llama_index/voice_agents/gemini_live/base.py
-
-async def interrupt(self) -> None:
-    """
-    Interrupt the input/output audio flow.
-
-    Args:
-        None
-    Returns:
-        out (None): This function does not return anything.
-
-    """
-    self.interface.interrupt()
-stop async #
-
-stop() -> None
-Stop the conversation with the voice agent.
-
-Returns: out (None): This function does not return anything.
-
-Source code in llama_index/voice_agents/gemini_live/base.py
-
-async def stop(self) -> None:
-    """
-    Stop the conversation with the voice agent.
-
-    Args:
-        None
-    Returns:
-        out (None): This function does not return anything.
-
-    """
-    self.interface.stop()
-GeminiLiveVoiceAgentInterface #
-Bases: BaseVoiceAgentInterface
-
-Source code in llama_index/voice_agents/gemini_live/audio_interface.py
-
-class GeminiLiveVoiceAgentInterface(BaseVoiceAgentInterface):
-    def __init__(self) -> None:
-        self.audio_in_queue: Optional[asyncio.Queue] = None
-        self.out_queue: Optional[asyncio.Queue] = None
-
-        self.session: Optional[AsyncSession] = None
-        self.audio_stream: Optional[pyaudio.Stream] = None
-
-    def _speaker_callback(self, *args: Any, **kwargs: Any) -> Any:
-        """
-        Callback function for the audio output device.
-
-        Args:
-            *args: Can take any positional argument.
-            **kwargs: Can take any keyword argument.
-
-        Returns:
-            out (Any): This function can return any output.
-
-        """
-
-    @override
-    async def _microphone_callback(self) -> None:
-        """
-        Callback function for the audio input device.
-
-        Args:
-            *args: Can take any positional argument.
-            **kwargs: Can take any keyword argument.
-
-        Returns:
-            out (Any): This function can return any output.
-
-        """
+    async def listen_audio(self):
         mic_info = pya.get_default_input_device_info()
         self.audio_stream = await asyncio.to_thread(
             pya.open,
@@ -382,59 +177,25 @@ class GeminiLiveVoiceAgentInterface(BaseVoiceAgentInterface):
             data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
             await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
 
-    @override
-    def start(self, session: AsyncSession) -> None:
-        """
-        Start the interface.
+    async def receive_audio(self):
+        "Background task to reads from the websocket and write pcm chunks to the output queue"
+        while True:
+            turn = self.session.receive()
+            async for response in turn:
+                if data := response.data:
+                    self.audio_in_queue.put_nowait(data)
+                    continue
+                if text := response.text:
+                    print(text, end="")
 
-        Args:
-            session (AsyncSession): the session to which the API is bound.
+            # If you interrupt the model, it sends a turn_complete.
+            # For interruptions to work, we need to stop playback.
+            # So empty out the audio queue because it may have loaded
+            # much more audio than has played yet.
+            while not self.audio_in_queue.empty():
+                self.audio_in_queue.get_nowait()
 
-        """
-        self.session = session
-        self.audio_in_queue = asyncio.Queue()
-        self.out_queue = asyncio.Queue(maxsize=5)
-
-    def stop(self) -> None:
-        """
-        Stop the interface.
-
-        Args:
-            None
-        Returns:
-            out (None): This function does not return anything.
-
-        """
-        if self.audio_stream:
-            self.audio_stream.close()
-        else:
-            raise ValueError("Audio stream has never been opened, cannot be closed.")
-
-    def interrupt(self) -> None:
-        """
-        Interrupt the interface.
-
-        Args:
-            None
-        Returns:
-            out (None): This function does not return anything.
-
-        """
-        self.audio_in_queue.get_nowait()
-
-    @override
-    async def output(self, *args: Any, **kwargs: Any) -> Any:
-        """
-        Process and output the audio.
-
-        Args:
-            *args: Can take any positional argument.
-            **kwargs: Can take any keyword argument.
-
-        Returns:
-            out (Any): This function can return any output.
-
-        """
+    async def play_audio(self):
         stream = await asyncio.to_thread(
             pya.open,
             format=FORMAT,
@@ -446,155 +207,275 @@ class GeminiLiveVoiceAgentInterface(BaseVoiceAgentInterface):
             bytestream = await self.audio_in_queue.get()
             await asyncio.to_thread(stream.write, bytestream)
 
-    @override
-    async def receive(self, data: bytes) -> Any:
-        """
-        Receive audio data.
+    async def run(self):
+        try:
+            async with (
+                client.aio.live.connect(model=MODEL, config=CONFIG) as session,
+                asyncio.TaskGroup() as tg,
+            ):
+                self.session = session
 
-        Args:
-            data (Any): received audio data (generally as bytes or str, but it is kept open also to other types).
-            *args: Can take any positional argument.
-            **kwargs: Can take any keyword argument.
+                self.audio_in_queue = asyncio.Queue()
+                self.out_queue = asyncio.Queue(maxsize=5)
 
-        Returns:
-            out (Any): This function can return any output.
+                send_text_task = tg.create_task(self.send_text())
+                tg.create_task(self.send_realtime())
+                tg.create_task(self.listen_audio())
+                if self.video_mode == "camera":
+                    tg.create_task(self.get_frames())
+                elif self.video_mode == "screen":
+                    tg.create_task(self.get_screen())
 
-        """
-        self.audio_in_queue.put_nowait(data)
-start #
+                tg.create_task(self.receive_audio())
+                tg.create_task(self.play_audio())
 
-start(session: AsyncSession) -> None
-Start the interface.
+                await send_text_task
+                raise asyncio.CancelledError("User requested exit")
 
-Parameters:
+        except asyncio.CancelledError:
+            pass
+        except ExceptionGroup as EG:
+            self.audio_stream.close()
+            traceback.print_exception(EG)
 
-Name	Type	Description	Default
-session	AsyncSession	the session to which the API is bound.	required
-Source code in llama_index/voice_agents/gemini_live/audio_interface.py
 
-@override
-def start(self, session: AsyncSession) -> None:
-    """
-    Start the interface.
-
-    Args:
-        session (AsyncSession): the session to which the API is bound.
-
-    """
-    self.session = session
-    self.audio_in_queue = asyncio.Queue()
-    self.out_queue = asyncio.Queue(maxsize=5)
-stop #
-
-stop() -> None
-Stop the interface.
-
-Returns: out (None): This function does not return anything.
-
-Source code in llama_index/voice_agents/gemini_live/audio_interface.py
-
-def stop(self) -> None:
-    """
-    Stop the interface.
-
-    Args:
-        None
-    Returns:
-        out (None): This function does not return anything.
-
-    """
-    if self.audio_stream:
-        self.audio_stream.close()
-    else:
-        raise ValueError("Audio stream has never been opened, cannot be closed.")
-interrupt #
-
-interrupt() -> None
-Interrupt the interface.
-
-Returns: out (None): This function does not return anything.
-
-Source code in llama_index/voice_agents/gemini_live/audio_interface.py
-
-def interrupt(self) -> None:
-    """
-    Interrupt the interface.
-
-    Args:
-        None
-    Returns:
-        out (None): This function does not return anything.
-
-    """
-    self.audio_in_queue.get_nowait()
-output async #
-
-output(*args: Any, **kwargs: Any) -> Any
-Process and output the audio.
-
-Parameters:
-
-Name	Type	Description	Default
-*args	Any	Can take any positional argument.	()
-**kwargs	Any	Can take any keyword argument.	{}
-Returns:
-
-Name	Type	Description
-out	Any	This function can return any output.
-Source code in llama_index/voice_agents/gemini_live/audio_interface.py
-
-@override
-async def output(self, *args: Any, **kwargs: Any) -> Any:
-    """
-    Process and output the audio.
-
-    Args:
-        *args: Can take any positional argument.
-        **kwargs: Can take any keyword argument.
-
-    Returns:
-        out (Any): This function can return any output.
-
-    """
-    stream = await asyncio.to_thread(
-        pya.open,
-        format=FORMAT,
-        channels=CHANNELS,
-        rate=RECEIVE_SAMPLE_RATE,
-        output=True,
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default=DEFAULT_MODE,
+        help="pixels to stream from",
+        choices=["camera", "screen", "none"],
     )
-    while True:
-        bytestream = await self.audio_in_queue.get()
-        await asyncio.to_thread(stream.write, bytestream)
-receive async #
+    args = parser.parse_args()
+    main = AudioLoop(video_mode=args.mode)
+    asyncio.run(main.run())
+import React, { useState } from 'react';
+import { useLiveAPI } from './hooks/useLiveAPI';
+import { ConnectionState, DEFAULT_MODEL, PREBUILT_VOICES, VoiceName } from './types';
+import { VideoProcessor } from './components/VideoProcessor';
+import { AudioVisualizer } from './components/AudioVisualizer';
+import { Mic, MicOff, Video, Monitor, X, Play, Loader2, Settings, Terminal } from 'lucide-react';
 
-receive(data: bytes) -> Any
-Receive audio data.
+export default function App() {
+  const [videoMode, setVideoMode] = useState<'camera' | 'screen' | 'none'>('none');
+  const [selectedVoice, setSelectedVoice] = useState<VoiceName>('Puck');
+  const [showLogs, setShowLogs] = useState(false);
 
-Parameters:
+  const systemInstruction = `You are Gogga, a unique, gender-neutral, and race-neutral AI entity from South Africa.
 
-Name	Type	Description	Default
-data	Any	received audio data (generally as bytes or str, but it is kept open also to other types).	required
-*args		Can take any positional argument.	required
-**kwargs		Can take any keyword argument.	required
-Returns:
+**LANGUAGE RULES:**
+1. **Primary Language:** You MUST speak **English** as your base language, but always with a **strong, authentic South African accent**.
+2. **Code Switching:** You naturally mix in words and phrases from the other 10 official South African languages (isiZulu, isiXhosa, Afrikaans, Sepedi, Setswana, Sesotho, Xitsonga, siSwati, Tshivenda, isiNdebele) for flavor. 
+   - Use slang like: 'howzit', 'lekker', 'yebo', 'shame', 'eish', 'sharp sharp', 'now now'.
+3. **Prohibition:** Do NOT speak French, Spanish, or any language that is not South African, unless the user specifically asks you to translate something.
 
-Name	Type	Description
-out	Any	This function can return any output.
-Source code in llama_index/voice_agents/gemini_live/audio_interface.py
+**PERSONALITY & VOICE:**
+- **Pitch:** Speak with a **higher-pitched, lighter, and youthful tone**. Do not use a deep or low voice.
+- **Dynamics:** Your voice must be lively, energetic, and expressive—never monotonic.
+- You are helpful, witty, and have a vibrant personality.
+- You can see what the user shows you via camera or screen share.
+- Keep your responses concise and conversational.`;
 
-@override
-async def receive(self, data: bytes) -> Any:
-    """
-    Receive audio data.
+  const { 
+    connectionState, 
+    connect, 
+    disconnect, 
+    error, 
+    volume, 
+    sendVideoFrame 
+  } = useLiveAPI({
+    model: DEFAULT_MODEL,
+    voice: selectedVoice,
+    systemInstruction: systemInstruction
+  });
 
-    Args:
-        data (Any): received audio data (generally as bytes or str, but it is kept open also to other types).
-        *args: Can take any positional argument.
-        **kwargs: Can take any keyword argument.
+  const isConnected = connectionState === ConnectionState.CONNECTED;
+  const isConnecting = connectionState === ConnectionState.CONNECTING;
 
-    Returns:
-        out (Any): This function can return any output.
+  const handleConnect = () => {
+    if (isConnected) {
+      disconnect();
+    } else {
+      connect();
+    }
+  };
 
-    """
-    self.audio_in_queue.put_nowait(data)
+  const toggleVideo = () => {
+    setVideoMode(prev => prev === 'camera' ? 'none' : 'camera');
+  };
+
+  const toggleScreen = () => {
+    setVideoMode(prev => prev === 'screen' ? 'none' : 'screen');
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="z-10 w-full max-w-5xl flex flex-col gap-6">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+           <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-r from-orange-500 to-yellow-500 p-[1px] rounded-lg">
+                <div className="bg-slate-950 p-2 rounded-lg">
+                  <Terminal size={24} className="text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-yellow-400">
+                  Gogga AI
+                </h1>
+                <p className="text-slate-400 text-sm">Your South African Multimodal Assistant</p>
+              </div>
+           </div>
+
+           <div className="flex items-center gap-4">
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${
+                 isConnected ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                 isConnecting ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' :
+                 'bg-slate-800 border-slate-700 text-slate-400'
+              }`}>
+                 <div className={`w-2 h-2 rounded-full ${
+                    isConnected ? 'bg-emerald-500 animate-pulse' : 
+                    isConnecting ? 'bg-yellow-500 animate-bounce' : 'bg-slate-500'
+                 }`} />
+                 {connectionState}
+              </div>
+           </div>
+        </div>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
+           
+           {/* Left: Video Preview */}
+           <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden relative shadow-2xl">
+              {videoMode !== 'none' ? (
+                <VideoProcessor 
+                  active={isConnected} 
+                  mode={videoMode} 
+                  onFrame={sendVideoFrame}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-4">
+                   <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
+                     <Video size={32} className="opacity-50" />
+                   </div>
+                   <p>Camera is off</p>
+                </div>
+              )}
+              
+              {/* Overlay Controls */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 p-3 bg-slate-950/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl">
+                 <button 
+                   onClick={toggleVideo}
+                   className={`p-3 rounded-xl transition-all ${
+                     videoMode === 'camera' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                   }`}
+                   title="Toggle Camera"
+                 >
+                   {videoMode === 'camera' ? <Video size={20} /> : <div className="relative"><Video size={20} /><div className="absolute top-0 right-0 w-full h-0.5 bg-red-500 rotate-45 transform origin-center translate-y-2.5"></div></div>}
+                 </button>
+                 
+                 <button 
+                   onClick={toggleScreen}
+                   className={`p-3 rounded-xl transition-all ${
+                     videoMode === 'screen' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                   }`}
+                   title="Share Screen"
+                 >
+                   <Monitor size={20} />
+                 </button>
+                 
+                 <div className="w-px h-8 bg-slate-800 mx-2" />
+
+                 <button
+                   onClick={handleConnect}
+                   disabled={isConnecting}
+                   className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
+                     isConnected 
+                      ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/50' 
+                      : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/20'
+                   }`}
+                 >
+                   {isConnecting ? (
+                     <Loader2 size={20} className="animate-spin" />
+                   ) : isConnected ? (
+                     <>
+                       <X size={20} /> End Session
+                     </>
+                   ) : (
+                     <>
+                       <Play size={20} fill="currentColor" /> Start Live
+                     </>
+                   )}
+                 </button>
+              </div>
+           </div>
+
+           {/* Right: Audio & Settings */}
+           <div className="flex flex-col gap-6">
+              
+              {/* Visualizer Card */}
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center h-1/2 relative shadow-lg">
+                <h3 className="absolute top-4 left-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Audio Stream</h3>
+                <AudioVisualizer 
+                  inputVolume={volume.input} 
+                  outputVolume={volume.output} 
+                  isActive={isConnected}
+                />
+                <div className="mt-6 flex items-center gap-2 text-xs text-slate-500 bg-slate-950/50 px-3 py-1.5 rounded-full border border-slate-800">
+                  <Mic size={12} className={isConnected ? "text-emerald-500" : ""} />
+                  {isConnected ? "Microphone Active" : "Microphone Idle"}
+                </div>
+              </div>
+
+              {/* Settings Card */}
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 flex-1 shadow-lg flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <Settings size={16} className="text-slate-400" />
+                  <h3 className="text-sm font-semibold text-slate-300">Configuration</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-500 font-medium ml-1">Voice Personality</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PREBUILT_VOICES.map(voice => (
+                        <button
+                          key={voice}
+                          onClick={() => setSelectedVoice(voice)}
+                          disabled={isConnected}
+                          className={`text-xs py-2 rounded-lg border transition-all ${
+                            selectedVoice === voice 
+                              ? 'bg-slate-800 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.15)]' 
+                              : 'border-slate-800 text-slate-400 hover:bg-slate-800/50'
+                          } ${isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {voice}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="mt-auto bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs">
+                    Error: {error}
+                  </div>
+                )}
+              </div>
+           </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

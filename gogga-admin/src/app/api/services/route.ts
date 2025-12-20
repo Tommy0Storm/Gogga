@@ -1,42 +1,44 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
 // Docker container-based services configuration
 export const GOGGA_SERVICES = {
   backend: {
-    name: 'backend',
-    displayName: 'Backend API',
-    description: 'FastAPI server handling AI requests, payments, and core business logic',
+    name: "backend",
+    displayName: "Backend API",
+    description:
+      "FastAPI server handling AI requests, payments, and core business logic",
     port: 8000,
-    containerName: 'gogga_api',
-    healthEndpoint: 'http://gogga_api:8000/health',
-    externalUrl: 'http://192.168.0.168:8000',
+    containerName: "gogga_api",
+    healthEndpoint: "http://gogga_api:8000/health",
+    externalUrl: "http://192.168.0.130:8000",
   },
   cepo: {
-    name: 'cepo',
-    displayName: 'CePO Sidecar',
-    description: 'OptiLLM chain-of-thought reasoning proxy for JIVE tier',
+    name: "cepo",
+    displayName: "CePO Sidecar",
+    description:
+      "OptiLLM chain-of-thought reasoning proxy for JIVE tier (Worker)",
     port: 8080,
-    containerName: 'gogga_cepo',
-    healthEndpoint: 'http://gogga_cepo:8080/health',
-    externalUrl: 'http://192.168.0.168:8080',
+    containerName: "gogga_cepo_worker",
+    healthEndpoint: "http://192.168.0.198:8080/health",
+    externalUrl: "http://192.168.0.198:8080",
   },
   frontend: {
-    name: 'frontend',
-    displayName: 'Frontend App',
-    description: 'Next.js 16 web application serving user interface',
+    name: "frontend",
+    displayName: "Frontend App",
+    description: "Next.js 16 web application serving user interface",
     port: 3000,
-    containerName: 'gogga_ui',
-    healthEndpoint: 'http://gogga_ui:3000/api/health',
-    externalUrl: 'http://192.168.0.168:3001',
+    containerName: "gogga_ui",
+    healthEndpoint: "http://gogga_ui:3000/api/health",
+    externalUrl: "https://192.168.0.130:3000",
   },
   admin: {
-    name: 'admin',
-    displayName: 'Admin Panel',
-    description: 'GOGGA Admin dashboard for service management',
+    name: "admin",
+    displayName: "Admin Panel",
+    description: "GOGGA Admin dashboard for service management",
     port: 3100,
-    containerName: 'gogga_admin',
-    healthEndpoint: 'http://localhost:3100/api/health/database',
-    externalUrl: 'http://192.168.0.168:3100',
+    containerName: "gogga_admin",
+    healthEndpoint: "http://localhost:3100/api/health/database",
+    externalUrl: "http://192.168.0.130:3100",
   },
 } as const;
 
@@ -48,12 +50,14 @@ interface ServiceStatus {
   description: string;
   port: number | null;
   containerName: string;
-  status: 'online' | 'offline' | 'unknown';
+  status: "online" | "offline" | "unknown";
   externalUrl: string;
   lastCheck: string;
-  metrics?: {
-    avgLatencyMs?: number;
-  };
+  metrics?:
+    | {
+        avgLatencyMs?: number;
+      }
+    | undefined;
 }
 
 async function checkServiceHealth(
@@ -68,7 +72,7 @@ async function checkServiceHealth(
 
     const res = await fetch(service.healthEndpoint, {
       signal: controller.signal,
-      cache: 'no-store',
+      cache: "no-store",
     });
 
     clearTimeout(timeout);
@@ -92,7 +96,7 @@ export async function GET() {
       description: service.description,
       port: service.port,
       containerName: service.containerName,
-      status: online ? 'online' : 'offline',
+      status: online ? "online" : "offline",
       externalUrl: service.externalUrl,
       lastCheck: new Date().toISOString(),
       metrics: online

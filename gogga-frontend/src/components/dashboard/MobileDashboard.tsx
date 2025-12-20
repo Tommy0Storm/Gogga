@@ -51,7 +51,7 @@ interface MobileDashboardProps {
   isLoading: boolean;
   lastUpdated: Date | null;
   onRefresh: () => void;
-  onDocumentRemove?: (docId: number) => void;
+  onDocumentRemove?: (docId: string) => void;
 }
 
 // ============================================================================

@@ -1,28 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const email = searchParams.get('email');
+  const email = searchParams.get("email");
 
   if (!email) {
-    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+    return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
   try {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        subscription: true,
+        Subscription: true,
       },
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Fetch recent vouchers redeemed by this user
-    let recentVouchers: { code: string; type: string; redeemedAt: Date | null }[] = [];
+    let recentVouchers: {
+      code: string;
+      type: string;
+      redeemedAt: Date | null;
+    }[] = [];
     try {
       recentVouchers = await prisma.voucher.findMany({
         where: { redeemedBy: email },
@@ -31,7 +35,7 @@ export async function GET(request: NextRequest) {
           type: true,
           redeemedAt: true,
         },
-        orderBy: { redeemedAt: 'desc' },
+        orderBy: { redeemedAt: "desc" },
         take: 10,
       });
     } catch {
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
         ip: true,
         createdAt: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 10,
     });
 
@@ -55,24 +59,24 @@ export async function GET(request: NextRequest) {
       email: user.email,
       createdAt: user.createdAt.toISOString(),
       isAdmin: (user as { isAdmin?: boolean }).isAdmin || false,
-      subscription: user.subscription
+      subscription: user.Subscription
         ? {
-            tier: user.subscription.tier,
-            status: user.subscription.status,
-            credits: user.subscription.credits,
-            creditsUsed: user.subscription.creditsUsed,
-            monthlyCredits: user.subscription.monthlyCredits,
-            imagesUsed: user.subscription.imagesUsed,
-            imagesLimit: user.subscription.imagesLimit,
-            startedAt: user.subscription.startedAt?.toISOString() || null,
-            nextBilling: user.subscription.nextBilling?.toISOString() || null,
-            payfastToken: user.subscription.payfastToken,
+            tier: user.Subscription.tier,
+            status: user.Subscription.status,
+            credits: user.Subscription.credits,
+            creditsUsed: user.Subscription.creditsUsed,
+            monthlyCredits: user.Subscription.monthlyCredits,
+            imagesUsed: user.Subscription.imagesUsed,
+            imagesLimit: user.Subscription.imagesLimit,
+            startedAt: user.Subscription.startedAt?.toISOString() || null,
+            nextBilling: user.Subscription.nextBilling?.toISOString() || null,
+            payfastToken: user.Subscription.payfastToken,
           }
         : null,
       recentVouchers: recentVouchers.map((v) => ({
         code: v.code,
         type: v.type,
-        redeemedAt: v.redeemedAt?.toISOString() || '',
+        redeemedAt: v.redeemedAt?.toISOString() || "",
       })),
       recentAuth: recentAuth.map((a) => ({
         action: a.action,
@@ -81,9 +85,9 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('User lookup error:', error);
+    console.error("User lookup error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

@@ -12,6 +12,7 @@ import {
   MdFullscreenExit,
   MdGridView,
   MdViewStream,
+  MdCode,
 } from 'react-icons/md';
 
 // Dynamic import to avoid SSR issues with xterm
@@ -32,7 +33,8 @@ interface ServiceTab {
 
 const SERVICES: ServiceTab[] = [
   { id: 'backend', name: 'Backend API', icon: <MdApi className="w-5 h-5" /> },
-  { id: 'cepo', name: 'CePO', icon: <MdPsychology className="w-5 h-5" /> },
+  { id: 'python', name: 'Python', icon: <MdCode className="w-5 h-5" /> },
+  { id: 'cepo', name: 'OptiLLM', icon: <MdPsychology className="w-5 h-5" /> },
   { id: 'frontend', name: 'Frontend', icon: <MdWeb className="w-5 h-5" /> },
   { id: 'admin', name: 'Admin', icon: <MdDashboard className="w-5 h-5" /> },
   { id: 'sqlite', name: 'SQLite', icon: <MdTerminal className="w-5 h-5" /> },

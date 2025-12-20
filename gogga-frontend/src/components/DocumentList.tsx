@@ -12,7 +12,7 @@ import type { Document } from '@/lib/db';
 
 interface DocumentListProps {
   documents: Document[];
-  onRemove: (docId: number) => Promise<void>;
+  onRemove: (docId: string) => Promise<void>;
   onClearAll: () => Promise<void>;
   stats: {
     documents: number;
@@ -30,10 +30,10 @@ export function DocumentList({
   isLoading = false 
 }: DocumentListProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [removingId, setRemovingId] = useState<number | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
 
-  const handleRemove = async (docId: number) => {
+  const handleRemove = async (docId: string) => {
     setRemovingId(docId);
     try {
       await onRemove(docId);

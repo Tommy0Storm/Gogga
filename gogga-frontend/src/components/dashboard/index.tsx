@@ -101,7 +101,7 @@ export const RAGDashboard: React.FC<RAGDashboardProps> = ({
     isLoading: state.isLoading,
     lastUpdated: state.lastUpdated,
     onRefresh: refreshData,
-    onDocumentRemove: (docId: number) => {
+    onDocumentRemove: (docId: string) => {
       // Will be handled by DocumentManager internally
       refreshData();
     },

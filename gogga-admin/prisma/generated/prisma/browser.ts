@@ -113,6 +113,11 @@ export type PricingAudit = Prisma.PricingAuditModel
  */
 export type CreditAdjustment = Prisma.CreditAdjustmentModel
 /**
+ * Model ToolUsage
+ * 
+ */
+export type ToolUsage = Prisma.ToolUsageModel
+/**
  * Model UsageEvent
  * 
  */

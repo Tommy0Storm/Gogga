@@ -263,6 +263,8 @@ export const CSVUploader: React.FC<CSVUploaderProps> = ({
           `}
         >
           <input
+            id="csv-file-upload"
+            name="csv-file-upload"
             type="file"
             accept=".csv,.tsv"
             onChange={handleFileChange}

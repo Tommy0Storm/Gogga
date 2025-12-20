@@ -52,7 +52,7 @@ import type {
 export interface VectorData {
   vectors: number[][];
   labels: string[];
-  docIds: number[];
+  docIds: string[];
   isReal: boolean;
 }
 
@@ -663,7 +663,7 @@ export function useContextMemory() {
     }
   }, []);
 
-  const deleteDocument = useCallback(async (docId: number) => {
+  const deleteDocument = useCallback(async (docId: string) => {
     try {
       // Get the document to find its sessionId
       const doc = documents.find(d => d.id === docId);

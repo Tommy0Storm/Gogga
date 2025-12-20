@@ -288,8 +288,58 @@ async def _generate_horde_image(prompt: str) -> str | None:
     return None
 
 
-# HD Quality enhancement keywords
+# HD Quality enhancement keywords (for FREE tier Pollinations)
 HD_QUALITY_SUFFIX = ", masterpiece, best quality, hyperdetailed, highly detailed, sharp focus, HD, 4K, ultra high resolution"
+
+
+async def _generate_imagen_image(prompt: str, style: str | None = None) -> dict[str, Any]:
+    """
+    Generate image using Vertex AI Imagen 3.0 (for JIVE/JIGGA tiers).
+    
+    Returns dict with success status and image data (base64).
+    """
+    from app.services.imagen_service import (
+        ImagenService, ImagenRequest, ImagenOperation
+    )
+    
+    try:
+        imagen = ImagenService()
+        request = ImagenRequest(
+            prompt=prompt,
+            operation=ImagenOperation.CREATE,
+            aspect_ratio="1:1",  # Square by default
+            sample_count=1,
+        )
+        
+        response = await imagen.generate(request=request, user_id=None)
+        
+        if response.success and response.images:
+            # Convert base64 to data URL for display
+            image_data = response.images[0]
+            data_url = f"data:image/png;base64,{image_data}"
+            return {
+                "success": True,
+                "image_url": data_url,
+                "image_urls": [data_url],
+                "prompt": prompt,
+                "style": style,
+                "providers": ["vertex-ai-imagen-3.0"],
+                "image_count": 1,
+                "model": "imagen-3.0-generate-002",
+                "note": "Generated with Vertex AI Imagen 3.0 (premium quality)"
+            }
+        else:
+            return {
+                "success": False,
+                "error": response.error or "Imagen generation failed",
+            }
+    except Exception as e:
+        logger.error(f"Imagen generation error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
 
 async def execute_generate_image(
     prompt: str,
@@ -297,10 +347,10 @@ async def execute_generate_image(
     tier: str = "free"
 ) -> dict[str, Any]:
     """
-    Generate images using BOTH Pollinations.ai AND AI Horde in parallel.
+    Generate images with tier-based provider routing:
     
-    Returns all successful images. If one fails, silently returns the other.
-    User never sees errors - at least one image will always be returned.
+    - FREE: Pollinations.ai + AI Horde (dual free generators)
+    - JIVE/JIGGA: Vertex AI Imagen 3.0 (premium quality)
     
     Args:
         prompt: Text description of the image to generate
@@ -310,6 +360,23 @@ async def execute_generate_image(
     Returns:
         dict with image_urls (array) and metadata
     """
+    tier_lower = tier.lower() if tier else "free"
+    
+    # JIVE/JIGGA: Use premium Imagen 3.0
+    if tier_lower in ("jive", "jigga"):
+        logger.info(f"🖼️ Imagen 3.0: Generating for {tier_lower.upper()} tier")
+        result = await _generate_imagen_image(prompt, style)
+        
+        # If Imagen succeeds, return it
+        if result.get("success"):
+            return result
+        
+        # Fallback to Pollinations if Imagen fails
+        logger.warning(f"Imagen failed, falling back to Pollinations: {result.get('error')}")
+    
+    # FREE tier (or fallback): Use Pollinations + AI Horde
+    logger.info(f"🖼️ Pollinations: Generating for {tier_lower.upper()} tier")
+    
     # Enhance prompt with style if provided
     full_prompt = prompt
     if style:
@@ -329,8 +396,8 @@ async def execute_generate_image(
     # URL encode for Pollinations - optimized for speed
     encoded_prompt = urllib.parse.quote(full_prompt)
     # Speed optimized: no enhance (prompt already enhanced), smaller size for faster generation
-    # nologo=true removes watermark, model=flux for best quality/speed balance
-    pollinations_url = f"{POLLINATIONS_BASE_URL}/{encoded_prompt}?nologo=true&width=768&height=768&model=flux"
+    # nologo=true removes watermark, model=turbo for best speed (uses default Stable Diffusion)
+    pollinations_url = f"{POLLINATIONS_BASE_URL}/{encoded_prompt}?nologo=true&width=1024&height=1024&model=turbo"
     
     # Fire both generators in parallel
     horde_task = asyncio.create_task(_generate_horde_image(full_prompt))
@@ -363,6 +430,144 @@ async def execute_generate_image(
         "image_count": len(image_urls),
         "note": "Image(s) generated from dual free providers"
     }
+
+
+# =============================================================================
+# Premium Image Tools - Imagen 4.0 Upscale, Imagen 3.0 Edit
+# =============================================================================
+
+async def execute_upscale_image(
+    source_image_id: str,
+    upscale_factor: str = "x2",
+    tier: str = "free"
+) -> dict[str, Any]:
+    """
+    Upscale an image using Imagen 4 Ultra.
+    
+    JIVE/JIGGA tier required. Uses Imagen 4.0 upscale model for
+    premium quality upscaling.
+    
+    Args:
+        source_image_id: ID of the image to upscale (from previous generation)
+        upscale_factor: Upscale factor (x2, x3, x4)
+        tier: User tier (must be jive or jigga)
+    
+    Returns:
+        dict with upscaled image data and metadata
+    """
+    tier_lower = tier.lower() if tier else "free"
+    
+    # Tier check - premium feature only
+    if tier_lower not in ("jive", "jigga"):
+        return {
+            "success": False,
+            "error": "Upscale image requires JIVE or JIGGA tier. Please upgrade to access Imagen 4 Ultra upscaling.",
+            "upgrade_required": True,
+        }
+    
+    # Validate upscale factor
+    if upscale_factor not in ("x2", "x3", "x4"):
+        return {
+            "success": False,
+            "error": f"Invalid upscale factor: {upscale_factor}. Must be x2, x3, or x4.",
+        }
+    
+    logger.info(f"🔍 Imagen 4 Upscale: {upscale_factor} for {tier_lower.upper()} tier, image_id={source_image_id[:20]}...")
+    
+    try:
+        from app.services.imagen_service import ImagenService, ImagenRequest, ImagenOperation
+        from app.core.router import UserTier
+        
+        # Initialize Imagen service
+        imagen = ImagenService()
+        
+        # The source_image_id should be base64 encoded image data or we need to fetch it
+        # For now, return instructions for frontend to handle
+        return {
+            "success": True,
+            "action": "upscale",
+            "requires_image_data": True,
+            "source_image_id": source_image_id,
+            "upscale_factor": upscale_factor,
+            "message": f"Ready to upscale image {upscale_factor}. Please provide the image data.",
+            "tier": tier_lower,
+            "model": "imagen-4.0-upscale-preview",
+            "execute_on": "frontend_with_image",  # Frontend needs to pass image data
+        }
+        
+    except Exception as e:
+        logger.exception(f"Upscale execution failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+async def execute_edit_image(
+    source_image_id: str,
+    edit_prompt: str,
+    edit_mode: str = "INPAINT_INSERTION",
+    mask_description: str | None = None,
+    tier: str = "free"
+) -> dict[str, Any]:
+    """
+    Edit an image using Imagen 3.0 mask-based editing.
+    
+    JIVE/JIGGA tier required. Supports inpainting, outpainting,
+    background swap, and object removal.
+    
+    Args:
+        source_image_id: ID of the image to edit
+        edit_prompt: Description of the edit to make
+        edit_mode: Edit mode (INPAINT_INSERTION, INPAINT_REMOVAL, BGSWAP, OUTPAINT)
+        mask_description: Optional natural language mask description
+        tier: User tier (must be jive or jigga)
+    
+    Returns:
+        dict with edited image data and metadata
+    """
+    tier_lower = tier.lower() if tier else "free"
+    
+    # Tier check - premium feature only
+    if tier_lower not in ("jive", "jigga"):
+        return {
+            "success": False,
+            "error": "Edit image requires JIVE or JIGGA tier. Please upgrade to access Imagen 3.0 editing.",
+            "upgrade_required": True,
+        }
+    
+    # Validate edit mode
+    valid_modes = ("INPAINT_INSERTION", "INPAINT_REMOVAL", "BGSWAP", "OUTPAINT")
+    if edit_mode not in valid_modes:
+        return {
+            "success": False,
+            "error": f"Invalid edit mode: {edit_mode}. Must be one of: {', '.join(valid_modes)}",
+        }
+    
+    logger.info(f"✏️ Imagen 3 Edit: {edit_mode} for {tier_lower.upper()} tier, prompt={edit_prompt[:50]}...")
+    
+    try:
+        # Return instructions for frontend to handle mask drawing
+        return {
+            "success": True,
+            "action": "edit",
+            "requires_mask": edit_mode != "BGSWAP",  # BGSWAP auto-detects background
+            "source_image_id": source_image_id,
+            "edit_prompt": edit_prompt,
+            "edit_mode": edit_mode,
+            "mask_description": mask_description,
+            "message": f"Ready to edit image. {'Please draw a mask on the area to edit.' if edit_mode != 'BGSWAP' else 'Background will be automatically detected.'}",
+            "tier": tier_lower,
+            "model": "imagen-3.0-capability-001",
+            "execute_on": "frontend_with_mask",  # Frontend needs to provide mask
+        }
+        
+    except Exception as e:
+        logger.exception(f"Edit execution failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
 
 
 # =============================================================================
@@ -665,9 +870,35 @@ async def execute_backend_tool(
     elif tool_name in ("python_execute", "sequential_think"):
         return await execute_math_tool(tool_name, arguments, tier)
     
+    # Document generation tool
+    elif tool_name == "generate_document":
+        from app.tools.document_executor import execute_document_tool
+        return await execute_document_tool(
+            arguments, 
+            tier,
+            user_id=arguments.get("user_id", "document_tool"),
+        )
+    
+    # Premium Image Tools - Imagen 4.0 upscale, Imagen 3.0 edit
+    elif tool_name == "upscale_image":
+        return await execute_upscale_image(
+            source_image_id=arguments.get("source_image_id", ""),
+            upscale_factor=arguments.get("upscale_factor", "x2"),
+            tier=tier
+        )
+    
+    elif tool_name == "edit_image":
+        return await execute_edit_image(
+            source_image_id=arguments.get("source_image_id", ""),
+            edit_prompt=arguments.get("edit_prompt", ""),
+            edit_mode=arguments.get("edit_mode", "INPAINT_INSERTION"),
+            mask_description=arguments.get("mask_description"),
+            tier=tier
+        )
+    
     else:
         return {
             "success": False,
-            "error": f"Unknown tool: {tool_name}. Supported: generate_image, math_*, python_execute, sequential_think",
+            "error": f"Unknown tool: {tool_name}. Supported: generate_image, generate_document, math_*, python_execute, sequential_think",
             "execute_on": "frontend"  # Try frontend execution
         }

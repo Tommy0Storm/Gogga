@@ -186,7 +186,7 @@ interface DesktopDashboardProps {
   lastUpdated: Date | null;
   onRefresh: () => void;
   onToggleAutoRefresh: () => void;
-  onDocumentRemove?: (docId: number) => void;
+  onDocumentRemove?: (docId: string) => void;
 }
 
 // ============================================================================
@@ -1219,7 +1219,7 @@ interface MemoryTabProps {
   documents: ContextDocument[];
   tier: 'free' | 'jive' | 'jigga';
   sessionId: string;
-  onDocumentRemove?: (docId: number) => void;
+  onDocumentRemove?: (docId: string) => void;
   onRefresh: () => void;
 }
 

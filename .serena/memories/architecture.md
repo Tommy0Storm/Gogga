@@ -1,5 +1,21 @@
 # GOGGA Architecture Details
 
+## Distributed Infrastructure (Dec 2025)
+
+GOGGA runs across **two Ubuntu servers** for optimized resource allocation:
+
+| Server | IP | Role | Services |
+|--------|-----|------|----------|
+| **Primary** | 192.168.0.130 | Main stack, VS Code host | Frontend, Backend, Admin, Proxy |
+| **Worker** | 192.168.0.129 | AI workloads, shared storage | CePO, cAdvisor, NFS DEV-Drive |
+
+Windows VS Code connects to **Primary only** (10.0.0.1 → 192.168.0.130 via SSH).
+Primary controls Worker via Docker context (`tcp://192.168.0.129:2376`).
+
+See `.serena/memories/distributed_infrastructure.md` for full setup details.
+
+---
+
 ## Storage Architecture (Dual-Database)
 
 GOGGA uses **two separate databases** that never connect directly:
@@ -39,34 +55,73 @@ Only difference: monthly token/image limits
 | Tier | General/Chat/Math | Complex/Legal/Extended | Images |
 |------|-------------------|------------------------|--------|
 | FREE | OpenRouter Qwen 235B FREE | OpenRouter Qwen 235B FREE | Pollinations (50/mo) |
-| JIVE | Cerebras Qwen 32B | Cerebras Qwen 235B | FLUX 1.1 Pro (200/mo) |
-| JIGGA | Cerebras Qwen 32B | Cerebras Qwen 235B | FLUX 1.1 Pro (1000/mo) |
+| JIVE | Cerebras Qwen 32B | Cerebras Qwen 235B | Imagen 3.0 (200/mo) |
+| JIGGA | Cerebras Qwen 32B | Cerebras Qwen 235B | Imagen 3.0 (1000/mo) |
 
 ### 235B Triggers (JIVE and JIGGA)
 - **Complex keywords**: constitutional, legal, compliance, statutory, litigation, etc.
 - **Extended output**: comprehensive analysis, detailed report, thorough review, etc.
 - **African languages**: Zulu, Xhosa, Sotho, Tswana, Venda, Tsonga, etc.
 
-### CePO/OptiLLM Status
-- **CePO sidecar**: REMOVED (Dec 2025)
-- **OptiLLM enhancements**: Implemented directly in code (`optillm_enhancements.py`)
-- **Techniques**: SPL, Re-Read (re2), CoT Reflection, Planning Mode
+### CePO/OptiLLM Status (Dec 2025)
+- **CePO sidecar**: ACTIVE - `ghcr.io/algorithmicsuperintelligence/optillm:latest-proxy`
+- **Port**: http://cepo:8080 (internal) / http://localhost:8080 (host)
+- **Active Approach**: `re2&cot_reflection` (Cerebras-compatible!)
+  - `re2` = ReRead (processes query twice)
+  - `cot_reflection` = Chain of Thought with `<thinking>`, `<reflection>`, `<output>`
+- **OptiLLM enhancements**: Fallback in `optillm_enhancements.py` when CePO unavailable
 
-### Pricing (USD per Million Tokens)
+### ⚠️ Cerebras API Limitations (Do NOT use)
+- ❌ `cepo` approach - uses `reasoning_effort` parameter (422 error)
+- ❌ `bon` approach - uses `n > 1` parameter (422 error)
+- ❌ `thinkdeeper` - OpenAI-specific features
 
-| Tier | Input | Output | Image |
-|------|-------|--------|-------|
-| FREE | $0.00 | $0.00 | $0.00 |
-| JIVE (32B) | $0.40 | $0.80 | $0.04 |
-| JIVE (235B) | $0.60 | $1.20 | $0.04 |
-| JIGGA (32B) | $0.40 | $0.80 | $0.04 |
-| JIGGA (235B) | $0.60 | $1.20 | $0.04 |
+### Pricing (USD per Million Tokens) - Dec 2025 Verified
+
+| Model | Provider | Input | Output |
+|-------|----------|-------|--------|
+| Qwen 3 235B (FREE) | OpenRouter `:free` | $0.00 | $0.00 |
+| Qwen 3 32B | Cerebras | $0.40 | $0.80 |
+| Qwen 3 235B | Cerebras | $0.60 | $1.20 |
+| Imagen 3.0 | Vertex AI | - | $0.04/img |
+| Pollinations | Pollinations | $0.00 | $0.00 |
+| Imagen 3.0 | Vertex AI | - | $0.04/img |
+| Imagen 4.0 Upscale | Vertex AI | - | $0.06/img |
+| Veo 3.1 Video | Vertex AI | - | $0.20/sec |
+| Veo 3.1 + Audio | Vertex AI | - | $0.40/sec |
+
+Exchange Rate: R18.50 = $1 USD
+
+### Feature Costs (Dec 2025)
+
+| Feature | Cost | Tiers |
+|---------|------|-------|
+| Web Search (Serper.dev) | $0.001/query | ALL |
+| Legal Search | $0.001/query | JIVE, JIGGA |
+| Places Search | $0.001/query | ALL |
+| GoggaTalk Voice | $0.015/sec (~$3 in + $12 out /M audio) | JIVE, JIGGA |
+| RAG Search | Free (client-side) | ALL |
+| Math Tools | Free | ALL |
+| Chart Gen | Free | ALL |
 
 ### Files
-- `app/core/router.py`: `route_request()`, `TierRouter.classify_intent()`, `JIVE_COMPLEX`, `JIGGA_COMPLEX`
+- `app/core/router.py`: `TierRouter.classify_intent()`, `JIVE_COMPLEX`, `JIGGA_COMPLEX`
+- `app/core/retry.py`: Exponential backoff, circuit breaker, `@with_retry` decorator
+- `app/core/idempotency.py`: Request deduplication cache, UUID v4 validation
 - `app/services/ai_service.py`: Handles `JIVE_TEXT`, `JIVE_COMPLEX`, `JIGGA_THINK`, `JIGGA_COMPLEX`
 - `app/config.py`: `MODEL_JIVE`, `MODEL_JIGGA`, `MODEL_JIGGA_235B`
 - `app/services/optillm_enhancements.py`: SPL, Re-Read, CoT Reflection, Planning
+
+### Token Limits (Dec 2025 Audit)
+```python
+# Qwen 32B (JIVE_TEXT, JIGGA_THINK layers)
+QWEN_32B_MAX_TOKENS = 8000      # Extended output (reports, analysis)
+QWEN_32B_DEFAULT_TOKENS = 4096   # Normal chat responses
+
+# Qwen 235B (JIVE_COMPLEX, JIGGA_COMPLEX layers)
+QWEN_235B_MAX_TOKENS = 32000    # Extended output (max hardware: 40,000)
+QWEN_235B_DEFAULT_TOKENS = 8000  # Normal complex queries
+```
 
 ### Qwen Thinking Mode Settings (NEVER use temp=0)
 ```python
@@ -111,3 +166,60 @@ When 235B receives a complex math query:
 | RAG Authoritative | Quotes directly from documents only |
 | RAG Analytics Dashboard | Document usage, query patterns, retrieval stats |
 | Cross-Session Selection | Select docs from other sessions |
+
+---
+
+## Router Audit Fixes (Jan 2025)
+
+### Issues Fixed
+1. **JIVE_COMPLEX missing from prompt mapping** → Added to `layer_mapping` dict
+2. **Confusing JIGGA_* constant names** → Renamed to `QWEN_32B_*` and `QWEN_235B_*`
+3. **Dead code removed**: `RouteConfig`, `get_default_config()`, `route_request()`
+4. **ai_service.py streaming** → Fixed to use proper `QWEN_32B_*` constants
+
+### Token Constant Naming (Updated)
+```python
+# OLD (confusing - implied JIGGA tier only):
+JIGGA_MAX_TOKENS = 8000
+JIGGA_DEFAULT_TOKENS = 4096
+JIGGA_235B_MAX_TOKENS = 32000
+JIGGA_235B_DEFAULT_TOKENS = 8000
+
+# NEW (clear - named by model):
+QWEN_32B_MAX_TOKENS = 8000
+QWEN_32B_DEFAULT_TOKENS = 4096
+QWEN_235B_MAX_TOKENS = 32000
+QWEN_235B_DEFAULT_TOKENS = 8000
+
+# Legacy aliases preserved for backwards compatibility
+JIGGA_MAX_TOKENS = QWEN_32B_MAX_TOKENS  # etc.
+```
+
+### Test Infrastructure
+- **File**: `tests/test_router_infrastructure.py` (63 tests)
+- **Coverage**: Token constants, tier routing, system prompts, keyword detection, edge cases
+- **Run**: `cd gogga-backend && python -m pytest tests/test_router_infrastructure.py -v`
+
+---
+
+## Enterprise Audit Summary (Dec 2025)
+
+See `.serena/memories/enterprise_audit_dec2025.md` for full details.
+
+### Critical Security Items (Immediate Action)
+1. **SEC-001**: API keys exposed in committed .env → Rotate ALL keys
+2. **SEC-002**: JWT uses base64, no signature → Implement pyjwt
+3. **SEC-003**: Admin endpoints unprotected → Add auth middleware
+4. **SEC-005**: Tier bypass via header → Server-side validation only
+
+### Performance Quick Wins
+1. **PERF-001**: Increase ThreadPoolExecutor to 64 workers (Cerebras SDK)
+2. **PERF-002**: Add request-level idempotency cache
+3. **PERF-004**: Skip local OptiLLM when routing to CePO
+4. **PERF-005**: Aho-Corasick for pattern matching in router
+
+### POPIA Compliance Gaps
+- ❌ No consent tracking at signup
+- ❌ No user data deletion API
+- ❌ No data retention auto-purge
+- ⚠️ AuthLog stores IPs indefinitely

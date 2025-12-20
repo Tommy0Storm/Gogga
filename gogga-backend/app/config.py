@@ -22,10 +22,18 @@ class Settings(BaseSettings):
     
     PROJECT_NAME: str = "GOGGA API"
     API_V1_STR: str = "/api/v1"
+    DEBUG: bool = Field(
+        default=False,
+        description="Enable debug mode (allows tier header override - NEVER True in production)"
+    )
     
     # Security
     SECRET_KEY: str = Field(default="dev-secret-key-change-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ADMIN_SECRET: str = Field(
+        default="admin-secret-change-in-production",
+        description="Secret for admin endpoint authentication (set in .env)"
+    )
     
     # Cerebras Configuration (Text only)
     CEREBRAS_API_KEY: str = Field(..., description="Cerebras Cloud API Key")

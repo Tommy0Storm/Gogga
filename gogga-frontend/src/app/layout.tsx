@@ -1,8 +1,17 @@
 import type { Metadata, Viewport } from 'next'
+import { Quicksand } from 'next/font/google'
 import { AuthProvider } from '@/components/AuthProvider'
 import { GlobalErrorBoundary } from '@/components/ErrorBoundary'
 import { BugReportButton } from '@/components/BugReportButton'
 import './globals.css'
+
+const quicksand = Quicksand({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  preload: true,
+  variable: '--font-quicksand',
+})
 
 export const metadata: Metadata = {
   title: 'GOGGA - South African AI Assistant',
@@ -25,28 +34,32 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={quicksand.variable}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        {/* Material Icons - optimized loading */}
         <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
+          rel="preload"
+          href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined&display=swap"
+          as="style"
         />
-        {/* Quicksand font */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined&display=swap"
           rel="stylesheet"
+          media="print"
         />
-        {/* Google Material Icons (Black, Outlined) */}
-        <link
-          href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined"
-          rel="stylesheet"
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `document.querySelectorAll('link[media="print"]')[0].media='all'`,
+          }}
         />
         {/* PostHog initialized via instrumentation-client.ts */}
       </head>
       <body
+<<<<<<< Updated upstream
         className="font-quicksand font-normal antialiased relative"
+=======
+        className={`${quicksand.className} font-normal antialiased`}
+>>>>>>> Stashed changes
         suppressHydrationWarning
       >
         <GlobalErrorBoundary>

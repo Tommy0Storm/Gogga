@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
 interface ActionRequest {
   userId: string;
@@ -14,22 +14,28 @@ export async function POST(request: NextRequest) {
     const { userId, action, tier, credits } = body;
 
     if (!userId || !action) {
-      return NextResponse.json({ error: 'userId and action required' }, { status: 400 });
+      return NextResponse.json(
+        { error: "userId and action required" },
+        { status: 400 }
+      );
     }
 
     const subscription = await prisma.subscription.findUnique({
       where: { userId },
-      include: { user: true },
+      include: { User: true },
     });
 
     if (!subscription) {
-      return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: "Subscription not found" },
+        { status: 404 }
+      );
     }
 
     switch (action) {
-      case 'override_tier':
-        if (!tier || !['FREE', 'JIVE', 'JIGGA'].includes(tier)) {
-          return NextResponse.json({ error: 'Invalid tier' }, { status: 400 });
+      case "override_tier":
+        if (!tier || !["FREE", "JIVE", "JIGGA"].includes(tier)) {
+          return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
         }
 
         // Log subscription event
@@ -38,11 +44,11 @@ export async function POST(request: NextRequest) {
             data: {
               subscriptionId: subscription.id,
               userId,
-              event: 'admin_override',
+              event: "admin_override",
               fromTier: subscription.tier,
               toTier: tier,
-              actor: 'admin@vcb-ai.online',
-              meta: JSON.stringify({ reason: 'Admin override' }),
+              actor: "admin@vcb-ai.online",
+              meta: JSON.stringify({ reason: "Admin override" }),
             },
           });
         } catch {
@@ -53,16 +59,20 @@ export async function POST(request: NextRequest) {
           where: { userId },
           data: {
             tier,
-            status: 'active',
-            monthlyCredits: tier === 'JIGGA' ? 500000 : tier === 'JIVE' ? 200000 : 0,
-            imagesLimit: tier === 'JIGGA' ? 1000 : tier === 'JIVE' ? 200 : 50,
+            status: "active",
+            monthlyCredits:
+              tier === "JIGGA" ? 500000 : tier === "JIVE" ? 200000 : 0,
+            imagesLimit: tier === "JIGGA" ? 1000 : tier === "JIVE" ? 200 : 50,
           },
         });
         break;
 
-      case 'grant_credits':
+      case "grant_credits":
         if (!credits || credits <= 0) {
-          return NextResponse.json({ error: 'Invalid credits' }, { status: 400 });
+          return NextResponse.json(
+            { error: "Invalid credits" },
+            { status: 400 }
+          );
         }
         await prisma.subscription.update({
           where: { userId },
@@ -72,7 +82,7 @@ export async function POST(request: NextRequest) {
         });
         break;
 
-      case 'reset_monthly':
+      case "reset_monthly":
         await prisma.subscription.update({
           where: { userId },
           data: {
@@ -83,14 +93,14 @@ export async function POST(request: NextRequest) {
         });
         break;
 
-      case 'cancel':
+      case "cancel":
         // If PayFast token exists, should also cancel with PayFast
         // For now just update local status
         await prisma.subscription.update({
           where: { userId },
           data: {
-            status: 'cancelled',
-            tier: 'FREE',
+            status: "cancelled",
+            tier: "FREE",
             payfastToken: null,
           },
         });
@@ -100,10 +110,10 @@ export async function POST(request: NextRequest) {
             data: {
               subscriptionId: subscription.id,
               userId,
-              event: 'cancelled',
+              event: "cancelled",
               fromTier: subscription.tier,
-              toTier: 'FREE',
-              actor: 'admin@vcb-ai.online',
+              toTier: "FREE",
+              actor: "admin@vcb-ai.online",
             },
           });
         } catch {
@@ -112,16 +122,16 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
 
     // Log admin action
     try {
       await prisma.adminLog.create({
         data: {
-          adminEmail: 'admin@vcb-ai.online',
+          adminEmail: "admin@vcb-ai.online",
           action: `subscription_${action}`,
-          targetUser: subscription.user.email,
+          targetUser: subscription.User.email,
           targetId: subscription.id,
           meta: JSON.stringify({ tier, credits }),
         },
@@ -132,9 +142,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Subscription action error:', error);
+    console.error("Subscription action error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

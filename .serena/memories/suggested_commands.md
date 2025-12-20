@@ -70,6 +70,12 @@ pytest tests/ -v
 
 # Run specific test file
 pytest tests/test_routing.py -v
+
+# Run all enterprise audit tests
+pytest tests/test_router_infrastructure.py tests/test_security_audit.py tests/test_usage_monitoring.py -v
+
+# Run usage monitoring tests only
+pytest tests/test_usage_monitoring.py -v
 ```
 
 ### Frontend Development
@@ -77,16 +83,39 @@ pytest tests/test_routing.py -v
 cd gogga-frontend
 
 # Install dependencies
-npm install
+pnpm install
 
 # Run development server
-npm run dev
+pnpm dev
+
+# Run with HTTPS (required for voice)
+pnpm dev:https
 
 # Build for production
-npm run build
+pnpm build
 
 # Lint code
-npm run lint
+pnpm lint
+
+# Run tests
+pnpm vitest run
+
+# Run usage tracking tests
+pnpm vitest run src/lib/__tests__/usageTracking.test.ts
+```
+
+### Admin Panel Development
+```bash
+cd gogga-admin
+
+# Generate Prisma client
+npx prisma generate
+
+# Push schema changes to database
+npx prisma db push
+
+# Run TypeScript check
+npx tsc --noEmit
 ```
 
 ## Utility Commands

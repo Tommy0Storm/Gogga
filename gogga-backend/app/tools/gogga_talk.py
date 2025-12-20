@@ -51,8 +51,8 @@ SEND_SAMPLE_RATE = 16000      # Input sample rate
 RECEIVE_SAMPLE_RATE = 24000   # Output sample rate  
 CHUNK_SIZE = 1024
 
-# Gemini Live model
-MODEL = "models/gemini-2.0-flash-exp"
+# Gemini Live native audio model (Dec 2025)
+MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
 
 # Gogga's voice - Aoede (warm, expressive, friendly)
 # Available: Puck, Charon, Kore, Fenrir, Aoede
@@ -332,9 +332,9 @@ class GoggaTalkAgent:
         self.ui.print_status("Connected to Gemini Live API", "green")
         
     def _get_session_config(self) -> Dict[str, Any]:
-        """Get session configuration for Gemini Live."""
+        """Get session configuration for Gemini Live native audio."""
         return {
-            "response_modalities": ["AUDIO", "TEXT"],
+            "response_modalities": ["AUDIO"],  # Native audio - AUDIO only
             "speech_config": {
                 "voice_config": {
                     "prebuilt_voice_config": {
@@ -356,7 +356,7 @@ class GoggaTalkAgent:
         self._gogga_initiated = True
         
     async def _send_audio(self):
-        """Send audio to Gemini."""
+        """Send audio to Gemini using realtime input."""
         # Wait for Gogga to initiate first
         while not self._gogga_initiated:
             await asyncio.sleep(0.1)
@@ -367,7 +367,8 @@ class GoggaTalkAgent:
                     self.audio.audio_out_queue.get(),
                     timeout=0.1
                 )
-                await self.session.send(input=msg)
+                # Use send_realtime_input for native audio model
+                await self.session.send_realtime_input(audio=msg)
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
