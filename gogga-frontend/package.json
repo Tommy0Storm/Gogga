@@ -4,23 +4,16 @@
   "private": true,
   "scripts": {
     "predev": "rm -rf .next 2>/dev/null || true && ./scripts/update-lan-ip.sh",
-<<<<<<< Updated upstream
-    "dev": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem",
-    "dev:https": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem",
-    "dev:localhost": "next dev --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem",
-    "dev:http": "next dev -H 192.168.0.130 -p 3000",
-    "dev:http:webpack": "next dev -H 192.168.0.130 -p 3000 --webpack",
-    "dev:debug": "next dev -H 192.168.0.130 -p 3000 --inspect",
-    "dev:debug:https": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem --inspect",
-    "dev:network": "concurrently \"next dev -p 3000\" \"node scripts/network-proxy.js 3001 3000\"",
-=======
     "dev": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem -p 3000",
+    "dev:https": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem -p 3000",
     "dev:lan": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem -p 3000",
     "dev:localhost": "next dev --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem -p 3000",
     "dev:http": "next dev -H 192.168.0.130 -p 3000",
+    "dev:http:webpack": "next dev -H 192.168.0.130 -p 3000 --webpack",
     "dev:http:noturbo": "next dev -H 192.168.0.130 -p 3000 --no-turbopack",
+    "dev:debug": "next dev -H 192.168.0.130 -p 3000 --inspect",
+    "dev:debug:https": "next dev -H 192.168.0.130 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem --inspect",
     "dev:network": "concurrently \"next dev -H 192.168.0.130 -p 3000\" \"node scripts/network-proxy.js 3001 3000\"",
->>>>>>> Stashed changes
     "proxy": "node scripts/network-proxy.js",
     "clean": "rm -rf .next node_modules/.cache",
     "build": "next build",
@@ -41,12 +34,9 @@
     "@types/papaparse": "^5.5.1",
     "axios": "^1.6.2",
     "better-sqlite3": "^12.5.0",
-<<<<<<< Updated upstream
     "buffer": "^6.0.3",
-    "crypto-browserify": "^3.12.1",
-=======
     "clsx": "^2.1.1",
->>>>>>> Stashed changes
+    "crypto-browserify": "^3.12.1",
     "dexie": "^4.2.1",
     "dotenv": "^16.5.0",
     "flexsearch": "^0.8.212",
@@ -56,11 +46,7 @@
     "jszip": "^3.10.1",
     "katex": "^0.16.27",
     "mathjs": "^15.1.0",
-<<<<<<< Updated upstream
-    "next": "^16.0.10",
-=======
     "next": "16.0.10",
->>>>>>> Stashed changes
     "next-auth": "5.0.0-beta.30",
     "onnxruntime-web": "^1.23.2",
     "papaparse": "^5.5.3",
@@ -73,11 +59,8 @@
     "remark-gfm": "^4.0.1",
     "rxdb": "^16.21.1",
     "rxjs": "^7.8.2",
-<<<<<<< Updated upstream
     "stream-browserify": "^3.0.0",
-=======
     "tailwind-merge": "^3.4.0",
->>>>>>> Stashed changes
     "unpdf": "^1.4.0",
     "zustand": "^5.0.9"
   },

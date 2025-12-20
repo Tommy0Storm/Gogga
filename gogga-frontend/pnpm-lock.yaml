@@ -29,12 +29,9 @@ importers:
       '@prisma/client':
         specifier: ^7.1.0
         version: 7.2.0(prisma@7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3))(typescript@5.9.3)
-<<<<<<< Updated upstream
-=======
       '@swc/helpers':
         specifier: ^0.5.17
         version: 0.5.17
->>>>>>> Stashed changes
       '@types/katex':
         specifier: ^0.16.7
         version: 0.16.7
@@ -47,18 +44,15 @@ importers:
       better-sqlite3:
         specifier: ^12.5.0
         version: 12.5.0
-<<<<<<< Updated upstream
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
-      crypto-browserify:
-        specifier: ^3.12.1
-        version: 3.12.1
-=======
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
->>>>>>> Stashed changes
+      crypto-browserify:
+        specifier: ^3.12.1
+        version: 3.12.1
       dexie:
         specifier: ^4.2.1
         version: 4.2.1
@@ -87,11 +81,7 @@ importers:
         specifier: ^15.1.0
         version: 15.1.0
       next:
-<<<<<<< Updated upstream
-        specifier: ^16.0.10
-=======
         specifier: 16.0.10
->>>>>>> Stashed changes
         version: 16.0.10(@babel/core@7.28.5)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       next-auth:
         specifier: 5.0.0-beta.30
@@ -102,15 +92,6 @@ importers:
       papaparse:
         specifier: ^5.5.3
         version: 5.5.3
-<<<<<<< Updated upstream
-=======
-      posthog-js:
-        specifier: ^1.302.2
-        version: 1.309.1
-      posthog-node:
-        specifier: ^5.17.2
-        version: 5.17.4
->>>>>>> Stashed changes
       react:
         specifier: ^19.2.3
         version: 19.2.3
@@ -138,15 +119,12 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
-<<<<<<< Updated upstream
       stream-browserify:
         specifier: ^3.0.0
         version: 3.0.0
-=======
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
->>>>>>> Stashed changes
       unpdf:
         specifier: ^1.4.0
         version: 1.4.0
@@ -1195,24 +1173,12 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-<<<<<<< Updated upstream
   '@prisma/adapter-better-sqlite3@7.2.0':
     resolution: {integrity: sha512-ZowCgDOnv0nk0VIUSPp6y8ns+wXRctVADPSu/vluznAYDx/Xy0dK4nTr7+7XVX/XqUrPPtOYdCBELwjEklS8vQ==}
 
   '@prisma/client-runtime-utils@7.2.0':
     resolution: {integrity: sha512-dn7oB53v0tqkB0wBdMuTNFNPdEbfICEUe82Tn9FoKAhJCUkDH+fmyEp0ClciGh+9Hp2Tuu2K52kth2MTLstvmA==}
 
-=======
-  '@posthog/core@1.8.1':
-    resolution: {integrity: sha512-jfzBtQIk9auRi/biO+G/gumK5KxqsD5wOr7XpYMROE/I3pazjP4zIziinp21iQuIQJMXrDvwt9Af3njgOGwtew==}
-
-  '@prisma/adapter-better-sqlite3@7.2.0':
-    resolution: {integrity: sha512-ZowCgDOnv0nk0VIUSPp6y8ns+wXRctVADPSu/vluznAYDx/Xy0dK4nTr7+7XVX/XqUrPPtOYdCBELwjEklS8vQ==}
-
-  '@prisma/client-runtime-utils@7.2.0':
-    resolution: {integrity: sha512-dn7oB53v0tqkB0wBdMuTNFNPdEbfICEUe82Tn9FoKAhJCUkDH+fmyEp0ClciGh+9Hp2Tuu2K52kth2MTLstvmA==}
-
->>>>>>> Stashed changes
   '@prisma/client@7.2.0':
     resolution: {integrity: sha512-JdLF8lWZ+LjKGKpBqyAlenxd/kXjd1Abf/xK+6vUA7R7L2Suo6AFTHFRpPSdAKCan9wzdFApsUpSa/F6+t1AtA==}
     engines: {node: ^20.19 || ^22.12 || >=24.0}
@@ -4295,16 +4261,6 @@ packages:
     resolution: {integrity: sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw==}
     engines: {node: '>=12'}
 
-<<<<<<< Updated upstream
-=======
-  posthog-js@1.309.1:
-    resolution: {integrity: sha512-JUJcQhYzNNKO0cgnSbowCsVi2RTu75XGZ2EmnTQti4tMGRCTOv/HCnZasdFniBGZ0rLugQkaScYca/84Ta2u5Q==}
-
-  posthog-node@5.17.4:
-    resolution: {integrity: sha512-hrd+Do/DMt40By12ESIDUfD81V9OASjq9XHjycZrGiD8cX/ZwCIVSJLUb7nQmvSCWcKII+u+nnPVuc4LjTDl9g==}
-    engines: {node: '>=20'}
-
->>>>>>> Stashed changes
   preact-render-to-string@6.5.11:
     resolution: {integrity: sha512-ubnauqoGczeGISiOh6RjX0/cdaF8v/oDXIjO85XALCQjwQP+SB4RDXXtvZ6yTYSjG+PC1QRP2AhPgCEsM2EvUw==}
     peerDependencies:
@@ -6318,17 +6274,8 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-<<<<<<< Updated upstream
   '@prisma/adapter-better-sqlite3@7.2.0':
     dependencies:
-=======
-  '@posthog/core@1.8.1':
-    dependencies:
-      cross-spawn: 7.0.6
-
-  '@prisma/adapter-better-sqlite3@7.2.0':
-    dependencies:
->>>>>>> Stashed changes
       '@prisma/driver-adapter-utils': 7.2.0
       better-sqlite3: 12.5.0
 
@@ -9949,21 +9896,6 @@ snapshots:
 
   postgres@3.4.7: {}
 
-<<<<<<< Updated upstream
-=======
-  posthog-js@1.309.1:
-    dependencies:
-      '@posthog/core': 1.8.1
-      core-js: 3.47.0
-      fflate: 0.4.8
-      preact: 10.28.0
-      web-vitals: 4.2.4
-
-  posthog-node@5.17.4:
-    dependencies:
-      '@posthog/core': 1.8.1
-
->>>>>>> Stashed changes
   preact-render-to-string@6.5.11(preact@10.24.3):
     dependencies:
       preact: 10.24.3
