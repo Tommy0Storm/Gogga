@@ -30,8 +30,8 @@ async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
   }
   
   // Send via EmailJS REST API
-  const EMAILJS_SERVICE_ID = 'service_q6alymo'
-  const EMAILJS_TEMPLATE_ID = 'template_k9ugryd'
+  const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || 'service_53ldd2p'
+  const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || 'template_hhsckmm'
   const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send'
   
   const publicKey = process.env.EMAILJS_PUBLIC_KEY?.trim()

@@ -50,13 +50,8 @@ export function useGoggaTalk(options: UseGoggaTalkOptions = {}) {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const playQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
-<<<<<<< Updated upstream
-  
-  // Get WebSocket URL - derive from window location for proper runtime config
-=======
 
   // Get WebSocket URL
->>>>>>> Stashed changes
   const getWsUrl = useCallback(() => {
     // In browser, derive backend URL from current location
     if (typeof window !== 'undefined') {

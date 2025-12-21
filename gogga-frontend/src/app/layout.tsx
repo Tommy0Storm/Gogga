@@ -36,30 +36,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={quicksand.variable}>
       <head>
-        {/* Material Icons - optimized loading */}
-        <link
-          rel="preload"
-          href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined&display=swap"
-          as="style"
-        />
+        {/* Material Icons */}
         <link
           href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined&display=swap"
           rel="stylesheet"
-          media="print"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `document.querySelectorAll('link[media="print"]')[0].media='all'`,
-          }}
         />
         {/* PostHog initialized via instrumentation-client.ts */}
       </head>
       <body
-<<<<<<< Updated upstream
-        className="font-quicksand font-normal antialiased relative"
-=======
         className={`${quicksand.className} font-normal antialiased`}
->>>>>>> Stashed changes
         suppressHydrationWarning
       >
         <GlobalErrorBoundary>

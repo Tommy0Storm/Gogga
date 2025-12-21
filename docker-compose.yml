@@ -106,8 +106,15 @@ services:
       CEPO_URL: http://cepo:8000
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-admin-internal-key-dev}
       NEXT_PUBLIC_API_URL: ""
-      WATCHPACK_POLLING: "true"
+      WATCHPACK_POLLING: "false"
+      CHOKIDAR_USEPOLLING: "false"
+      FAST_REFRESH: "false"
       NODE_ENV: development
+      # EmailJS Outlook Service
+      EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY:-B3ukyx7xd9MrHX2eW}
+      EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY:-rh87uE_EH0onM2qaB41V4}
+      EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID:-service_53ldd2p}
+      EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID:-template_hhsckmm}
     volumes:
       - ./gogga-frontend:/app
       - ./gogga-frontend/prisma:/app/prisma

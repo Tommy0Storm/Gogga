@@ -9,11 +9,13 @@ WORKDIR /app
 RUN apk update && apk add --no-cache python3 make g++ wget && \
     corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Copy package files and .npmrc for build config
+COPY package.json pnpm-lock.yaml .npmrc ./
 
-# Install dependencies (will use volume in docker-compose)
-RUN pnpm install --frozen-lockfile
+# Install dependencies and force rebuild native modules
+RUN pnpm install --frozen-lockfile && \
+    cd node_modules/better-sqlite3 && npx node-gyp rebuild || true && \
+    cd /app && pnpm rebuild better-sqlite3 || true
 
 # Set backend URL for Docker networking
 ENV BACKEND_URL=http://backend:8000

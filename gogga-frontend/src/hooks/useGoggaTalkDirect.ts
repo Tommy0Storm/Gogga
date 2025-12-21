@@ -193,14 +193,6 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
 
   // Connect to Gemini Live API directly
   const connect = useCallback(async () => {
-<<<<<<< Updated upstream
-    // Check if mediaDevices is available before attempting connection
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      addLog('error', 'Cannot connect: microphone not available (requires HTTPS or localhost)');
-      return;
-    }
-    
-=======
     // Reset manual disconnect flag - we're initiating a new connection
     isManualDisconnectRef.current = false;
 
@@ -249,7 +241,6 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
     isConnectingRef.current = true;
     lastConnectTimeRef.current = now;
 
->>>>>>> Stashed changes
     // Guard against double-connect - clean up first if already connected
     if (isSessionOpenRef.current || sessionPromiseRef.current) {
       addLog('warning', 'Cleaning up existing connection first...');

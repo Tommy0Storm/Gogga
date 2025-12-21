@@ -13,9 +13,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as crypto from 'crypto';
 import prisma from '@/lib/prisma'
 
-// EmailJS configuration
-const EMAILJS_SERVICE_ID = 'service_q6alymo'
-const EMAILJS_TEMPLATE_ID = 'template_k9ugryd'
+// EmailJS configuration - uses env vars with Outlook service fallback
+const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || 'service_53ldd2p'
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || 'template_hhsckmm'
 const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
 
 // Token expiry: 15 minutes
