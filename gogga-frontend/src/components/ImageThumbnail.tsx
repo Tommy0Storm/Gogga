@@ -23,26 +23,41 @@ export default function ImageThumbnail({ imageId, onDelete }: ImageThumbnailProp
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+    
+    const loadImage = async () => {
+      try {
+        const img = await getImage(imageId);
+        if (mounted) {
+          setImage(img || null);
+        }
+      } catch (err) {
+        console.error('Failed to load image:', err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
     loadImage();
+    
+    return () => {
+      mounted = false;
+    };
   }, [imageId]);
-
-  const loadImage = async () => {
-    try {
-      const img = await getImage(imageId);
-      setImage(img || null);
-    } catch (err) {
-      console.error('Failed to load image:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDelete = async () => {
     if (onDelete) {
       onDelete();
     }
     // Reload to show deleted state
-    await loadImage();
+    try {
+      const img = await getImage(imageId);
+      setImage(img || null);
+    } catch (err) {
+      console.error('Failed to reload image:', err);
+    }
   };
 
   if (loading) {

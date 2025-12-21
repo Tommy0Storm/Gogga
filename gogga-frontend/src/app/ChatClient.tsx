@@ -5,7 +5,6 @@ import { GoggaTalkButton, ScreenShareButton } from '@/components/GoggaTalkButton
 import { GoggaTalkTerminal } from '@/components/GoggaTalkTerminal';
 import AdminPanel from '@/components/AdminPanel';
 import PromptManager from '@/components/PromptManager';
-import FileUpload from '@/components/FileUpload';
 import DocumentList from '@/components/DocumentList';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
@@ -50,6 +49,7 @@ import {
   Clock,
   BookOpen,
   FileSearch,
+  FileText,
   Plus,
   History,
   Trash2,
@@ -69,11 +69,16 @@ import {
   Scale,
   Code,
   Languages,
+  Check,
+  Smile,
+  MoreHorizontal,
+  Settings,
+  ChevronRight,
 } from 'lucide-react';
 import axios from 'axios';
 import { useBuddySystem } from '@/hooks/useBuddySystem';
 import { LanguageBadge } from '@/components/LanguageBadge';
-import { WeatherSlidePanel } from '@/components/ChatComponents';
+import { WeatherSlidePanel, GoggaForecast } from '@/components/ChatComponents';
 import { AccountMenu } from '@/components/AccountMenu';
 import { ReportIssueModal } from '@/components/ReportIssueModal';
 import { useConsoleCapture } from '@/hooks/useConsoleCapture';
@@ -87,6 +92,13 @@ import { ExportModal, ExportButton } from '@/components/ExportModal';
 import { useGoggaSmart } from '@/hooks/useGoggaSmart';
 import { GoggaSmartButton, GoggaSmartModal, FeedbackButtons } from '@/components/GoggaSmartUI';
 import { useRightPanel } from '@/hooks/useRightPanel';
+import { 
+  fetchWeatherForecast, 
+  hasShownWeatherToday, 
+  markWeatherShownToday,
+  getWeatherComment,
+  type WeatherForecast 
+} from '@/lib/weatherService';
 
 // Extended message with image and thinking support
 interface ChatMessage extends Message {
@@ -101,6 +113,14 @@ const TIER_DISPLAY = {
   jive: { name: 'JIVE', icon: Brain, color: 'bg-gray-600' },
   jigga: { name: 'JIGGA', icon: Sparkles, color: 'bg-gray-800' },
 };
+
+// Helper for daily weather greeting
+function getTimeOfDay(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
+}
 
 interface ChatClientProps {
   userEmail: string | null;
@@ -148,6 +168,12 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const [showReportIssue, setShowReportIssue] = useState(false);
   // PDF export modal state
   const [showExportModal, setShowExportModal] = useState(false);
+  // Copy feedback state (tracks which message was just copied)
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  // AI Power dropdown state
+  const [showAIPowerDropdown, setShowAIPowerDropdown] = useState(false);
+  // Chat Options modal state (New/History/Export grouped)
+  const [showChatOptionsModal, setShowChatOptionsModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // AbortController for streaming - cancels API calls on navigation/unmount
@@ -229,6 +255,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     requestLocation,
     retryLocation,
     declineLocation,
+    promptLocation,
     setManualLocation,
     setLocationFromSuggestion,
     setManualLocationInput,
@@ -266,7 +293,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const { forcedTool, fetchTools, clearForcedTool } = useToolShed();
 
   // RightSidePanel hook (for triggering Tools/Docs/Weather panel)
-  const { togglePanel: toggleRightPanel, isOpen: isRightPanelOpen } = useRightPanel();
+  const { togglePanel: toggleRightPanel, isOpen: isRightPanelOpen, setActiveTab: setRightPanelTab } = useRightPanel();
 
   // Document store sync (for RightSidePanel)
   // Use selectors to get stable function references
@@ -281,6 +308,11 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const setClearAllRAGHandler = useDocumentStore((state) => state.setClearAllRAGHandler);
   const setSessionDocuments = useDocumentStore((state) => state.setSessionDocuments);
   const setRAGDocuments = useDocumentStore((state) => state.setRAGDocuments);
+  // RAG Controls sync (for RightSidePanel to control)
+  const storeSetRagMode = useDocumentStore((state) => state.setRagMode);
+  const storeSetUseRAGForChat = useDocumentStore((state) => state.setUseRAGForChat);
+  const storeRagMode = useDocumentStore((state) => state.ragMode);
+  const storeUseRAGForChat = useDocumentStore((state) => state.useRAGForChat);
 
   // Fetch tools when tier changes or on mount for paid tiers
   useEffect(() => {
@@ -288,6 +320,29 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       fetchTools(tier);
     }
   }, [tier, fetchTools]);
+
+  // Sync RAG controls with store (bidirectional)
+  // When local state changes, update store
+  useEffect(() => {
+    storeSetRagMode(ragMode);
+  }, [ragMode, storeSetRagMode]);
+  
+  useEffect(() => {
+    storeSetUseRAGForChat(useRAGContext);
+  }, [useRAGContext, storeSetUseRAGForChat]);
+  
+  // When store changes (from RightSidePanel), update local state
+  useEffect(() => {
+    if (storeRagMode !== ragMode) {
+      setRagMode(storeRagMode);
+    }
+  }, [storeRagMode, ragMode]);
+  
+  useEffect(() => {
+    if (storeUseRAGForChat !== useRAGContext) {
+      setUseRAGContext(storeUseRAGForChat);
+    }
+  }, [storeUseRAGForChat, useRAGContext]);
 
   // Sync RAG state with document store for RightSidePanel
   useEffect(() => {
@@ -350,6 +405,13 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     lon: number;
     name: string;
   } | null>(null);
+
+  // ═══ 7-Day Forecast Modal State ═══
+  const [showForecastModal, setShowForecastModal] = useState(false);
+  const [forecastData, setForecastData] = useState<WeatherForecast | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+  const dailyWeatherPromptShown = useRef(false);
 
   // Detect when location transitions from null to a value
   useEffect(() => {
@@ -455,6 +517,106 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     }
   }, []);
 
+  // ═══ 7-Day Forecast Handlers ═══
+  const loadForecast = useCallback(async () => {
+    if (!userLocation?.lat || !userLocation?.lon) {
+      setForecastError('Location not available. Please set your location first.');
+      return;
+    }
+    
+    setForecastLoading(true);
+    setForecastError(null);
+    
+    try {
+      const forecast = await fetchWeatherForecast(
+        userLocation.lat,
+        userLocation.lon
+      );
+      setForecastData(forecast);
+    } catch (err) {
+      console.error('[ChatClient] Failed to load forecast:', err);
+      setForecastError(err instanceof Error ? err.message : 'Failed to load weather');
+    } finally {
+      setForecastLoading(false);
+    }
+  }, [userLocation?.lat, userLocation?.lon]);
+
+  const handleShowForecast = useCallback(() => {
+    setShowForecastModal(true);
+    loadForecast();
+  }, [loadForecast]);
+
+  const handleRefreshForecast = useCallback(() => {
+    loadForecast();
+  }, [loadForecast]);
+
+  // ═══ Daily Weather Prompt (once per day on first app use) ═══
+  useEffect(() => {
+    // Only trigger once, only if we have location, only if not already shown today
+    if (
+      dailyWeatherPromptShown.current ||
+      !userLocation?.lat ||
+      !userLocation?.lon ||
+      hasShownWeatherToday()
+    ) {
+      return;
+    }
+
+    // Mark as triggered (even if it fails, we don't want to spam)
+    dailyWeatherPromptShown.current = true;
+
+    // Delay slightly to let the app settle
+    const timer = setTimeout(async () => {
+      try {
+        const forecast = await fetchWeatherForecast(
+          userLocation.lat,
+          userLocation.lon
+        );
+        
+        // Mark as shown today
+        markWeatherShownToday();
+        
+        // Get a funny comment
+        const comment = getWeatherComment(forecast);
+        const location = forecast.location;
+        const current = forecast.current;
+        
+        // Create a Gogga weather greeting message
+        const weatherGreeting = `☀️ **Good ${getTimeOfDay()}, ek het jou ${location.name} weer gekry!**
+
+${comment}
+
+🌡️ **${Math.round(current.temp_c)}°C** (feels like ${Math.round(current.feelslike_c)}°C) — ${current.condition.text}
+💨 Wind: ${Math.round(current.wind_kph)} km/h ${current.wind_dir} | 💧 Humidity: ${current.humidity}%
+
+*Tap the location button → "7-Day Forecast" for the full week!*`;
+        
+        // Add as a Gogga assistant message
+        const weatherMsg: ChatMessage = {
+          role: 'assistant',
+          content: weatherGreeting,
+        };
+        
+        if (isPersistenceEnabled) {
+          await addMessage(weatherMsg);
+        } else {
+          setFreeMessages(prev => [...prev, {
+            id: Date.now(),
+            role: 'assistant' as const,
+            content: weatherGreeting,
+            timestamp: new Date().toISOString(),
+          }]);
+        }
+      } catch (err) {
+        console.warn('[ChatClient] Failed to load daily weather:', err);
+        // Don't show error to user, just skip the weather greeting
+      }
+    }, 2000); // 2 second delay
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLocation?.lat, userLocation?.lon, isPersistenceEnabled]);
+
   // Auto-scroll to bottom only when message count changes
   const prevMessageCountRef = useRef(displayMessages.length);
   useEffect(() => {
@@ -527,10 +689,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     // Process message for BuddySystem (updates profile, relationship, etc.)
     await processBuddyMessage(text);
 
-    // Add optimistically to UI first for instant feedback
-    const optimisticId = addOptimisticMessage(userMsg);
-    
-    // Then persist to appropriate message store
+    // Persist user message immediately (no optimistic - causes duplicates)
     try {
       if (isPersistenceEnabled) {
         await addMessage(userMsg);
@@ -539,7 +698,9 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       }
     } catch (error) {
       console.error('[GOGGA] Failed to persist user message:', error);
-      markAsError(optimisticId, 'Failed to save message');
+      // Show error to user
+      alert('Failed to save message. Please try again.');
+      return;
     }
 
     setInput('');
@@ -549,13 +710,8 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     }
     setIsLoading(true);
 
-    // Add optimistic bot message placeholder
-    const botPlaceholder: OptimisticMessage = {
-      role: 'assistant',
-      content: '', // Will be filled as response streams in
-      isPending: true,
-    };
-    const optimisticBotId = addOptimisticMessage(botPlaceholder);
+    // Note: No optimistic bot placeholder - we use isLoading state instead
+    // This prevents the stuck "thinking" indicators that were appearing
 
     try {
       // Build the full message with all context
@@ -713,7 +869,17 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             if (!line.startsWith('data: ')) continue;
 
             try {
-              const eventData = JSON.parse(line.slice(6));
+              // Guard against malformed JSON in SSE data
+              const jsonData = line.slice(6);
+              if (!jsonData.trim() || jsonData.trim() === '') continue;
+              
+              const eventData = JSON.parse(jsonData);
+              
+              // Guard against undefined eventData.type
+              if (!eventData || typeof eventData.type !== 'string') {
+                console.warn('[GOGGA] SSE received event without type:', eventData);
+                continue;
+              }
 
               switch (eventData.type) {
                 case 'meta':
@@ -846,14 +1012,35 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                   break;
 
                 case 'error':
-                  throw new Error(eventData.message || 'Stream error');
+                  // Log the full error for debugging
+                  console.error('[GOGGA] SSE stream error event:', eventData);
+                  throw new Error(eventData.message || eventData.error || 'Stream error');
+                  
+                default:
+                  // Log unknown event types for debugging but don't crash
+                  console.debug('[GOGGA] SSE unknown event type:', eventData.type, eventData);
+                  break;
               }
             } catch (parseError) {
-              // Ignore parse errors for incomplete JSON
-              if ((parseError as Error).message !== 'Stream error') {
+              // Distinguish between JSON parse errors and thrown errors
+              const error = parseError as Error;
+              const isStreamError = error.message === 'Stream error' || 
+                                    error.message?.includes('Stream error');
+              
+              if (isStreamError) {
+                // This was a deliberate error from the 'error' case above
+                throw parseError;
+              }
+              
+              // JSON parse error or other issue - log and continue
+              if (error instanceof SyntaxError) {
+                // JSON parsing failed - likely incomplete chunk, skip silently
                 continue;
               }
-              throw parseError;
+              
+              // Unexpected error - log but don't crash
+              console.warn('[GOGGA] SSE parse warning:', error.message);
+              continue;
             }
           }
         }
@@ -896,6 +1083,14 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           cleanedPreview: cleanContent.substring(0, 200),
           hasThinkTags: accumulatedContent.includes('<think'),
         });
+
+        // CRITICAL FIX: Frontend fallback for empty responses
+        // If the backend returned empty content (due to bugs or model issues),
+        // provide a user-friendly fallback instead of showing a blank message
+        if (!cleanContent || cleanContent.trim() === '') {
+          console.warn('[GOGGA] Empty response from backend - applying fallback');
+          cleanContent = "I apologize, but I couldn't generate a response. Please try again or rephrase your question. If this persists, try simplifying your request.";
+        }
 
         data = {
           response: cleanContent,
@@ -1157,20 +1352,23 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       const { response, message } = error;
       const errorMessage = `Eish! Something went wrong: ${response?.data?.detail || message}`;
       
-      // Mark optimistic bot message as error
-      markAsError(optimisticBotId, errorMessage);
-      
-      // Still add error message to persistence for history
+      // Persist error message so user sees what happened
       const errorMsg: ChatMessage = {
         role: 'assistant',
         content: errorMessage,
       };
-
-      if (isPersistenceEnabled) {
-        await addMessage(errorMsg);
-      } else {
-        setFreeMessages((prev) => [...prev, errorMsg]);
+      
+      try {
+        if (isPersistenceEnabled) {
+          await addMessage(errorMsg);
+        } else {
+          setFreeMessages((prev) => [...prev, errorMsg]);
+        }
+      } catch (persistError) {
+        console.error('[GOGGA] Failed to persist error message:', persistError);
       }
+      
+      console.log('[GOGGA] Error response saved:', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -1179,20 +1377,6 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const handleAudio = (audioBlob: Blob) => {
     console.log('Audio recorded:', audioBlob.size, 'bytes');
     alert('Audio Captured! Transcription coming soon.');
-  };
-
-  const handleFileUpload = async (file: File) => {
-    // Both JIVE and JIGGA can upload documents
-    if (tier === 'jive' || tier === 'jigga') {
-      try {
-        console.log(`[GOGGA] ${tier.toUpperCase()} uploading:`, file.name);
-        await uploadDocument(file);
-        console.log(`[GOGGA] Upload complete:`, file.name);
-      } catch (error: any) {
-        console.error(`[GOGGA] Upload failed:`, error);
-        alert(`Upload failed: ${error.message}`);
-      }
-    }
   };
 
   const enhancePrompt = async () => {
@@ -1222,10 +1406,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     const originalPrompt = input;
     const userMsg: ChatMessage = { role: 'user', content: `🖼️ ${input}` };
 
-    // Add user message optimistically
-    const optimisticUserId = addOptimisticMessage(userMsg);
-    
-    // Persist user message
+    // Persist user message immediately (no optimistic - causes duplicates)
     try {
       if (isPersistenceEnabled) {
         await addMessage(userMsg);
@@ -1234,18 +1415,14 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
       }
     } catch (error) {
       console.error('[GOGGA] Failed to persist image request:', error);
-      markAsError(optimisticUserId, 'Failed to save message');
+      alert('Failed to save message. Please try again.');
+      setIsGeneratingImage(false);
+      return;
     }
     
     setInput('');
 
-    // Add optimistic image placeholder
-    const imagePlaceholder: OptimisticMessage = {
-      role: 'assistant',
-      content: '🎨 Generating your image...',
-      isPending: true,
-    };
-    const optimisticImageId = addOptimisticMessage(imagePlaceholder);
+    // Note: No optimistic placeholder - isGeneratingImage state shows loading
 
     try {
       const response = await axios.post('/api/v1/images/generate', {
@@ -1827,42 +2004,82 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           <GoggaLogo size="xl" variant="animated" />
           <div>
             <h1 className="text-2xl font-bold tracking-tight">GOGGA</h1>
-            <span className="text-xs text-primary-300 font-medium">
-              South African AI
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-primary-300 font-medium">
+                South African AI
+              </span>
+              {/* Beta v3 with smile tooth icon */}
+              <span className="flex items-center gap-1 text-[10px] text-primary-400">
+                <Smile size={12} className="text-primary-400" />
+                Beta v3
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* ═══ Chat Actions Group ═══ */}
-          <div className="flex items-center gap-1.5">
-            {/* New Chat Button */}
+          {/* ═══ Chat Options Dropdown ═══ */}
+          <div className="relative">
             <button
-              onClick={handleNewChat}
+              onClick={() => setShowChatOptionsModal(!showChatOptionsModal)}
               className="header-btn"
-              title="New chat session (Ctrl+Shift+N)"
+              title="Chat options"
             >
-              <Plus size={16} />
-              <span>New</span>
+              <MoreHorizontal size={16} />
+              <span className="hidden sm:inline">Chat</span>
+              <ChevronDown size={12} className={`transition-transform ${showChatOptionsModal ? 'rotate-180' : ''}`} />
             </button>
-
-            {/* History Button (JIVE/JIGGA only) */}
-            {isPersistenceEnabled && (
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className={`header-btn ${showHistory ? 'bg-primary-500' : ''}`}
-                title="Chat history (Ctrl+H)"
-              >
-                <History size={16} />
-                <span>{sessions.length}</span>
-              </button>
-            )}
-
-            {/* Export PDF Button (JIVE/JIGGA only) */}
-            {isPersistenceEnabled && (
-              <ExportButton
-                onClick={() => setShowExportModal(true)}
-                disabled={!chatSessionId}
-              />
+            
+            {/* Chat Options Dropdown Menu */}
+            {showChatOptionsModal && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowChatOptionsModal(false)} 
+                />
+                <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                  {/* New Chat */}
+                  <button
+                    onClick={() => { handleNewChat(); setShowChatOptionsModal(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Plus size={14} className="text-gray-500" />
+                    <div className="flex-1">
+                      <div className="font-medium">New Chat</div>
+                      <div className="text-[10px] text-gray-400">Ctrl+Shift+N</div>
+                    </div>
+                  </button>
+                  
+                  {/* History (JIVE/JIGGA) */}
+                  {isPersistenceEnabled && (
+                    <button
+                      onClick={() => { setShowHistory(!showHistory); setShowChatOptionsModal(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <History size={14} className="text-gray-500" />
+                      <div className="flex-1">
+                        <div className="font-medium">History</div>
+                        <div className="text-[10px] text-gray-400">{sessions.length} sessions</div>
+                      </div>
+                      {showHistory && <Check size={14} className="text-primary-600" />}
+                    </button>
+                  )}
+                  
+                  {/* Export (JIVE/JIGGA) */}
+                  {isPersistenceEnabled && (
+                    <button
+                      onClick={() => { setShowExportModal(true); setShowChatOptionsModal(false); }}
+                      disabled={!chatSessionId}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FileText size={14} className="text-gray-500" />
+                      <div className="flex-1">
+                        <div className="font-medium">Export PDF</div>
+                        <div className="text-[10px] text-gray-400">Save conversation</div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
@@ -1873,68 +2090,92 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           <div className="flex items-center gap-1.5">
             {/* Location Badge */}
             <LocationBadge
-            location={userLocation}
-            weather={weatherData}
-            onClick={() => {
-              if (!userLocation) {
+              location={userLocation}
+              weather={weatherData}
+              onClick={() => {
+                if (!userLocation) {
+                  promptLocation();
+                }
+              }}
+              onEdit={() => {
+                if (userLocation) {
+                  setManualLocationInput(
+                    userLocation.city || userLocation.street || ''
+                  );
+                }
                 setShowManualLocation(true);
-              }
-            }}
-            onEdit={() => {
-              // Pre-fill with current location when editing
-              if (userLocation) {
-                setManualLocationInput(
-                  userLocation.city || userLocation.street || ''
-                );
-              }
-              setShowManualLocation(true);
-            }}
-            onClear={clearLocation}
-          />
+              }}
+              onClear={clearLocation}
+              onShowForecast={handleShowForecast}
+            />
 
-            {/* Token Count Display */}
-            <div
-              className="header-btn bg-primary-700/50 cursor-default"
-              title={`Today: ${formatTokenCount(
-                tokenStats.today.totalTokens
-              )} tokens | All time: ${formatTokenCount(
-                tokenStats.allTime.totalTokens
-              )} tokens`}
-            >
-              <Hash size={14} className="text-primary-300" />
-              <span className="text-sm font-medium">
-                {tokenStats.isLoading
-                  ? '...'
-                  : formatTokenCount(tokenStats.allTime.totalTokens)}
-              </span>
-            </div>
-          </div>
-
-          {/* ═══ Separator ═══ */}
-          <div className="w-px h-6 bg-primary-600/30" />
-
-          {/* ═══ Tools & Features Group ═══ */}
-          <div className="flex items-center gap-1.5">
-            {/* Tools/Docs/Weather Panel Toggle (JIVE/JIGGA) */}
-            {tier !== 'free' && (
-              <button
-                onClick={() => toggleRightPanel('tools')}
-                className={`header-btn ${isRightPanelOpen ? 'bg-primary-500' : ''}`}
-                title="Open Tools, Documents & Weather panel"
+            {/* Token Count - Prominent display badge */}
+            <div className="relative group">
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 rounded-lg transition-all cursor-default shadow-sm hover:shadow-md"
               >
-                <Wrench size={14} />
-                <span className="hidden sm:inline">Tools</span>
-              </button>
-            )}
-
-            {/* GoggaSmart Button (JIVE/JIGGA only) */}
-            {isGoggaSmartEnabled && (
-              <GoggaSmartButton
-                isEnabled={isGoggaSmartEnabled}
-                stats={goggaSmartStats}
-                onClick={() => setShowGoggaSmartModal(true)}
-              />
-            )}
+                <div className="flex items-center justify-center w-5 h-5 bg-amber-500 rounded-md shadow-inner">
+                  <Hash size={12} className="text-white" />
+                </div>
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] text-amber-300/80 font-medium uppercase tracking-wider">Tokens</span>
+                  <span className="text-sm font-bold text-amber-100">
+                    {tokenStats.isLoading ? '...' : formatTokenCount(tokenStats.allTime.totalTokens)}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Hover Popup */}
+              <div className="absolute top-full right-0 mt-2 w-64 p-4 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                <div className="text-sm text-white font-semibold mb-3 flex items-center gap-2">
+                  <div className="w-6 h-6 bg-amber-500 rounded-md flex items-center justify-center">
+                    <Hash size={14} className="text-white" />
+                  </div>
+                  Token Usage
+                </div>
+                
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="p-2.5 bg-gray-800 rounded-lg">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Today</div>
+                    <div className="text-lg font-bold text-white">
+                      {formatTokenCount(tokenStats.today.totalTokens)}
+                    </div>
+                  </div>
+                  <div className="p-2.5 bg-gray-800 rounded-lg">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">All Time</div>
+                    <div className="text-lg font-bold text-amber-400">
+                      {formatTokenCount(tokenStats.allTime.totalTokens)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Breakdown */}
+                <div className="border-t border-gray-700 pt-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
+                      Input Tokens
+                    </span>
+                    <span className="text-xs font-medium text-gray-200">
+                      {formatTokenCount(tokenStats.allTime.inputTokens)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-green-400 rounded-full" />
+                      Output Tokens
+                    </span>
+                    <span className="text-xs font-medium text-gray-200">
+                      {formatTokenCount(tokenStats.allTime.outputTokens)}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Arrow pointer */}
+                <div className="absolute -top-1.5 right-6 w-3 h-3 bg-gray-900 border-l border-t border-gray-700 rotate-45" />
+              </div>
+            </div>
           </div>
 
           {/* ═══ Separator ═══ */}
@@ -1968,24 +2209,16 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
             )}
           </div>
 
-          {/* ═══ Tester/Beta badges ═══ */}
-          {(isTester || true) && (
-            <div className="flex items-center gap-1">
-              {/* Report Issue button (testers only) */}
-              {isTester && (
-                <button
-                  onClick={() => setShowReportIssue(true)}
-                  className="header-btn bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
-                  title="Report an issue (Tester)"
-                >
-                  <Bug size={14} />
-                  <span className="text-xs">Report</span>
-                </button>
-              )}
-              <span className="header-btn bg-primary-600/50 text-[10px] cursor-default">
-                Beta v1.0
-              </span>
-            </div>
+          {/* ═══ Tester Report Button ═══ */}
+          {isTester && (
+            <button
+              onClick={() => setShowReportIssue(true)}
+              className="header-btn bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
+              title="Report an issue (Tester)"
+            >
+              <Bug size={14} />
+              <span className="text-xs">Report</span>
+            </button>
           )}
         </div>
       </header>
@@ -2427,18 +2660,28 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                               <span>GoggaSolve×{m.meta.math_tool_count}</span>
                             </span>
                           )}
-                        {/* Copy to clipboard button - actual interactive element */}
+                        {/* Copy to clipboard button - with visual feedback */}
                         {m.role === 'assistant' && (
                           <button
                             type="button"
                             onClick={() => {
                               navigator.clipboard.writeText(m.content);
-                              // Brief visual feedback could be added with state
+                              setCopiedMessageIndex(i);
+                              // Reset after 2 seconds
+                              setTimeout(() => setCopiedMessageIndex(null), 2000);
                             }}
-                            className="meta-badge hover:bg-primary-200 cursor-pointer transition-colors"
-                            title="Copy response to clipboard"
+                            className={`meta-badge cursor-pointer transition-all duration-200 ${
+                              copiedMessageIndex === i 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'hover:bg-primary-200'
+                            }`}
+                            title={copiedMessageIndex === i ? 'Copied!' : 'Copy response to clipboard'}
                           >
-                            <Copy size={12} />
+                            {copiedMessageIndex === i ? (
+                              <Check size={12} className="text-green-600" />
+                            ) : (
+                              <Copy size={12} />
+                            )}
                           </button>
                         )}
                       </div>
@@ -2525,108 +2768,79 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
 
           {/* Input Area */}
           <div className="p-4 bg-white border-t border-primary-200">
-            {/* RAG Mode Toggle - JIVE/JIGGA tiers */}
+            {/* JIGGA AI Power Dropdown + Forced Tool Badge */}
             {canUpload && (
               <div className="max-w-4xl mx-auto mb-2 flex items-center gap-2 flex-wrap">
-                {/* JIGGA Model Toggle - 32B/235B with descriptive label */}
+                {/* JIGGA Model Dropdown - Clean clickable button */}
                 {tier === 'jigga' && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">AI Power:</span>
-                    <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                      <button
-                        onClick={() => setForceModel('auto')}
-                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === 'auto'
-                            ? 'bg-white text-primary-700 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        title="Auto: Smart routing based on language & complexity. Best for most queries."
-                      >
-                        <Zap size={12} />
-                        <span>Auto</span>
-                      </button>
-                      <button
-                        onClick={() => setForceModel('32b')}
-                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '32b'
-                            ? 'bg-white text-primary-700 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        title="Qwen 32B: Fast &amp; efficient. Deep thinking mode with 8k output. Great for code & reasoning."
-                      >
-                        <Brain size={12} />
-                        <span>Fast</span>
-                      </button>
-                      <button
-                        onClick={() => setForceModel('235b')}
-                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${forceModel === '235b'
-                            ? 'bg-white text-primary-700 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        title="Qwen 235B: Most powerful. 40k output, best for SA languages, legal & complex analysis."
-                      >
-                        <Sparkles size={12} />
-                        <span>Max</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* RAG Mode Button */}
-                {tier === 'jigga' && (
-                  <button
-                    onClick={() =>
-                      setRagMode(
-                        ragMode === 'analysis' ? 'authoritative' : 'analysis'
-                      )
-                    }
-                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${totalDocsActive > 0
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-gray-100 text-gray-500'
-                      }`}
-                  >
-                    {ragMode === 'analysis' ? (
-                      <FileSearch size={12} />
-                    ) : (
-                      <BookOpen size={12} />
-                    )}
-                    <span>
-                      {ragMode === 'analysis' ? 'Analysis' : 'Authoritative'}
-                    </span>
-                    {totalDocsActive > 0 && (
-                      <span className="text-[10px] opacity-70">
-                        ({totalDocsActive} docs)
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAIPowerDropdown(!showAIPowerDropdown)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors"
+                      title="Select AI power level"
+                    >
+                      {forceModel === 'auto' && <Zap size={12} className="text-primary-600" />}
+                      {forceModel === '32b' && <Brain size={12} className="text-primary-600" />}
+                      {forceModel === '235b' && <Sparkles size={12} className="text-primary-600" />}
+                      <span>
+                        {forceModel === 'auto' ? 'Auto' : forceModel === '32b' ? 'Fast' : 'Max'}
                       </span>
+                      <ChevronDown size={12} className={`transition-transform ${showAIPowerDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Dropdown menu */}
+                    {showAIPowerDropdown && (
+                      <>
+                        {/* Backdrop to close on click outside */}
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowAIPowerDropdown(false)} 
+                        />
+                        <div className="absolute bottom-full left-0 mb-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                          <button
+                            onClick={() => { setForceModel('auto'); setShowAIPowerDropdown(false); }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                              forceModel === 'auto' ? 'bg-primary-50 text-primary-700' : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <Zap size={14} className={forceModel === 'auto' ? 'text-primary-600' : 'text-gray-400'} />
+                            <div className="flex-1">
+                              <div className="font-medium">Auto</div>
+                              <div className="text-[10px] text-gray-400">Smart routing • Best for most</div>
+                            </div>
+                            {forceModel === 'auto' && <Check size={14} className="text-primary-600" />}
+                          </button>
+                          <button
+                            onClick={() => { setForceModel('32b'); setShowAIPowerDropdown(false); }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                              forceModel === '32b' ? 'bg-primary-50 text-primary-700' : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <Brain size={14} className={forceModel === '32b' ? 'text-primary-600' : 'text-gray-400'} />
+                            <div className="flex-1">
+                              <div className="font-medium">Fast</div>
+                              <div className="text-[10px] text-gray-400">Qwen 32B • Code & reasoning</div>
+                            </div>
+                            {forceModel === '32b' && <Check size={14} className="text-primary-600" />}
+                          </button>
+                          <button
+                            onClick={() => { setForceModel('235b'); setShowAIPowerDropdown(false); }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                              forceModel === '235b' ? 'bg-primary-50 text-primary-700' : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <Sparkles size={14} className={forceModel === '235b' ? 'text-primary-600' : 'text-gray-400'} />
+                            <div className="flex-1">
+                              <div className="font-medium">Max</div>
+                              <div className="text-[10px] text-gray-400">Qwen 235B • SA languages & legal</div>
+                            </div>
+                            {forceModel === '235b' && <Check size={14} className="text-primary-600" />}
+                          </button>
+                        </div>
+                      </>
                     )}
-                  </button>
-                )}
-
-                {/* Storage Usage */}
-                {(tier === 'jive' || tier === 'jigga') && (
-                  <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                    <HardDrive size={10} />
-                    <span>
-                      {storageUsage.totalMB.toFixed(1)}/{storageUsage.maxMB}MB (
-                      {documents.length}/{getMaxDocsPerSession()} docs)
-                    </span>
                   </div>
                 )}
-
-                {/* RAG Help Text */}
-                <span className="text-[10px] text-gray-400 flex-1">
-                  {tier === 'jive' &&
-                    documents.length === 0 &&
-                    'Upload up to 5 docs for this chat'}
-                  {tier === 'jigga' &&
-                    totalDocsActive === 0 &&
-                    'Upload or select docs from all sessions'}
-                  {tier === 'jigga' &&
-                    totalDocsActive > 0 &&
-                    ragMode === 'analysis' &&
-                    'AI analyzes from docs'}
-                  {tier === 'jigga' &&
-                    totalDocsActive > 0 &&
-                    ragMode === 'authoritative' &&
-                    'AI quotes directly'}
-                </span>
               </div>
             )}
 
@@ -2657,14 +2871,21 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
                   <span className="text-[9px] text-primary-500 font-medium">Voice</span>
                 </div>
 
-                {/* File Upload (JIVE/JIGGA) */}
+                {/* Paperclip - Opens Documents Panel for RAG uploads */}
                 {tier !== 'free' && (
-                  <FileUpload
-                    tier={tier}
-                    onUpload={handleFileUpload}
-                    disabled={isLoading || ragLoading}
-                    isEmbedding={isEmbedding}
-                  />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button
+                      onClick={() => {
+                        setRightPanelTab('documents');
+                      }}
+                      disabled={isLoading}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg bg-primary-100 hover:bg-primary-200 text-primary-700 transition-colors disabled:opacity-50"
+                      title="Upload documents for RAG"
+                    >
+                      <Paperclip size={18} />
+                    </button>
+                    <span className="text-[9px] text-primary-500 font-medium">Docs</span>
+                  </div>
                 )}
               </div>
 
@@ -2911,9 +3132,15 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
           setLocationFromSuggestion(suggestion);
         }}
         onAutoDetect={() => {
-          // Close manual modal and trigger auto-detection
+          // Close manual modal and re-prompt for location permission
+          // This clears any 'declined' state and triggers the permission prompt
           setShowManualLocation(false);
           setManualLocationInput('');
+          // Clear declined state first, then request
+          const savedConsent = localStorage.getItem('gogga_location_consent');
+          if (savedConsent === 'declined') {
+            localStorage.removeItem('gogga_location_consent');
+          }
           requestLocation();
         }}
         onCancel={() => {
@@ -2953,6 +3180,22 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
         {...(currentSessionTitle ? { sessionTitle: currentSessionTitle } : {})}
         tier={tier}
       />
+
+      {/* 7-Day Forecast Modal */}
+      {showForecastModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
+            <GoggaForecast
+              forecast={forecastData}
+              isLoading={forecastLoading}
+              error={forecastError}
+              onClose={() => setShowForecastModal(false)}
+              onRefresh={handleRefreshForecast}
+              showCloseButton={true}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,90 @@
 # Docker Best Practices for Node.js Development (Dec 2025)
 
+## 🚨 NB! CRITICAL: DOCKER FRONTEND TURBOPACK CONFIGURATION (Dec 2025)
+
+**THIS CONFIGURATION WORKS. DO NOT CHANGE WITHOUT UNDERSTANDING WHY.**
+
+### The Problems That Were Fixed
+1. `ERR_INCOMPLETE_CHUNKED_ENCODING` errors (frontend container dying mid-response)
+2. `Failed to persist usage to database` errors (backend→frontend connectivity)
+3. Container showing "Server is approaching the used memory threshold, restarting..."
+
+### The Working Configuration
+
+#### 1. Frontend Memory & Heap Settings (docker-compose.override.yml)
+```yaml
+frontend:
+  deploy:
+    resources:
+      limits:
+        memory: 4G  # ❌ NOT 3G - causes OOM during compilation
+  environment:
+    NODE_OPTIONS: --max-old-space-size=3584  # 90% of 4G container limit
+```
+
+#### 2. USE TURBOPACK (NOT WEBPACK!)
+```yaml
+# docker-compose.override.yml - frontend command
+command: sh -c "npm install && ./node_modules/.bin/prisma generate && ./node_modules/.bin/next dev -H 0.0.0.0 -p 3000 --experimental-https..."
+
+# ❌ DO NOT ADD --webpack FLAG!
+# Turbopack is the default in Next.js 16 and uses SIGNIFICANTLY LESS MEMORY
+# Webpack was causing the memory exhaustion and ERR_INCOMPLETE_CHUNKED_ENCODING
+```
+
+#### 3. Turbopack Filesystem Cache (next.config.js) - CRITICAL!
+```javascript
+// gogga-frontend/next.config.js
+experimental: {
+  optimizePackageImports: ['react-icons', 'lucide-react'],
+  turbopackFileSystemCacheForDev: true,  // ⚡ CRITICAL: Reduces memory, faster restarts
+}
+```
+
+#### 4. Backend → Frontend Connectivity (docker-compose.override.yml)
+```yaml
+backend:
+  environment:
+    FRONTEND_URL: https://frontend:3000  # Docker network name, NOT localhost!
+```
+
+#### 5. SSL Context for Self-Signed Certs (cost_tracker.py)
+```python
+# gogga-backend/app/services/cost_tracker.py
+import ssl
+_ssl_context = ssl.create_default_context()
+_ssl_context.check_hostname = False
+_ssl_context.verify_mode = ssl.CERT_NONE
+
+# Use in ALL httpx.AsyncClient calls:
+async with httpx.AsyncClient(timeout=5.0, verify=_ssl_context) as client:
+```
+
+### Why This Works
+| Setting | Purpose |
+|---------|---------|
+| **Turbopack** | Incremental compilation = lower peak memory than webpack |
+| **turbopackFileSystemCacheForDev** | Persists compiled modules across restarts (game-changer!) |
+| **4G memory limit** | Gives headroom for initial compilation spike |
+| **3584MB heap** | 90% of container limit, prevents Node from exceeding container RAM |
+| **Docker network name** | `frontend` resolves correctly inside containers (localhost doesn't) |
+| **SSL context** | Trusts self-signed certs for inter-container HTTPS |
+
+### Healthy State Metrics (What Good Looks Like)
+```
+gogga_ui:  ~3GB / 4GB (75%) - STABLE after initial compile
+gogga_api: ~50MB / 512MB (10%) - STABLE
+```
+
+### Files That Were Modified
+| File | Change |
+|------|--------|
+| `/docker-compose.override.yml` | Memory 4G, heap 3584MB, FRONTEND_URL, removed --webpack |
+| `/gogga-frontend/next.config.js` | `turbopackFileSystemCacheForDev: true` |
+| `/gogga-backend/app/services/cost_tracker.py` | SSL context for httpx calls |
+
+---
+
 ## ⚠️ CRITICAL: HTTPS Backend Proxy with Self-Signed Certs
 
 The backend runs HTTPS with self-signed certificates. **Next.js rewrites DO NOT work** with self-signed certs even with `NODE_TLS_REJECT_UNAUTHORIZED=0`.

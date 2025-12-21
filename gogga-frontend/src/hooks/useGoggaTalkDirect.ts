@@ -76,6 +76,10 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
   const [logs, setLogs] = useState<GoggaTalkLog[]>([]);
   const [transcripts, setTranscripts] = useState<GoggaTalkTranscript[]>([]);
   const [error, setError] = useState<string | null>(null);
+  
+  // Real-time audio levels for visualizer (0-1 range)
+  const [userAudioLevel, setUserAudioLevel] = useState(0);
+  const [goggaAudioLevel, setGoggaAudioLevel] = useState(0);
 
   // Separate AudioContexts for input and output (Firefox requires matching sample rates)
   const audioContextRef = useRef<AudioContext | null>(null); // Output at 24kHz
@@ -90,6 +94,11 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
   const inputGainNodeRef = useRef<GainNode | null>(null); // Input gain (mic amplification)
   const isMutedRef = useRef(false);
   const isSessionOpenRef = useRef(false);
+  
+  // Analyser nodes for audio visualization
+  const inputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Connection mutex to prevent duplicate connections
   const isConnectingRef = useRef(false);
@@ -193,6 +202,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
 
   // Connect to Gemini Live API directly
   const connect = useCallback(async () => {
+    // Clear any previous error when trying to connect again
+    setError(null);
+    
     // Reset manual disconnect flag - we're initiating a new connection
     isManualDisconnectRef.current = false;
 
@@ -252,6 +264,19 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
         } catch (e) {}
         sessionPromiseRef.current = null;
       }
+      // Cancel animation frame for audio level visualization
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (inputAnalyserRef.current) {
+        inputAnalyserRef.current.disconnect();
+        inputAnalyserRef.current = null;
+      }
+      if (outputAnalyserRef.current) {
+        outputAnalyserRef.current.disconnect();
+        outputAnalyserRef.current = null;
+      }
       if (processorRef.current) {
         processorRef.current.disconnect();
         processorRef.current.onaudioprocess = null;
@@ -269,6 +294,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
+      // Reset audio levels
+      setUserAudioLevel(0);
+      setGoggaAudioLevel(0);
       if (
         inputAudioContextRef.current &&
         inputAudioContextRef.current.state !== 'closed'
@@ -455,6 +483,59 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             source.connect(inputGain);
             inputGain.connect(processor);
             processor.connect(inputCtx.destination); // Use inputCtx, not outputCtx
+            
+            // Create input analyser for visualizing user's voice
+            const inputAnalyser = inputCtx.createAnalyser();
+            inputAnalyser.fftSize = 256;
+            inputAnalyser.smoothingTimeConstant = 0.5;
+            inputGain.connect(inputAnalyser);
+            inputAnalyserRef.current = inputAnalyser;
+            
+            // Create output analyser for visualizing Gogga's voice
+            const outputAnalyser = outputCtx.createAnalyser();
+            outputAnalyser.fftSize = 256;
+            outputAnalyser.smoothingTimeConstant = 0.5;
+            gainNode.connect(outputAnalyser);
+            outputAnalyserRef.current = outputAnalyser;
+            
+            // Start audio level visualization loop
+            const inputDataArray = new Uint8Array(inputAnalyser.frequencyBinCount);
+            const outputDataArray = new Uint8Array(outputAnalyser.frequencyBinCount);
+            
+            const updateAudioLevels = () => {
+              // Calculate input (user) audio level
+              if (inputAnalyserRef.current && !isMutedRef.current) {
+                inputAnalyserRef.current.getByteFrequencyData(inputDataArray);
+                let sum = 0;
+                for (let i = 0; i < inputDataArray.length; i++) {
+                  sum += inputDataArray[i]!;
+                }
+                const avg = sum / inputDataArray.length;
+                // Normalize to 0-1 range (byte values are 0-255)
+                setUserAudioLevel(Math.min(1, avg / 128));
+              } else {
+                setUserAudioLevel(0);
+              }
+              
+              // Calculate output (Gogga) audio level
+              if (outputAnalyserRef.current && activeSourcesRef.current.size > 0) {
+                outputAnalyserRef.current.getByteFrequencyData(outputDataArray);
+                let sum = 0;
+                for (let i = 0; i < outputDataArray.length; i++) {
+                  sum += outputDataArray[i]!;
+                }
+                const avg = sum / outputDataArray.length;
+                // Normalize to 0-1 range
+                setGoggaAudioLevel(Math.min(1, avg / 128));
+              } else {
+                setGoggaAudioLevel(0);
+              }
+              
+              animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
+            };
+            
+            animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
+            
             setIsRecording(true);
             setIsMuted(false);
             isMutedRef.current = false;
@@ -723,21 +804,23 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             }
 
             // Handle session resumption updates
+            // NOTE: Gemini sends resumable=false during active turns - only clear handle
+            // if we receive an explicit non-resumable state WITHOUT a new handle
             if (msg.sessionResumptionUpdate) {
               const { newHandle, resumable } = msg.sessionResumptionUpdate;
-              if (resumable && newHandle) {
+              if (newHandle) {
+                // Always store new handles when provided
                 lastHandleRef.current = newHandle;
                 addLog(
                   'debug',
-                  `Session resumption handle updated: ${newHandle.substring(
-                    0,
-                    20
-                  )}...`
+                  `Session handle updated: ${newHandle.substring(0, 20)}...`
                 );
-              } else if (!resumable) {
-                // Clear handle when session is not resumable
-                lastHandleRef.current = null;
-                addLog('debug', 'Session not resumable - cleared handle');
+              }
+              // Only log resumable state changes, don't clear handle aggressively
+              // The handle remains valid until a new session is established
+              if (!resumable && !newHandle && lastHandleRef.current) {
+                addLog('debug', 'Session temporarily non-resumable (mid-turn)');
+                // Don't clear the handle - it may become valid again after turn completes
               }
             }
           },
@@ -812,12 +895,20 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             // 2. We're already reconnecting
             // 3. We've exceeded max reconnection attempts
             // 4. This is a normal closure (code 1000)
+            // 5. This appears to be an idle timeout (code 1001 with no pending interaction)
             const isNormalClosure = e.code === 1000;
+            const isIdleTimeout = e.code === 1001 && lastTurnCompleteRef.current;
             const shouldReconnect =
               !isNormalClosure &&
+              !isIdleTimeout &&
               !isManualDisconnectRef.current &&
               !isReconnectingRef.current &&
               reconnectAttemptsRef.current < maxReconnectAttempts;
+
+            // For idle timeouts, show a user-friendly message
+            if (isIdleTimeout) {
+              addLog('info', 'Session timed out due to inactivity. Click Connect to start again.');
+            }
 
             if (shouldReconnect) {
               isReconnectingRef.current = true;
@@ -950,13 +1041,22 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
         cause: error?.cause,
         toString: error?.toString?.(),
       });
-      const errorMessage =
-        error?.message ||
-        error?.name ||
-        error?.toString?.() ||
-        JSON.stringify(error) ||
-        'Unknown error';
-      addLog('error', `Failed to connect: ${errorMessage}`);
+      
+      // Handle microphone permission denial specifically
+      if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
+        addLog('error', 'Microphone permission denied. Please allow microphone access in your browser settings and try again.');
+        setError('Microphone permission denied. Click the lock icon in your browser\'s address bar to allow microphone access, then try again.');
+      } else {
+        const errorMessage =
+          error?.message ||
+          error?.name ||
+          error?.toString?.() ||
+          JSON.stringify(error) ||
+          'Unknown error';
+        addLog('error', `Failed to connect: ${errorMessage}`);
+        setError(errorMessage);
+      }
+      
       setIsConnected(false);
       isConnectingRef.current = false; // Release lock on error
     }
@@ -1213,6 +1313,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
     error,
     logs,
     transcripts,
+    // Real-time audio levels for visualization (0-1 range)
+    userAudioLevel,
+    goggaAudioLevel,
     connect,
     startRecording,
     stopRecording,

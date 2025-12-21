@@ -53,7 +53,8 @@ SEARCH_TOOL = {
                     "default": "en"
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": False
         }
     }
 }
@@ -94,7 +95,8 @@ LEGAL_SEARCH_TOOL = {
                     "default": "any"
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": False
         }
     }
 }
@@ -125,7 +127,8 @@ SHOPPING_SEARCH_TOOL = {
                     "maximum": 10
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": False
         }
     }
 }
@@ -140,20 +143,23 @@ PLACES_SEARCH_TOOL = {
         "description": (
             "Search for nearby places, businesses, restaurants, shops, and services. "
             "Returns detailed information including addresses, ratings, phone numbers, and websites. "
-            "Use this when users ask for recommendations, directions, or 'near me' queries. "
-            "Examples: 'restaurants near me', 'plumbers in Sandton', 'hospitals in Durban', "
-            "'best coffee shops Cape Town CBD', 'Pick n Pay stores nearby'."
+            "Use this when users ask for recommendations, directions, 'near me' queries, or 'nearest' queries. "
+            "IMPORTANT: If the user's message includes [User Location Context], extract the location from there "
+            "and use it in the 'location' parameter. For example, if context says 'Location: Pretoriuspark, Pretoria, South Africa', "
+            "use 'Pretoria, South Africa' as the location. "
+            "Examples: 'petrol stations near me', 'plumbers in Sandton', 'hospitals in Durban', "
+            "'best coffee shops Cape Town CBD', 'Pick n Pay stores nearby', 'nearest petrol station'."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "What to search for. Include the type of place and optionally location. Examples: 'Italian restaurants Cape Town', 'pharmacies Sandton', 'petrol stations N1 highway'"
+                    "description": "What to search for. Include the type of place. Examples: 'petrol stations', 'pharmacies', 'restaurants Italian'"
                 },
                 "location": {
                     "type": "string",
-                    "description": "Specific location for the search. Use South African cities/suburbs. Examples: 'Cape Town, South Africa', 'Sandton, Johannesburg', 'Umhlanga, Durban'",
+                    "description": "Specific location for the search. MUST be extracted from [User Location Context] if available, or from the user's message. Use format 'City, Country' or 'Suburb, City'. Examples: 'Pretoria, South Africa', 'Sandton, Johannesburg', 'Umhlanga, Durban'",
                     "default": "South Africa"
                 },
                 "num_results": {
@@ -164,7 +170,8 @@ PLACES_SEARCH_TOOL = {
                     "maximum": 20
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": False
         }
     }
 }

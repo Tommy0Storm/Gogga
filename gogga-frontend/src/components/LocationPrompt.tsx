@@ -18,6 +18,7 @@ interface LocationSuggestion {
     city?: string;
     town?: string;
     village?: string;
+    suburb?: string;
     road?: string;
     country?: string;
   };
@@ -219,6 +220,7 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false); // Track if we've completed at least one search
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -227,6 +229,7 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
   const fetchSuggestions = useCallback(async (query: string) => {
     if (query.length < 2) {
       setSuggestions([]);
+      setHasSearched(false);
       return;
     }
 
@@ -253,11 +256,13 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
       }
       
       setSuggestions(data || []);
-      setShowSuggestions(data && data.length > 0);
+      setShowSuggestions(true); // Always show dropdown after search (even if empty for "no results")
+      setHasSearched(true);
       setSelectedIndex(-1);
     } catch (err) {
       console.error('[Location] Autocomplete failed:', err);
       setSuggestions([]);
+      setHasSearched(true);
     } finally {
       setIsSearching(false);
     }
@@ -290,6 +295,7 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
     if (!show) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setHasSearched(false);
       setSelectedIndex(-1);
     }
   }, [show]);
@@ -324,10 +330,22 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
   };
 
   const handleSelectSuggestion = (suggestion: LocationSuggestion) => {
-    const displayText = suggestion.address?.city || 
-                       suggestion.address?.town || 
-                       suggestion.address?.village ||
-                       (suggestion.display_name.split(',')[0] ?? '');
+    // Build a meaningful display text - prefer more specific locations
+    const road = suggestion.address?.road;
+    const suburb = suggestion.address?.suburb;
+    const city = suggestion.address?.city || suggestion.address?.town || suggestion.address?.village;
+    
+    // For street addresses, show road + suburb/city
+    // For suburb/city only, show that
+    let displayText: string;
+    if (road && (suburb || city)) {
+      displayText = `${road}, ${suburb || city}`;
+    } else if (suburb && city) {
+      displayText = `${suburb}, ${city}`;
+    } else {
+      displayText = suburb || city || (suggestion.display_name.split(',')[0] ?? '');
+    }
+    
     onChange(displayText);
     setShowSuggestions(false);
     setSuggestions([]);
@@ -406,8 +424,18 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
               {suggestions.map((suggestion, index) => {
                 const city = suggestion.address?.city || suggestion.address?.town || suggestion.address?.village;
+                const suburb = suggestion.address?.suburb;
+                const road = suggestion.address?.road;
                 const country = suggestion.address?.country;
                 const displayParts = suggestion.display_name.split(',').slice(0, 3);
+                
+                // Build a more descriptive display - prefer suburb/road for street-level
+                const primaryDisplay = road || suburb || city || displayParts[0];
+                const secondaryDisplay = road 
+                  ? [suburb, city, country].filter(Boolean).join(', ')
+                  : suburb 
+                    ? [city, country].filter(Boolean).join(', ')
+                    : country ? `${displayParts.slice(1).join(', ')}` : suggestion.display_name;
                 
                 return (
                   <button
@@ -428,15 +456,24 @@ export const ManualLocationInput: React.FC<ManualLocationInputProps> = ({
                     </span>
                     <div className="min-w-0">
                       <div className="font-medium text-gray-900 truncate">
-                        {city || displayParts[0]}
+                        {primaryDisplay}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
-                        {country ? `${displayParts.slice(1).join(', ')}` : suggestion.display_name}
+                        {secondaryDisplay}
                       </div>
                     </div>
                   </button>
                 );
               })}
+            </div>
+          )}
+          
+          {/* No results message - show when search completed with no results */}
+          {!isSearching && hasSearched && value.trim().length >= 2 && suggestions.length === 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-center">
+              <span className="material-icons text-gray-400 text-2xl mb-2">search_off</span>
+              <p className="text-gray-500 text-sm">No locations found for "{value}"</p>
+              <p className="text-gray-400 text-xs mt-1">Try a different city or suburb name</p>
             </div>
           )}
         </div>
@@ -527,11 +564,13 @@ interface LocationBadgeProps {
   onClick?: () => void;
   onEdit?: () => void;
   onClear?: () => void;
+  /** Called when user clicks "7-Day Forecast" menu option */
+  onShowForecast?: () => void;
 }
 
 /**
  * Compact location display badge for header/toolbar
- * Click to edit location, X to clear
+ * Click to open menu with options: Edit, 7-Day Forecast, Clear
  */
 export const LocationBadge: React.FC<LocationBadgeProps> = ({
   location,
@@ -539,7 +578,25 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({
   onClick,
   onEdit,
   onClear,
+  onShowForecast,
 }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMenu]);
+  
   if (!location) {
     return (
       <button
@@ -554,20 +611,31 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({
   }
 
   const displayLocation = location.city || location.street || 'Unknown location';
+  
+  const handleMenuAction = (action: 'edit' | 'forecast' | 'clear') => {
+    setShowMenu(false);
+    if (action === 'edit') {
+      onEdit?.() || onClick?.();
+    } else if (action === 'forecast') {
+      onShowForecast?.();
+    } else if (action === 'clear') {
+      onClear?.();
+    }
+  };
 
   return (
-    <div className="flex items-center gap-1">
-      {/* Main location button - click to edit */}
+    <div className="relative flex items-center gap-1" ref={menuRef}>
+      {/* Main location button - click to toggle menu */}
       <button
-        onClick={onEdit || onClick}
+        onClick={() => setShowMenu(!showMenu)}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors group cursor-pointer ${
           location.isApproximate 
             ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' 
             : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
         }`}
         title={location.isApproximate 
-          ? `${displayLocation} (approximate - click to set exact location)` 
-          : `${location.displayName || displayLocation} — Click to change`}
+          ? `${displayLocation} (approximate - click for options)` 
+          : `${location.displayName || displayLocation} — Click for options`}
       >
         <span className={`material-icons text-base group-hover:text-gray-700 ${
           location.isApproximate ? 'text-amber-500' : 'text-gray-500'
@@ -587,24 +655,51 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({
           </>
         )}
         
-        {/* Edit indicator on hover */}
-        <span className="material-icons text-xs text-gray-400 group-hover:text-gray-600 ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          edit
+        {/* Dropdown indicator */}
+        <span className={`material-icons text-xs text-gray-400 group-hover:text-gray-600 ml-0.5 transition-transform ${showMenu ? 'rotate-180' : ''}`}>
+          expand_more
         </span>
       </button>
       
-      {/* Clear button */}
-      {onClear && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onClear();
-          }}
-          className="p-1.5 hover:bg-gray-200 rounded-full transition-colors"
-          title="Clear location"
-        >
-          <span className="material-icons text-sm text-gray-400 hover:text-gray-600">close</span>
-        </button>
+      {/* Dropdown Menu */}
+      {showMenu && (
+        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 py-1 min-w-[180px] z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+          {/* Edit Location */}
+          <button
+            onClick={() => handleMenuAction('edit')}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <span className="material-icons text-base text-gray-500">edit_location</span>
+            <span>Change Location</span>
+          </button>
+          
+          {/* 7-Day Forecast */}
+          {onShowForecast && (
+            <button
+              onClick={() => handleMenuAction('forecast')}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <span className="material-icons text-base text-gray-500">calendar_month</span>
+              <span>7-Day Forecast</span>
+            </button>
+          )}
+          
+          {/* Divider */}
+          {onClear && (
+            <div className="my-1 border-t border-gray-100" />
+          )}
+          
+          {/* Clear Location */}
+          {onClear && (
+            <button
+              onClick={() => handleMenuAction('clear')}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <span className="material-icons text-base text-red-500">location_off</span>
+              <span>Clear Location</span>
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

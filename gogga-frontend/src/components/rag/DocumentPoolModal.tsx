@@ -51,36 +51,62 @@ export function DocumentPoolModal({
   const [operationInProgress, setOperationInProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Load documents from pool
-  const loadPool = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  // Load on open with proper cleanup
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    let mounted = true;
+    
+    const loadPool = async () => {
+      setIsLoading(true);
+      setError(null);
 
+      try {
+        const poolManager = DocumentPoolManager.getInstance();
+        await poolManager.init(userId);
+
+        const [poolDocs, poolStats] = await Promise.all([
+          poolManager.getPool(),
+          poolManager.getStats(),
+        ]);
+
+        if (mounted) {
+          setDocuments(poolDocs);
+          setStats(poolStats);
+        }
+      } catch (err) {
+        console.error('[DocumentPoolModal] Error loading pool:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load document pool');
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    loadPool();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen, userId]);
+
+  // Refresh pool helper for operations
+  const refreshPool = useCallback(async () => {
     try {
       const poolManager = DocumentPoolManager.getInstance();
-      await poolManager.init(userId);
-
       const [poolDocs, poolStats] = await Promise.all([
         poolManager.getPool(),
         poolManager.getStats(),
       ]);
-
       setDocuments(poolDocs);
       setStats(poolStats);
     } catch (err) {
-      console.error('[DocumentPoolModal] Error loading pool:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load document pool');
-    } finally {
-      setIsLoading(false);
+      console.error('[DocumentPoolModal] Error refreshing pool:', err);
     }
-  }, [userId]);
-
-  // Load on open
-  useEffect(() => {
-    if (isOpen) {
-      loadPool();
-    }
-  }, [isOpen, loadPool]);
+  }, []);
 
   // Filter documents
   const filteredDocuments = documents.filter((doc) => {
@@ -113,7 +139,7 @@ export function DocumentPoolModal({
       const result = await poolManager.activateDocForSession(docId, sessionId);
 
       if (result.success) {
-        await loadPool(); // Refresh
+        await refreshPool(); // Refresh
         onDocumentActivated?.(docId);
       } else {
         setError(result.message);
@@ -135,7 +161,7 @@ export function DocumentPoolModal({
       const result = await poolManager.deactivateDocFromSession(docId, sessionId);
 
       if (result.success) {
-        await loadPool(); // Refresh
+        await refreshPool(); // Refresh
         onDocumentDeactivated?.(docId);
       } else {
         setError(result.message);

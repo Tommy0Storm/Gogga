@@ -1,11 +1,15 @@
 'use client'
 
 /**
- * Optimistic Chat Messages with React 19 useOptimistic Hook
- * Provides instant UI feedback for message sending
+ * Optimistic Chat Messages Hook
+ * 
+ * SIMPLIFIED: The React 19 useOptimistic hook doesn't work well with async RxDB updates
+ * because it's designed for Server Actions with automatic reconciliation.
+ * 
+ * This version simply passes through the base messages and provides a loading state
+ * that can be shown while waiting for responses.
  */
 
-import { useOptimistic, startTransition } from 'react'
 import type { Message } from '@/hooks/useChatHistory'
 
 export interface OptimisticMessage extends Message {
@@ -21,52 +25,35 @@ export interface OptimisticMessage extends Message {
 }
 
 /**
- * Hook for managing optimistic chat messages
- * Messages appear instantly in UI, then update when server confirms
+ * Hook for managing chat messages with loading states
+ * 
+ * Instead of adding optimistic messages that cause duplicates,
+ * we just track loading state separately and show it in the UI.
  */
 export function useOptimisticMessages(messages: OptimisticMessage[]) {
-  const [optimisticMessages, setOptimisticState] = useOptimistic<
-    OptimisticMessage[],
-    { type: 'add' | 'error'; id?: string; message?: OptimisticMessage; errorMessage?: string }
-  >(
-    messages,
-    (state, action) => {
-      if (action.type === 'add' && action.message) {
-        // Add new optimistic message with generated ID
-        return [...state, { ...action.message, id: action.id || Date.now().toString() }]
-      }
-      
-      if (action.type === 'error' && action.id) {
-        // Mark message as error
-        return state.map(msg => 
-          msg.id === action.id 
-            ? { ...msg, isPending: false, isError: true, errorMessage: action.errorMessage }
-            : msg
-        )
-      }
-      
-      return state
-    }
-  )
-
-  const addOptimisticMessage = (message: OptimisticMessage): string => {
-    const id = Date.now().toString() + Math.random()
-    startTransition(() => {
-      setOptimisticState({ type: 'add', message: { ...message, isPending: true }, id })
-    })
-    return id
+  // Simply return the base messages - no optimistic additions
+  // The loading state is handled by isLoading in ChatClient
+  
+  // Placeholder functions for API compatibility
+  const addOptimisticMessage = (_message: OptimisticMessage): string => {
+    // No-op - we don't add optimistic messages anymore
+    // Loading state is shown via isLoading state in ChatClient
+    return Date.now().toString()
   }
 
-  const markAsError = (id: string, errorMessage: string) => {
-    startTransition(() => {
-      setOptimisticState({ type: 'error', id, errorMessage })
-    })
+  const markAsError = (_id: string, _errorMessage: string) => {
+    // No-op - errors are persisted to message history instead
+  }
+
+  const clearOptimistic = () => {
+    // No-op
   }
 
   return { 
-    messages: optimisticMessages, 
+    messages, // Just pass through the base messages
     addOptimisticMessage,
-    markAsError
+    markAsError,
+    clearOptimistic
   }
 }
 

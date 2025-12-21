@@ -448,11 +448,103 @@ pnpm vitest run src/lib/__tests__/usageTracking.test.ts
 
 ---
 
+## 9. Empty Response Bug Fix (December 21, 2025) ✅
+
+### Bug Report Analysis
+
+**User Report**: "A math question and the math calculation disappeared in Auto mode and empty response"
+
+**Frontend Logs Observed**:
+```javascript
+[GOGGA] SSE accumulated content: { rawLength: 0, cleanedLength: 0 }
+[GOGGA] SSE stream complete: { responseLength: 0, logsCount: 14, toolCallsCount: 0 }
+[GOGGA] Full API response: { hasResponse: false, responseLength: 0 }
+```
+
+**Backend Error (from docker logs)**:
+```
+ERROR | app.services.ai_service | Streaming with tools failed: 'bool' object is not iterable
+```
+
+### Root Cause
+
+A faulty `any()` pattern in `ai_service.py:1769-1775` was causing TypeErrors:
+
+```python
+# BUGGY CODE - throws TypeError when tool_calls is None or missing
+has_chart_tool = any(
+    (hasattr(final_choice, 'tool_calls') and final_choice.tool_calls and 
+     any(tc.function.name == 'create_chart' for tc in final_choice.tool_calls))
+)
+```
+
+The `any()` function requires an iterable, but was receiving:
+- `any(False)` when `hasattr()` returns False → TypeError: 'bool' object is not iterable
+- `any(None)` when `tool_calls` is None → TypeError: 'NoneType' object is not iterable
+
+### Fixes Applied
+
+| ID | Issue | Fix | File |
+|----|-------|-----|------|
+| EMPTY-001 | `any()` pattern bug | Use explicit null checks before `any()` | `ai_service.py:1771-1790` |
+| EMPTY-002 | Missing post-search fallback | Add fallback when search retry returns empty | `ai_service.py:1546` |
+| EMPTY-003 | Frontend shows blank message | Add client-side fallback for empty responses | `ChatClient.tsx:921` |
+
+### Code Changes
+
+**Backend Fix (ai_service.py:1771-1790)**:
+```python
+# FIXED - Proper boolean evaluation with explicit null checks
+has_chart_tool = (
+    hasattr(final_choice, 'tool_calls') 
+    and final_choice.tool_calls is not None 
+    and len(final_choice.tool_calls) > 0
+    and any(tc.function.name == 'create_chart' for tc in final_choice.tool_calls)
+)
+```
+
+**Frontend Fallback (ChatClient.tsx:921)**:
+```typescript
+// CRITICAL FIX: Frontend fallback for empty responses
+if (!cleanContent || cleanContent.trim() === '') {
+  console.warn('[GOGGA] Empty response from backend - applying fallback');
+  cleanContent = "I apologize, but I couldn't generate a response. Please try again.";
+}
+```
+
+### Verification
+
+```bash
+# Test all edge cases
+python3 -c "
+class MockChoice:
+    tool_calls = None  # None case
+
+# Result: False (no error thrown)
+has_chart_tool = (
+    hasattr(MockChoice(), 'tool_calls') 
+    and MockChoice().tool_calls is not None 
+    and len(MockChoice().tool_calls) > 0
+    and any(tc.function.name == 'create_chart' for tc in MockChoice().tool_calls)
+)
+print(f'tool_calls=None: {has_chart_tool}')  # False ✓
+"
+
+# Run router tests (63 tests)
+cd gogga-backend && source venv314/bin/activate
+python -m pytest tests/test_router_infrastructure.py -v --tb=short
+```
+
+**All 63 router tests pass after fix.**
+
+---
+
 ## Audit Metadata
 
 | Field | Value |
 |-------|-------|
 | Audit Date | December 20, 2025 |
+| Empty Response Fix | December 21, 2025 |
 | Auditor | Enterprise Audit Agent |
 | Router Audit | December 20, 2025 |
 | Usage Monitoring | December 20, 2025 |

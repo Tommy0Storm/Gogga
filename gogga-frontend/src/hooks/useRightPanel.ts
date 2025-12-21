@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 
-type TabId = 'tools' | 'documents' | 'weather' | 'search';
+type TabId = 'tools' | 'documents' | 'weather' | 'search' | 'smart';
 
 interface RightPanelState {
   isOpen: boolean;
@@ -19,7 +19,7 @@ interface RightPanelState {
 
 export const useRightPanel = create<RightPanelState>((set, get) => ({
   isOpen: false,
-  activeTab: 'tools',
+  activeTab: 'documents',
   
   openPanel: (tab) => set({ 
     isOpen: true, 

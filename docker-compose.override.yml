@@ -14,6 +14,7 @@
 services:
   # ============================================================
   # FRONTEND - Increased memory for Next.js 16 + RxDB
+  # Optimized Dec 2025: +1G from admin (5G total)
   # ============================================================
   frontend:
     entrypoint: []
@@ -24,19 +25,22 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 3G
+          memory: 5G
         reservations:
           cpus: '0.5'
-          memory: 1G
+          memory: 2G
+    # OOM protection: keep frontend alive as priority service
+    oom_score_adj: -500
     environment:
-      NODE_OPTIONS: --max-old-space-size=2560
+      # V8 heap: ~4.5GB (leave room for native memory)
+      NODE_OPTIONS: --max-old-space-size=4608
       # Point to worker's CePO
       CEPO_URL: http://192.168.0.198:8080
       # Magic-link base URL (what users click in email) - HTTPS for GoggaTalk
       NEXTAUTH_URL: https://192.168.0.130:3002
       NEXT_PUBLIC_BASE_URL: https://192.168.0.130:3002
-    # Run HTTPS webpack dev server (required for GoggaTalk MediaRecorder API)
-    command: sh -c "npm install && ./node_modules/.bin/prisma generate && ./node_modules/.bin/next dev -H 0.0.0.0 -p 3000 --webpack --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem"
+    # Run HTTPS Turbopack dev server (default in Next.js 16, more memory efficient)
+    command: sh -c "npm install && ./node_modules/.bin/prisma generate && ./node_modules/.bin/next dev -H 0.0.0.0 -p 3000 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem"
     # Keep source mounted, but put write-heavy outputs in named volumes
     volumes:
       - ./gogga-frontend:/app
@@ -59,6 +63,8 @@ services:
     environment:
       # Use worker's CePO for AI processing
       CEPO_URL: http://192.168.0.198:8080
+      # Frontend URL for usage logging (Docker network - frontend container)
+      FRONTEND_URL: https://frontend:3000
     # Mount certs for HTTPS
     volumes:
       - ./gogga-backend:/app
@@ -67,19 +73,21 @@ services:
     command: python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --ssl-keyfile /app/certs/key.pem --ssl-certfile /app/certs/cert.pem
 
   # ============================================================
-  # ADMIN - Increased memory for dashboard operations
+  # ADMIN - Reduced memory (dashboard doesn't need much)
+  # Optimized Dec 2025: -1G transferred to frontend (1.5G total)
   # ============================================================
   admin:
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 2.5G
+          cpus: '1.0'
+          memory: 1.5G
         reservations:
           cpus: '0.25'
-          memory: 768M
+          memory: 512M
     environment:
-      NODE_OPTIONS: --max-old-space-size=2048
+      # V8 heap: ~1.2GB
+      NODE_OPTIONS: --max-old-space-size=1228
       # Point to worker's CePO
       CEPO_URL: http://192.168.0.198:8080
 
@@ -134,15 +142,17 @@ volumes:
 
 # =============================================================================
 # MEMORY ALLOCATION SUMMARY (Primary Server - 7.7GB total)
+# Optimized Dec 2025: Reallocated 1G from Admin to Frontend
 # =============================================================================
-# Service      | Limit  | Reserved | Purpose
-# -------------|--------|----------|----------------------------------
-# Frontend     | 3.0GB  | 1.0GB    | Next.js 16 + RxDB + React 19
-# Admin        | 2.5GB  | 768MB    | Dashboard + Docker management
-# Backend      | 512MB  | 256MB    | FastAPI (lightweight)
-# Proxy        | 128MB  | 32MB     | SSL termination only
-# -------------|--------|----------|----------------------------------
-# TOTAL LIMITS | 6.1GB  | 2.0GB    | Leaves ~1.5GB for system/buffer
+# Service      | Limit  | Reserved | NODE_OPTIONS         | Purpose
+# -------------|--------|----------|----------------------|------------------
+# Frontend     | 5.0GB  | 2.0GB    | --max-old-space=4608 | Next.js 16 + RxDB
+# Admin        | 1.5GB  | 512MB    | --max-old-space=1228 | Dashboard (light)
+# Backend      | 512MB  | 256MB    | N/A (Python)         | FastAPI
+# Proxy        | 128MB  | 32MB     | N/A                  | SSL termination
+# CePO stub    | 16MB   | 8MB      | N/A                  | Placeholder
+# -------------|--------|----------|----------------------|------------------
+# TOTAL LIMITS | 7.2GB  | 2.8GB    |                      | Max headroom
 # =============================================================================
 #
 # Worker Server (192.168.0.198) runs:

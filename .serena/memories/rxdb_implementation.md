@@ -1,11 +1,41 @@
 # RxDB Implementation for GOGGA
 
-> **Last Updated:** December 19, 2025
-> **Status:** ✅ COMPLETE - db.ts shim switchover done, performance optimizations applied
+> **Last Updated:** December 21, 2025
+> **Status:** ✅ COMPLETE - db.ts shim switchover done, performance optimizations applied, **COL23/DB8 collection limit fix applied**
 
 ## Overview
 Complete RxDB 16.21.1 implementation replacing/augmenting Dexie for client-side storage.
 Uses Distance-to-Samples vector indexing for efficient similarity search without external dependencies.
+
+## Collection Limit Fix (December 21, 2025)
+
+### Problem Solved
+Fixed two critical RxDB errors:
+- **COL23**: "amount of collections limited to 16" (had 17: 14 goggadb + 3 goggamemory)
+- **DB8**: Race conditions creating duplicate `goggamemory` databases during parallel embedding
+
+### Solution: Eliminated Memory Database
+The separate `goggamemory` RxDB database was completely replaced with pure JavaScript:
+
+| Old (RxDB goggamemory) | New (In-Memory) |
+|------------------------|-----------------|
+| `activeSessions` collection | `activeSession` variable + `BehaviorSubject` |
+| `embeddingCache` collection | JavaScript `Map` with LRU eviction (500 max) |
+| `pendingOperations` collection | JavaScript `Map` |
+| App settings local docs | `localStorage` with `SETTINGS_KEY` |
+
+### Benefits
+1. **Collection count**: 17 → 14 (well under 16 limit)
+2. **Zero race conditions**: No async database initialization
+3. **Faster access**: Synchronous operations for ephemeral data
+4. **All tests pass**: 66 tests (15 memoryStorage + 24 rxdb + 27 advanced)
+
+### Files Changed
+- `memoryStorage.ts` - Complete rewrite (backup at `.bak`)
+- `memoryStorage.test.ts` - Updated test descriptions
+
+### Documentation
+- Full details: `docs/RXDB_COLLECTION_LIMIT_FIX.md`
 
 ## Performance Enhancements (December 19, 2025)
 
@@ -228,7 +258,7 @@ Also includes `RxDBPerf` namespace with helper patterns:
 - `gogga-frontend/src/lib/rxdb/__tests__/rxdb.test.ts` - 24 passing tests
 - `gogga-frontend/vitest.config.ts` - Test configuration
 
-## Collections (12 total)
+## Collections (14 total in goggadb)
 1. `documents` - Uploaded documents with content
 2. `documentChunks` - Document chunks for RAG
 3. `chatSessions` - Chat session metadata
@@ -237,10 +267,14 @@ Also includes `RxDBPerf` namespace with helper patterns:
 6. `userPreferences` - User settings
 7. `memoryContexts` - BuddySystem memories
 8. `tokenUsage` - Daily token tracking
-9. `ragMetrics` - RAG performance metrics
-10. `systemLogs` - Application logs
-11. `vectorEmbeddings` - Vector embeddings with idx0-idx4 indexes
-12. `offlineQueue` - Offline message queue
+9. `toolUsage` - Tool call tracking
+10. `ragMetrics` - RAG performance metrics
+11. `systemLogs` - Application logs
+12. `vectorEmbeddings` - Vector embeddings with idx0-idx4 indexes
+13. `offlineQueue` - Offline message queue
+14. `goggaSmartSkills` - GoggaSmart learned skills
+
+**Note**: RxDB open-source limits to 16 collections max. Memory storage now uses JavaScript Maps (not RxDB) to stay under limit.
 
 ## Distance-to-Samples Indexing
 
@@ -313,19 +347,25 @@ Use `runFullMigration()` from migration.ts to transfer:
 - **Handler is idempotent**: Checks for existing embeddings before generating
 - **Functions**: `getEmbeddingPipelineStatus()`, `awaitEmbeddingPipelineIdle()`, `resetEmbeddingPipeline()`
 
-### Memory RxStorage (Fast Ephemeral Data)
+### Memory Storage (Refactored December 21, 2025)
 - **File**: `memoryStorage.ts`
-- **Plugin**: `getRxStorageMemory()` from `rxdb/plugins/storage-memory`
-- **Collections**:
-  1. `activeSessions` - Current user session state (typing, model, pending messages)
-  2. `embeddingCache` - Hash-based cache for embeddings (avoids recalculating)
-  3. `pendingOperations` - Optimistic UI operations queue
+- **Architecture**: Pure JavaScript Maps + localStorage (NO RxDB - eliminated to fix COL23)
+- **Collections** (now in-memory Maps):
+  1. `activeSession` - Current user session state (typing, model, pending messages)
+  2. `embeddingCache` - LRU cache for embeddings (500 max, JavaScript Map)
+  3. `pendingOperations` - Optimistic UI operations queue (JavaScript Map)
+  4. `appSettings` - localStorage-backed with reactive BehaviorSubject
 
 **Key Functions**:
-- `updateActiveSession(sessionId, updates)` / `getActiveSession()`
-- `getCachedEmbedding(text)` / `cacheEmbedding(text, embedding)` (500 max, LRU eviction)
-- `addPendingOperation()` / `getPendingOperations()` (optimistic UI)
-- `getAppSettings()` / `updateAppSettings()` (local documents)
+- `updateActiveSession(sessionId, updates)` / `getActiveSession()` - Session state
+- `getCachedEmbedding(text)` / `cacheEmbedding(text, embedding)` - LRU cache (500 max)
+- `addPendingOperation()` / `getPendingOperations()` - Optimistic UI
+- `getAppSettings()` / `updateAppSettings()` - localStorage-backed
+- `subscribeToActiveSession()` / `subscribeToAppSettings()` - BehaviorSubject observables
+
+**Why Changed**: Original RxDB memory database (`goggamemory`) with 3 collections caused:
+- COL23 error: 17 total collections exceeded 16 limit
+- DB8 error: Race conditions during parallel embedding worker initialization
 
 ### Parallel Embedding with WebWorkers
 - **Files**: `embeddingWorker.ts`, `parallelEmbedding.ts`
@@ -369,20 +409,16 @@ Use `runFullMigration()` from migration.ts to transfer:
 ## Testing
 ```bash
 cd gogga-frontend
-NODE_ENV=test pnpm exec vitest run src/lib/rxdb
+pnpm vitest run src/lib/rxdb/__tests__/
 ```
 
-All 66 tests pass (24 original + 15 memory storage + 27 advanced features):
-- Database initialization
-- Document CRUD
-- Vector storage and search
-- Pipeline stats
-- Chat sessions
-- Offline queue
-- Cleanup utilities
-- Vector search methods
-- Schema migration helpers
-- Population refs
+All 66 tests pass (December 21, 2025):
+- `memoryStorage.test.ts` - 15 tests (in-memory storage, LRU cache, pending ops)
+- `rxdb.test.ts` - 24 tests (database init, CRUD, vector search, pipeline)
+- `advancedFeatures.test.ts` - 27 tests (cleanup, maintenance, schema migration)
+
+**Global Tests Location**: `TESTS/` folder at repo root (reference docs only)
+**Unit Tests Location**: `gogga-frontend/src/lib/rxdb/__tests__/` (actual test files)
 
 ### Schema Migration (December 2025)
 - **File**: `schemaMigration.ts`

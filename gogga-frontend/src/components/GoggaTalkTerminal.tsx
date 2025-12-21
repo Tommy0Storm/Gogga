@@ -6,7 +6,11 @@
  * Uses Gemini Live API for real-time voice conversation.
  * 
  * Design: Monochrome Material Icons only (no emojis)
- * Layout: Transcript above, verbose logs below (visible by default when talking)
+ * Features:
+ * - Audio sinewave visualizer (white = Gogga, blue = user, gray = idle)
+ * - Chat transcripts shown by default (logs hidden, expandable)
+ * - Session resumption for interrupted conversations
+ * - Screen sharing support
  */
 
 'use client';
@@ -29,9 +33,12 @@ import {
   AlertTriangle,
   Circle,
   CircleDot,
-  Bug
+  Bug,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useGoggaTalkDirect, GoggaTalkLog } from '@/hooks/useGoggaTalkDirect';
+import { AudioWaveVisualizer, type VisualizerState } from './AudioWaveVisualizer';
 
 interface GoggaTalkTerminalProps {
   onClose: () => void;
@@ -46,8 +53,11 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
     isMuted,
     isPlaying,
     isScreenSharing,
+    error,
     logs,
     transcripts,
+    userAudioLevel,
+    goggaAudioLevel,
     connect,
     startRecording,
     stopRecording,
@@ -59,7 +69,17 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
   
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [showTranscripts, setShowTranscripts] = useState(true);
-  const [showLogs, setShowLogs] = useState(true); // Verbose logs visible by default
+  const [showLogs, setShowLogs] = useState(false); // Logs hidden by default - transcripts are primary
+  
+  // Derive visualizer state from connection state
+  const visualizerState: VisualizerState = isPlaying 
+    ? 'gogga-speaking' 
+    : (isRecording && !isMuted) 
+      ? 'user-speaking' 
+      : 'idle';
+  
+  // Select appropriate audio level based on state
+  const currentAudioLevel = isPlaying ? goggaAudioLevel : userAudioLevel;
   
   // Auto-scroll to bottom when logs update
   useEffect(() => {
@@ -222,57 +242,93 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowTranscripts(!showTranscripts)}
-                className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
-                  showTranscripts ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-400'
+                className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                  showTranscripts ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                 }`}
-                title="Toggle transcripts"
+                title="Toggle conversation view"
               >
                 <MessageSquare size={12} /> Chat
               </button>
               <button
                 onClick={() => setShowLogs(!showLogs)}
-                className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
-                  showLogs ? 'bg-gray-600 text-white' : 'bg-gray-700 text-gray-400'
+                className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+                  showLogs ? 'bg-gray-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                 }`}
-                title="Toggle verbose logs"
+                title={showLogs ? "Hide system logs" : "Show system logs"}
               >
-                <ScrollText size={12} /> Logs
+                <ScrollText size={12} /> 
+                Logs
+                {showLogs ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
               </button>
               <button
                 onClick={clearLogs}
-                className="text-xs px-2 py-1.5 rounded-lg bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600 flex items-center"
-                title="Clear logs"
+                className="text-xs px-2 py-1.5 rounded-lg bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600 flex items-center transition-colors"
+                title="Clear all logs and transcripts"
               >
                 <Trash2 size={12} />
               </button>
             </div>
           </div>
           
-          {/* Status indicators */}
-          <div className="flex items-center gap-3 mt-2 text-xs">
-            {isConnected && isRecording && !isMuted && (
-              <span className="flex items-center gap-1 text-red-400">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                Listening...
-              </span>
+          {/* Status indicators with Audio Visualizer */}
+          <div className="flex items-center gap-3 mt-3">
+            {/* Audio Visualizer - Central focus */}
+            {isConnected && (
+              <div className="flex-1 flex justify-center">
+                <AudioWaveVisualizer
+                  state={visualizerState}
+                  audioLevel={currentAudioLevel}
+                  width={180}
+                  height={32}
+                  showActivityIndicator={true}
+                />
+              </div>
             )}
-            {isConnected && (isMuted || !isRecording) && (
-              <span className="flex items-center gap-1 text-gray-500">
-                <span className="w-2 h-2 bg-gray-500 rounded-full" />
-                Mic muted
-              </span>
-            )}
-            {isPlaying && (
-              <span className="flex items-center gap-1 text-blue-400">
-                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                Gogga speaking...
-              </span>
-            )}
-            <span className="text-gray-600 ml-auto flex items-center gap-1">
-              <Headphones size={12} /> Headphones recommended
-            </span>
+            
+            {/* Status text indicators */}
+            <div className="flex items-center gap-3 text-xs shrink-0">
+              {isConnected && isRecording && !isMuted && !isPlaying && (
+                <span className="flex items-center gap-1 text-blue-400">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                  Listening...
+                </span>
+              )}
+              {isConnected && (isMuted || !isRecording) && !isPlaying && (
+                <span className="flex items-center gap-1 text-gray-500">
+                  <span className="w-2 h-2 bg-gray-500 rounded-full" />
+                  Mic muted
+                </span>
+              )}
+              {isPlaying && (
+                <span className="flex items-center gap-1 text-white font-medium">
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  Gogga speaking
+                </span>
+              )}
+              {!isConnected && (
+                <span className="flex-1 text-gray-600 flex items-center justify-center gap-1">
+                  <Headphones size={12} /> Headphones recommended
+                </span>
+              )}
+            </div>
           </div>
         </div>
+        
+        {/* Error Banner - Shown when microphone permission denied or other errors */}
+        {error && (
+          <div className="mx-4 mt-2 p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-start gap-3">
+            <XCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-300 text-sm">{error}</p>
+              <button
+                onClick={connect}
+                className="mt-2 text-xs px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
         
         {/* Main Content Area - Scrollable */}
         <div className="flex-1 overflow-y-auto p-4 font-mono text-sm bg-black/50 min-h-50">
@@ -281,28 +337,47 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
             <div className="mb-4">
               {transcripts.length === 0 ? (
                 <div className="text-gray-500 italic text-center py-8">
-                  {/* SA Flag Banner as visual element */}
-                  <div className="flex justify-center mb-3">
-                    <div className="flex w-16 h-4 rounded overflow-hidden">
-                      <div className="flex-1 bg-red-600" />
-                      <div className="flex-1 bg-blue-600" />
-                      <div className="flex-1 bg-green-600" />
-                      <div className="flex-1 bg-yellow-500" />
-                      <div className="flex-1 bg-black" />
-                      <div className="flex-1 bg-white" />
+                  {isConnected ? (
+                    // Connected but no transcripts yet - show large visualizer
+                    <div className="flex flex-col items-center gap-4">
+                      <AudioWaveVisualizer
+                        state={visualizerState}
+                        audioLevel={currentAudioLevel}
+                        width={240}
+                        height={48}
+                        showActivityIndicator={true}
+                      />
+                      {isRecording && !isMuted ? (
+                        <span className="flex items-center gap-2 text-blue-400">
+                          <Mic size={16} /> Listening... Speak to start the conversation!
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2 text-gray-500">
+                          <MicOff size={16} /> Microphone muted. Click "Unmute" to speak.
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  {isConnected 
-                    ? isRecording 
-                      ? <span className="flex items-center justify-center gap-2"><Mic size={16} className="text-red-400" /> Listening... Speak to start the conversation!</span>
-                      : <span className="flex items-center justify-center gap-2"><MicOff size={16} /> Microphone muted. Click "Unmute" to speak.</span>
-                    : (
-                      <div>
-                        <p className="mb-2 flex items-center justify-center gap-2"><Power size={16} /> Click "Connect" to start voice chat</p>
-                        <p className="text-xs text-gray-600 flex items-center justify-center gap-1"><Globe size={12} /> Supports all 11 SA official languages</p>
+                  ) : (
+                    // Not connected - show connect prompt with SA flag
+                    <div>
+                      <div className="flex justify-center mb-3">
+                        <div className="flex w-16 h-4 rounded overflow-hidden">
+                          <div className="flex-1 bg-red-600" />
+                          <div className="flex-1 bg-blue-600" />
+                          <div className="flex-1 bg-green-600" />
+                          <div className="flex-1 bg-yellow-500" />
+                          <div className="flex-1 bg-black" />
+                          <div className="flex-1 bg-white" />
+                        </div>
                       </div>
-                    )
-                  }
+                      <p className="mb-2 flex items-center justify-center gap-2">
+                        <Power size={16} /> Click "Connect" to start voice chat
+                      </p>
+                      <p className="text-xs text-gray-600 flex items-center justify-center gap-1">
+                        <Globe size={12} /> Supports all 11 SA official languages
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 transcripts.map((t, i) => (

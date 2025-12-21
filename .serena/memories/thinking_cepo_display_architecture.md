@@ -228,12 +228,21 @@ Frontend (ChatClient.tsx)
 ### Backend Tests
 - ✅ `test_optillm_enhancements.py`: 37 tests pass
 - ✅ `test_router_infrastructure.py`: 63 tests pass
+- ✅ `test_usage_monitoring.py`: 36 tests pass (34 passed, 2 skipped)
 - ✅ `parse_enhanced_response()` function tests all tag types
+- ✅ Empty response bug fixed (Dec 21, 2025)
 
 ### Frontend Tests
 - TypeScript compilation (with Next.js build system)
 - Component rendering with thinking content
 - State management for streaming thinking
+- ✅ Empty response fallback in ChatClient.tsx
+
+### December 21, 2025 Bug Fix
+**Issue**: Empty responses for math/reasoning queries
+- Backend: Fixed `any()` pattern bug in `ai_service.py:1769-1790`
+- Frontend: Added empty response fallback in `ChatClient.tsx:921`
+- Symptom: `logsCount: 14` but `responseLength: 0`
 
 ## Key Files Modified
 

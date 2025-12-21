@@ -71,11 +71,17 @@ pytest tests/ -v
 # Run specific test file
 pytest tests/test_routing.py -v
 
-# Run all enterprise audit tests
+# Run all enterprise audit tests (132 tests total)
 pytest tests/test_router_infrastructure.py tests/test_security_audit.py tests/test_usage_monitoring.py -v
 
-# Run usage monitoring tests only
+# Run router infrastructure tests (63 tests)
+pytest tests/test_router_infrastructure.py -v
+
+# Run usage monitoring tests (36 tests)
 pytest tests/test_usage_monitoring.py -v
+
+# Verify empty response bug fix
+pytest tests/test_router_infrastructure.py -v -k "test"
 ```
 
 ### Frontend Development

@@ -41,6 +41,7 @@
     "gpt-tokenizer": "^3.4.0",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.12.1",
+    "jspdf": "^3.0.4",
     "jszip": "^3.10.1",
     "katex": "^0.16.27",
     "mathjs": "^15.1.0",

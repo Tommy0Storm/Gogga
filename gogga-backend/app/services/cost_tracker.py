@@ -6,6 +6,7 @@ Essential for unit economics analysis and subscription viability.
 Now persists usage to SQLite via frontend API for billing/analytics.
 """
 import logging
+import ssl
 from typing import TypedDict, Final
 import httpx
 
@@ -17,6 +18,11 @@ logger = logging.getLogger(__name__)
 # Constants
 MILLION: Final[int] = 1_000_000
 FRONTEND_URL: Final[str] = settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else "http://localhost:3000"
+
+# Create SSL context that doesn't verify certs (for self-signed Docker certs)
+_ssl_context = ssl.create_default_context()
+_ssl_context.check_hostname = False
+_ssl_context.verify_mode = ssl.CERT_NONE
 
 
 def _get_provider(model: str, layer: str) -> str:
@@ -145,7 +151,7 @@ async def track_usage(
     
     # Persist to SQLite via frontend API
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, verify=_ssl_context) as client:
             await client.post(
                 f"{FRONTEND_URL}/api/usage/log",
                 json={
@@ -230,7 +236,7 @@ async def track_image_usage(
         # Convert USD cost to ZAR cents for storage
         cost_zar_cents = int(total_cost_zar * 100)
         
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, verify=_ssl_context) as client:
             await client.post(
                 f"{FRONTEND_URL}/api/usage/log",
                 json={
@@ -301,7 +307,7 @@ async def track_imagen_usage(
     try:
         cost_zar_cents = int(total_cost_zar * 100)
         
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, verify=_ssl_context) as client:
             await client.post(
                 f"{FRONTEND_URL}/api/usage/log",
                 json={
@@ -371,7 +377,7 @@ async def track_veo_usage(
     try:
         cost_zar_cents = int(total_cost_zar * 100)
         
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, verify=_ssl_context) as client:
             await client.post(
                 f"{FRONTEND_URL}/api/usage/log",
                 json={

@@ -1541,6 +1541,11 @@ class AIService:
                     assistant_content = retry_response.choices[0].message.content or ""
                     response = retry_response  # Update for usage tracking
                     logger.info(f"Retry response content length: {len(assistant_content)}")
+                    
+                    # FIX: Add fallback if post-search retry still returns empty
+                    if not assistant_content:
+                        assistant_content = "I found some search results but couldn't synthesize them properly. Please try again or rephrase your question."
+                        logger.warning(f"Empty response after post-search retry | tier={tier} | model={model_id}")
                 
                 # Handle empty response - retry with simpler prompt
                 if not assistant_content and not search_results:
@@ -1766,13 +1771,19 @@ class AIService:
             
             # Handle empty response - provide a smarter fallback message
             # Check if we have frontend tool calls that will produce output
-            has_chart_tool = any(
-                (hasattr(final_choice, 'tool_calls') and final_choice.tool_calls and 
-                 any(tc.function.name == 'create_chart' for tc in final_choice.tool_calls))
+            # FIX: Use proper boolean evaluation instead of buggy any() pattern
+            # that throws 'NoneType/bool object is not iterable'
+            has_chart_tool = (
+                hasattr(final_choice, 'tool_calls') 
+                and final_choice.tool_calls is not None 
+                and len(final_choice.tool_calls) > 0
+                and any(tc.function.name == 'create_chart' for tc in final_choice.tool_calls)
             )
-            has_image_tool = any(
-                (hasattr(final_choice, 'tool_calls') and final_choice.tool_calls and 
-                 any(tc.function.name == 'generate_image' for tc in final_choice.tool_calls))
+            has_image_tool = (
+                hasattr(final_choice, 'tool_calls') 
+                and final_choice.tool_calls is not None 
+                and len(final_choice.tool_calls) > 0
+                and any(tc.function.name == 'generate_image' for tc in final_choice.tool_calls)
             )
             
             if not final_content.strip():

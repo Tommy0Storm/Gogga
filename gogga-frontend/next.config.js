@@ -61,6 +61,9 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ['react-icons', 'lucide-react'],
+    // Next.js 16: Enable Turbopack filesystem cache to reduce memory usage
+    // Stores compiler artifacts on disk between runs for faster restarts
+    turbopackFileSystemCacheForDev: true,
   },
   async rewrites() {
     return [

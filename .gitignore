@@ -166,3 +166,16 @@ vertex-ai-key.json
 .cursor/rules/todo2.mdc
 .cursor/mcp.json
 .todo2/
+
+# Local artifacts / exports
+*.zip
+*.pdf
+
+# Do not commit extracted third-party archives
+IP/extracted_zip/
+
+# Next.js dev oddities
+gogga-frontend/.next-root-broken/
+
+# TypeScript incremental build info
+*.tsbuildinfo

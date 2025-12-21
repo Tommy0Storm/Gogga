@@ -8,6 +8,7 @@ export { WeatherForecast } from './WeatherForecast';
 export { WeatherWidget } from './WeatherWidget';
 export { WeatherPanel } from './WeatherPanel';
 export { WeatherSlidePanel } from './WeatherSlidePanel';
+export { GoggaForecast } from './GoggaForecast';
 
 // Hooks
 export { useWeather } from '../../hooks/useWeather';

@@ -198,7 +198,12 @@ JIGGA_MAX_TOKENS = QWEN_32B_MAX_TOKENS  # etc.
 ### Test Infrastructure
 - **File**: `tests/test_router_infrastructure.py` (63 tests)
 - **Coverage**: Token constants, tier routing, system prompts, keyword detection, edge cases
-- **Run**: `cd gogga-backend && python -m pytest tests/test_router_infrastructure.py -v`
+- **Run**: `cd gogga-backend && source venv314/bin/activate && python -m pytest tests/test_router_infrastructure.py -v`
+
+### Known Issues Fixed (Dec 21, 2025)
+- **Empty Response Bug**: `any()` pattern in `ai_service.py:1769-1775` threw TypeError when `tool_calls` was None
+- **Symptom**: Math questions returned `responseLength: 0` but `logsCount: 14`
+- **Fix**: Use explicit null checks: `hasattr(...) and tool_calls is not None and len(...) > 0 and any(...)`
 
 ---
 

@@ -99,6 +99,44 @@ import { MagicWandIcon, JiggaTierIcon, GoggaIcons } from '@/components/GoggaIcon
 <GoggaIcons.JiggaTier size={24} strokeWidth={1.5} />
 ```
 
+## Tool Category Icons (`/lib/toolshedStore.ts`)
+
+Unicode symbols for category filter tabs - NO DUPLICATES:
+| Category | Icon | Description |
+|----------|------|-------------|
+| All | ⊕ | Circle with plus - all tools |
+| Math & Finance | Σ | Sigma - calculations, stats |
+| Charts | ◱ | Square with quadrant - visualization |
+| Images | ◈ | Diamond - AI image generation |
+| Memory | ⬡ | Hexagon - store/recall info |
+
+## Tool Icon Map (`/lib/iconMapping.ts`)
+
+Lucide icons for individual tools - unique per tool type:
+| Tool Type | Lucide Icon | Example Tools |
+|-----------|-------------|---------------|
+| Math | Calculator | calculator, math, solve, goggasolve, wolfram_alpha |
+| Code | Code | execute_code, python, javascript, run_code |
+| Search | Search | search, web_search, google_search, find |
+| Web | Globe | browse, fetch_url, web, http |
+| Document | FileText | document, read_file, write_file, file |
+| Image | Image | generate_image, analyze_image, vision |
+| Chat | MessageSquare | chat, message, conversation |
+| Database | Database | database, query, sql |
+| AI | Brain | ai, llm, thinking |
+| Weather | CloudSun | weather, forecast |
+| Location | MapPin | location, geocode, places |
+| Time | Calendar/Clock | calendar, schedule, time, timer |
+| Email | Mail | email, send_email |
+| Notification | Bell | notification, notify |
+| Settings | Settings | settings, config |
+| Default | Wrench | unknown tools (fallback) |
+
+**Note**: The `getToolIcon()` function performs fuzzy matching:
+1. Direct match on normalized tool name
+2. Partial match if key is contained in tool name
+3. Falls back to Wrench for unknown tools
+
 ## Design Principles
 - All icons: Monochrome (black, currentColor)
 - Material Icons style with custom detail work

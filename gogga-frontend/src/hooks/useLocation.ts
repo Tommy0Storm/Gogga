@@ -17,6 +17,7 @@ export interface UserLocation {
   isManual: boolean;
   isApproximate?: boolean; // True when using IP-based location (less accurate)
   timestamp: number;
+  source?: 'gps' | 'ip' | 'manual' | 'cache' | 'suggestion'; // Track location source for debugging
 }
 
 // Weather data structure (optional integration)
@@ -26,6 +27,21 @@ export interface WeatherData {
   icon: string;
   humidity?: number;
   windSpeed?: number;
+}
+
+// Debug logging utility
+const DEBUG_LOCATION = process.env.NODE_ENV === 'development' || 
+  (typeof window !== 'undefined' && window.localStorage?.getItem('gogga_debug_location') === 'true');
+
+function debugLog(category: string, message: string, data?: unknown) {
+  if (!DEBUG_LOCATION) return;
+  const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+  const prefix = `[Location:${category}] ${timestamp}`;
+  if (data !== undefined) {
+    console.log(prefix, message, data);
+  } else {
+    console.log(prefix, message);
+  }
 }
 
 // Hook return type
@@ -45,6 +61,7 @@ interface UseLocationReturn {
   requestLocation: () => void;
   retryLocation: () => void;
   declineLocation: () => void;
+  promptLocation: () => void;
   setManualLocation: (locationText: string) => Promise<void>;
   setLocationFromSuggestion: (suggestion: {
     lat: string;
@@ -88,36 +105,48 @@ function isSecureContext(): boolean {
  */
 async function getLocationFromIP(): Promise<UserLocation | null> {
   try {
-    console.log('[Location] Attempting IP-based geolocation...');
+    debugLog('IP', 'Attempting IP-based geolocation...');
     const response = await fetch('https://ipapi.co/json/', {
       headers: { Accept: 'application/json' },
     });
 
     if (!response.ok) {
-      console.warn('[Location] IP geolocation failed:', response.status);
+      debugLog('IP', `IP geolocation failed with status: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
+    debugLog('IP', 'IP geolocation response:', { 
+      city: data.city, 
+      region: data.region, 
+      country: data.country_name,
+      lat: data.latitude,
+      lon: data.longitude,
+      ip: data.ip?.substring(0, 8) + '...' // Partial IP for privacy
+    });
 
     if (data.latitude && data.longitude) {
-      return {
+      const location: UserLocation = {
         lat: data.latitude,
         lon: data.longitude,
         city: data.city,
         country: data.country_name,
         displayName: data.city
-          ? `${data.city}, ${data.country_name}`
+          ? `${data.city}, ${data.region || data.country_name}`
           : data.country_name,
         isManual: false,
         isApproximate: true, // IP-based location is less accurate
         timestamp: Date.now(),
+        source: 'ip',
       };
+      debugLog('IP', 'IP location resolved:', location.displayName);
+      return location;
     }
 
+    debugLog('IP', 'IP response missing coordinates');
     return null;
   } catch (err) {
-    console.warn('[Location] IP geolocation error:', err);
+    debugLog('IP', 'IP geolocation error:', err);
     return null;
   }
 }
@@ -167,6 +196,7 @@ async function getWeatherByCoords(
 /**
  * Sanitize city name for geocoding API
  * Removes ward numbers, district suffixes, and other noise
+ * Falls back to parent city for SA suburbs that may not be found
  */
 function sanitizeCityName(city: string): string {
   // Remove "Ward X", "Ward XX", "District X" patterns
@@ -186,9 +216,61 @@ function sanitizeCityName(city: string): string {
     'mangaung': 'Bloemfontein',
   };
   
+  // SA suburb to city mappings for weather (suburb names that geocoding APIs might not find)
+  const suburbMappings: Record<string, string> = {
+    // Pretoria suburbs
+    'pretoriuspark': 'Pretoria',
+    'centurion': 'Pretoria',
+    'faerie glen': 'Pretoria',
+    'lynnwood': 'Pretoria',
+    'menlyn': 'Pretoria',
+    'waterkloof': 'Pretoria',
+    'hatfield': 'Pretoria',
+    'brooklyn': 'Pretoria',
+    'sunnyside': 'Pretoria',
+    'arcadia': 'Pretoria',
+    // Johannesburg suburbs
+    'sandton': 'Johannesburg',
+    'rosebank': 'Johannesburg',
+    'fourways': 'Johannesburg',
+    'midrand': 'Johannesburg',
+    'bryanston': 'Johannesburg',
+    'randburg': 'Johannesburg',
+    'roodepoort': 'Johannesburg',
+    'bedfordview': 'Johannesburg',
+    'edenvale': 'Johannesburg',
+    'boksburg': 'Johannesburg',
+    'kempton park': 'Johannesburg',
+    'benoni': 'Johannesburg',
+    'alberton': 'Johannesburg',
+    'soweto': 'Johannesburg',
+    // Cape Town suburbs
+    'sea point': 'Cape Town',
+    'claremont': 'Cape Town',
+    'constantia': 'Cape Town',
+    'camps bay': 'Cape Town',
+    'bellville': 'Cape Town',
+    'stellenbosch': 'Cape Town',
+    'paarl': 'Cape Town',
+    // Durban suburbs
+    'umhlanga': 'Durban',
+    'ballito': 'Durban',
+    'hillcrest': 'Durban',
+    'pinetown': 'Durban',
+    'westville': 'Durban',
+  };
+  
   const lowerCleaned = cleaned.toLowerCase().trim();
+  
+  // Check municipality mappings first
   if (cityMappings[lowerCleaned]) {
     return cityMappings[lowerCleaned];
+  }
+  
+  // Check suburb mappings
+  if (suburbMappings[lowerCleaned]) {
+    console.log(`[Weather] Suburb '${cleaned}' mapped to '${suburbMappings[lowerCleaned]}'`);
+    return suburbMappings[lowerCleaned];
   }
   
   return cleaned.trim() || city;
@@ -288,6 +370,11 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
       const savedConsent = localStorage.getItem(LOCATION_CONSENT_KEY);
       const savedLocation = localStorage.getItem(LOCATION_DATA_KEY);
 
+      debugLog('CACHE', 'Loading saved location...', { 
+        hasConsent: savedConsent, 
+        hasLocation: !!savedLocation 
+      });
+
       if (savedConsent === 'true') {
         setHasConsented(true);
 
@@ -295,17 +382,36 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
           const parsed = JSON.parse(savedLocation) as UserLocation;
           // Only use cached location if less than 1 hour old
           const oneHour = 60 * 60 * 1000;
+          const ageMinutes = Math.round((Date.now() - parsed.timestamp) / 60000);
+          
+          debugLog('CACHE', `Cached location age: ${ageMinutes} minutes`, {
+            city: parsed.city,
+            source: parsed.source,
+            isExpired: Date.now() - parsed.timestamp >= oneHour
+          });
+          
           if (Date.now() - parsed.timestamp < oneHour) {
-            setUserLocation(parsed);
-            // Fetch weather for cached location
-            if (parsed.city) {
+            // Mark as loaded from cache for debugging
+            const cachedLocation: UserLocation = {
+              ...parsed,
+              source: 'cache',
+            };
+            setUserLocation(cachedLocation);
+            debugLog('CACHE', 'Using cached location:', cachedLocation.displayName);
+            
+            // Fetch weather for cached location using coordinates if available
+            if (parsed.lat && parsed.lon) {
+              getWeatherByCoords(parsed.lat, parsed.lon).then(setWeatherData);
+            } else if (parsed.city) {
               getWeatherForecast(parsed.city).then(setWeatherData);
             }
+          } else {
+            debugLog('CACHE', 'Cached location expired, will request fresh');
           }
         }
       }
     } catch (e) {
-      console.error('[Location] Failed to load saved location:', e);
+      debugLog('CACHE', 'Failed to load saved location:', e);
     }
   }, []);
 
@@ -347,10 +453,10 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
         localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
         localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(ipLocation));
 
-        console.log('[Location] IP-based location obtained:', ipLocation.city);
+        debugLog('IP', 'IP-based location obtained:', ipLocation.city);
 
-        // Fetch weather if we have a city
-        if (ipLocation.city) {
+        // Fetch weather if we have coordinates
+        if (ipLocation.lat && ipLocation.lon) {
           const weather = await getWeatherByCoords(
             ipLocation.lat,
             ipLocation.lon
@@ -359,6 +465,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
         }
         setIsLoadingLocation(false);
       } else {
+        debugLog('IP', 'IP fallback failed, prompting manual entry');
         setLocationError('Could not detect location. Please enter manually.');
         setShowLocationPrompt(false);
         setShowManualLocation(true);
@@ -368,28 +475,30 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
 
     // Check if we're in a secure context (HTTPS, localhost, or 127.0.0.1)
     if (!isSecureContext()) {
-      console.warn('[Location] Not in secure context - trying IP fallback');
+      debugLog('GPS', 'Not in secure context - trying IP fallback');
       tryIPFallback('not_secure_context');
       return;
     }
 
     if (!('geolocation' in navigator)) {
-      console.warn('[Location] Geolocation not supported - trying IP fallback');
+      debugLog('GPS', 'Geolocation API not supported - trying IP fallback');
       tryIPFallback('geolocation_not_supported');
       return;
     }
 
-    console.log('[Location] Requesting HTTPS geolocation permission...');
+    debugLog('GPS', 'Requesting HTTPS geolocation permission...');
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const { latitude, longitude } = position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
+        debugLog('GPS', `GPS coordinates received (accuracy: ${accuracy?.toFixed(0) || '?'}m)`, { latitude, longitude });
 
         const newLocation: UserLocation = {
           lat: latitude,
           lon: longitude,
           isManual: false,
           timestamp: Date.now(),
+          source: 'gps',
         };
 
         setUserLocation(newLocation);
@@ -397,15 +506,18 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
         setHasConsented(true);
         localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
 
-        console.log('[Location] GPS location obtained:', latitude, longitude);
+        debugLog('GPS', 'GPS location obtained:', { latitude, longitude });
 
         // Reverse geocode to get full address
         try {
+          debugLog('GEOCODE', 'Reverse geocoding coordinates...');
           const response = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
             { headers: { 'User-Agent': 'Gogga-App/1.0' } }
           );
           const data = await response.json();
+          
+          debugLog('GEOCODE', 'Nominatim response address:', data.address);
 
           // For display, prefer suburb/town for more specific location
           const displayCity =
@@ -422,6 +534,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
             street,
             country,
             displayName: data.display_name,
+            source: 'gps', // Confirm source is GPS
           };
 
           setUserLocation(updatedLocation);
@@ -430,18 +543,18 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
             JSON.stringify(updatedLocation)
           );
 
-          console.log(
-            '[Location] Address detected:',
+          debugLog('GEOCODE', 'Address resolved:', {
             street,
-            displayCity,
-            country
-          );
+            city: displayCity,
+            country,
+            displayName: data.display_name?.substring(0, 50) + '...'
+          });
 
           // Fetch weather using coordinates directly (most reliable)
           const weather = await getWeatherByCoords(latitude, longitude);
           setWeatherData(weather);
         } catch (err) {
-          console.error('[Location] Reverse geocode failed:', err);
+          debugLog('GEOCODE', 'Reverse geocode failed:', err);
           // Still save the coordinates even if geocoding fails
           localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
         }
@@ -449,14 +562,14 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
         setIsLoadingLocation(false);
       },
       async (error) => {
-        console.warn('[Location] GPS error:', error.code, error.message);
+        debugLog('GPS', `GPS error code ${error.code}:`, error.message);
 
         // Try IP fallback for position unavailable or timeout
         if (
           error.code === error.POSITION_UNAVAILABLE ||
           error.code === error.TIMEOUT
         ) {
-          console.log('[Location] GPS failed, trying IP fallback...');
+          debugLog('GPS', 'GPS failed, trying IP fallback...');
           await tryIPFallback(`gps_error_${error.code}`);
           return;
         }
@@ -628,6 +741,26 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
   }, []);
 
   /**
+   * Reset declined state and re-prompt for location permission
+   * Called when user clicks "Add location" button after previously declining
+   */
+  const promptLocation = useCallback(() => {
+    // Clear the declined state so we can prompt again
+    const savedConsent = localStorage.getItem(LOCATION_CONSENT_KEY);
+    if (savedConsent === 'declined') {
+      localStorage.removeItem(LOCATION_CONSENT_KEY);
+      debugLog('PROMPT', 'Cleared declined state, re-prompting for permission');
+    }
+    
+    setLocationError(null);
+    setRetryCount(0);
+    
+    // Show the location prompt modal
+    setShowLocationPrompt(true);
+    console.log('[Location] Re-prompting for location permission');
+  }, []);
+
+  /**
    * Set location manually by address/city name
    */
   const setManualLocation = useCallback(async (locationText: string) => {
@@ -662,6 +795,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
           displayName: result.display_name,
           isManual: true,
           timestamp: Date.now(),
+          source: 'manual',
         };
 
         setUserLocation(newLocation);
@@ -671,12 +805,14 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
         localStorage.setItem(LOCATION_CONSENT_KEY, 'true');
         localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(newLocation));
 
-        console.log('[Location] Manual location set:', result.display_name);
+        debugLog('MANUAL', 'Manual location set:', result.display_name);
 
-        // Fetch weather for manual location
-        const cityName = newLocation.city;
-        if (cityName) {
-          const weather = await getWeatherForecast(cityName);
+        // Fetch weather for manual location using coordinates
+        if (newLocation.lat && newLocation.lon) {
+          const weather = await getWeatherByCoords(newLocation.lat, newLocation.lon);
+          setWeatherData(weather);
+        } else if (newLocation.city) {
+          const weather = await getWeatherForecast(newLocation.city);
           setWeatherData(weather);
         }
       } else {
@@ -685,7 +821,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
         );
       }
     } catch (error) {
-      console.error('[Location] Manual geocoding failed:', error);
+      debugLog('MANUAL', 'Manual geocoding failed:', error);
       setLocationError('Failed to find location. Please try again.');
     } finally {
       setIsLoadingLocation(false);
@@ -712,6 +848,8 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
       setIsLoadingLocation(true);
       setLocationError(null);
 
+      debugLog('SUGGEST', 'Setting location from suggestion:', suggestion.display_name);
+
       try {
         const cityName =
           suggestion.address?.city ||
@@ -726,6 +864,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
           street: suggestion.address?.road,
           country: suggestion.address?.country,
           displayName: suggestion.display_name,
+          source: 'suggestion',
           isManual: true,
           timestamp: Date.now(),
         };
@@ -782,27 +921,50 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
 
   /**
    * Get location context string for LLM prompts
+   * Enhanced with safety checks and better formatting for places_search tool
    */
   const getLocationContext = useCallback((): string | null => {
     if (!userLocation) return null;
 
+    // Safety check: Ensure lat/lon are valid numbers
+    const lat = typeof userLocation.lat === 'number' && !isNaN(userLocation.lat) 
+      ? userLocation.lat 
+      : null;
+    const lon = typeof userLocation.lon === 'number' && !isNaN(userLocation.lon) 
+      ? userLocation.lon 
+      : null;
+
+    // If we have no valid location data, return null
+    if (lat === null && lon === null && !userLocation.city && !userLocation.displayName) {
+      return null;
+    }
+
     const parts: string[] = [];
 
-    if (userLocation.city) {
-      parts.push(`City: ${userLocation.city}`);
-    }
-    if (userLocation.street) {
-      parts.push(`Street/Area: ${userLocation.street}`);
-    }
-    if (userLocation.country) {
-      parts.push(`Country: ${userLocation.country}`);
+    // Include full display name for better context (e.g., "Pretoriuspark, Pretoria, South Africa")
+    if (userLocation.displayName) {
+      parts.push(`Location: ${userLocation.displayName}`);
+    } else if (userLocation.city) {
+      // Fallback to city if no display name
+      const cityWithCountry = userLocation.country 
+        ? `${userLocation.city}, ${userLocation.country}` 
+        : userLocation.city;
+      parts.push(`Location: ${cityWithCountry}`);
     }
 
-    parts.push(
-      `Coordinates: ${userLocation.lat.toFixed(4)}, ${userLocation.lon.toFixed(
-        4
-      )}`
-    );
+    if (userLocation.street && !userLocation.displayName?.includes(userLocation.street)) {
+      parts.push(`Street/Area: ${userLocation.street}`);
+    }
+
+    // Only add coordinates if we have valid lat/lon (safe .toFixed call)
+    if (lat !== null && lon !== null) {
+      parts.push(`Coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    }
+
+    // Add accuracy note for IP-based locations
+    if (userLocation.isApproximate) {
+      parts.push(`(Note: Approximate location based on IP address)`);
+    }
 
     if (weatherData) {
       parts.push(
@@ -810,7 +972,18 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
       );
     }
 
-    return `[User Location Context]\n${parts.join('\n')}`;
+    // Add instruction for AI to use this for places_search tool
+    const context = `[User Location Context - Use for places_search tool 'location' parameter]\n${parts.join('\n')}`;
+    
+    // Debug log the context being sent to the LLM
+    debugLog('CONTEXT', 'getLocationContext called:', {
+      source: userLocation.source,
+      city: userLocation.city,
+      isApproximate: userLocation.isApproximate,
+      contextLength: context.length,
+    });
+    
+    return context;
   }, [userLocation, weatherData]);
 
   return {
@@ -828,6 +1001,7 @@ export function useLocation(autoPrompt: boolean = true): UseLocationReturn {
     requestLocation,
     retryLocation,
     declineLocation,
+    promptLocation,
     setManualLocation,
     setLocationFromSuggestion,
     setManualLocationInput,

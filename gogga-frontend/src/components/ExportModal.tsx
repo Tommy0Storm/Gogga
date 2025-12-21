@@ -44,6 +44,7 @@ interface ExportModalProps {
   sessionId: string | null;
   sessionTitle?: string;
   tier: 'free' | 'jive' | 'jigga';
+  userName?: string;
 }
 
 interface ExportState {
@@ -110,6 +111,7 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
   sessionId,
   sessionTitle = 'Chat Session',
   tier,
+  userName = 'GOGGA User',
 }) => {
   const [exportState, setExportState] = useState<ExportState>({
     isExporting: false,
@@ -129,6 +131,7 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
   });
   
   const isPersistenceEnabled = tier === 'jive' || tier === 'jigga';
+  const premiumTier = tier === 'jive' || tier === 'jigga' ? tier : undefined;
   
   // Reset state when modal opens
   React.useEffect(() => {
@@ -140,17 +143,28 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
   
   // Export handlers
   const handleQuickExport = async () => {
-    if (!sessionId) return;
+    if (!sessionId || !premiumTier) return;
     setActiveExport('quick');
     setExportState({ isExporting: true, result: null });
     
-    const result = await quickExportCurrentSession(sessionId);
+    const result = await exportChatToPdf({
+      mode: 'current-session',
+      sessionId,
+      includeCharts: true,
+      includeImages: true,
+      includeThinking: false,
+      includeTimestamps: true,
+      pageSize: 'a4',
+      orientation: 'portrait',
+      userName,
+      userTier: premiumTier,
+    });
     setExportState({ isExporting: false, result });
     setActiveExport(null);
   };
   
   const handleCustomExport = async () => {
-    if (!sessionId) return;
+    if (!sessionId || !premiumTier) return;
     setActiveExport('custom');
     setExportState({ isExporting: true, result: null });
     
@@ -158,6 +172,8 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
       mode: 'current-session',
       sessionId,
       ...options,
+      userName,
+      userTier: premiumTier,
     } as ExportOptions);
     
     setExportState({ isExporting: false, result });
@@ -165,10 +181,21 @@ const ExportModalContent: React.FC<ExportModalProps> = ({
   };
   
   const handleFullHistoryExport = async () => {
+    if (!premiumTier) return;
     setActiveExport('history');
     setExportState({ isExporting: true, result: null });
     
-    const result = await exportFullHistory();
+    const result = await exportChatToPdf({
+      mode: 'full-history',
+      includeCharts: true,
+      includeImages: true,
+      includeThinking: false,
+      includeTimestamps: true,
+      pageSize: 'a4',
+      orientation: 'portrait',
+      userName,
+      userTier: premiumTier,
+    });
     setExportState({ isExporting: false, result });
     setActiveExport(null);
   };

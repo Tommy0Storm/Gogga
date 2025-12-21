@@ -5,12 +5,13 @@ import React, { useEffect, useRef } from 'react';
 interface GoggaSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
-  overlay?: boolean; // Pin to center of screen
+  overlay?: boolean; // Pin to center of screen with 3D effect
 }
 
 /**
  * Gogga Transparent 3D Spinner
  * Morphing logo with particle flow animation
+ * When overlay=true, creates a floating 3D effect above all content
  */
 export const GoggaSpinner: React.FC<GoggaSpinnerProps> = ({
   size = 'md',
@@ -19,11 +20,11 @@ export const GoggaSpinner: React.FC<GoggaSpinnerProps> = ({
 }) => {
   const particlesRef = useRef<HTMLDivElement>(null);
 
-  // Size configurations
+  // Size configurations - larger for overlay mode
   const sizeConfig = {
     sm: { container: 60, logo: 22, particle: 6, flowArea: 50 },
-    md: { container: 120, logo: 44, particle: 12, flowArea: 100 },
-    lg: { container: 180, logo: 66, particle: 18, flowArea: 150 },
+    md: { container: overlay ? 160 : 120, logo: overlay ? 56 : 44, particle: overlay ? 14 : 12, flowArea: overlay ? 130 : 100 },
+    lg: { container: 200, logo: 80, particle: 20, flowArea: 170 },
   };
 
   const config = sizeConfig[size];
@@ -139,8 +140,29 @@ export const GoggaSpinner: React.FC<GoggaSpinnerProps> = ({
           pointerEvents: 'none',
         }}
       >
-        {content}
+        {/* 3D floating transparent container - no background circle */}
+        <div
+          className="gogga-3d-container"
+          style={{
+            background: 'transparent',
+            padding: '24px',
+            animation: 'float3d 3s ease-in-out infinite',
+            transform: 'perspective(1000px) rotateX(5deg)',
+            filter: 'drop-shadow(0 8px 20px rgba(0, 0, 0, 0.15))',
+          }}
+        >
+          {content}
+        </div>
         <style jsx>{`
+        @keyframes float3d {
+          0%, 100% {
+            transform: perspective(1000px) rotateX(5deg) translateY(0px);
+          }
+          50% {
+            transform: perspective(1000px) rotateX(-5deg) translateY(-10px);
+          }
+        }
+        
         @keyframes morph-a {
           0%,
           100% {
@@ -194,7 +216,8 @@ export const GoggaSpinner: React.FC<GoggaSpinnerProps> = ({
 
         @media (prefers-reduced-motion: reduce) {
           .particle,
-          .brand-morph-icon {
+          .brand-morph-icon,
+          .gogga-3d-container {
             animation: none !important;
           }
         }

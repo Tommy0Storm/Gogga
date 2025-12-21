@@ -479,8 +479,27 @@ class SearchService:
         """
         start_time = time.perf_counter()
         
+        # Enhanced location handling
+        # If location is generic or empty, default to South Africa
+        if not location or location.strip().lower() in ["", "unknown", "n/a", "none"]:
+            location = "South Africa"
+            logger.info(f"Places search: No specific location, defaulting to '{location}'")
+        
+        # Enhance query with location if not already included
+        # This helps Serper.dev return better results
+        enhanced_query = query
+        location_lower = location.lower()
+        query_lower = query.lower()
+        
+        # If query doesn't mention the location, include location context
+        if not any(loc_part in query_lower for loc_part in location_lower.split(",")):
+            # Only append location to query if it's specific enough (not just "South Africa")
+            if location.lower() != "south africa" and len(location.split(",")) > 0:
+                enhanced_query = f"{query} near {location}"
+                logger.debug(f"Places search: Enhanced query to '{enhanced_query}'")
+        
         # Check cache
-        cache_key = self._get_cache_key(f"places:{query}", location=location, num_results=num_results)
+        cache_key = self._get_cache_key(f"places:{enhanced_query}", location=location, num_results=num_results)
         cached = self._get_cached(cache_key)
         if cached:
             cached["cached"] = True
@@ -489,7 +508,7 @@ class SearchService:
         client = await self._get_client()
         
         payload = {
-            "q": query,
+            "q": enhanced_query,
             "location": location,
             "gl": "za",  # South Africa
             "num": min(num_results, 20),
@@ -510,6 +529,20 @@ class SearchService:
             response.raise_for_status()
             data = response.json()
             
+        except httpx.TimeoutException:
+            logger.error(f"Places search timeout for query: {query}")
+            return {
+                "success": False,
+                "error": "Search timed out. Please try again.",
+                "context": "[Places search timed out. The search service took too long to respond. Please try a more specific search or try again later.]",
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Places search HTTP error: {e.response.status_code} - {e.response.text}")
+            return {
+                "success": False,
+                "error": f"Search service error: {e.response.status_code}",
+                "context": f"[Places search failed: HTTP {e.response.status_code}. Please try again.]",
+            }
         except Exception as e:
             logger.error(f"Places search failed: {e}")
             return {
