@@ -156,12 +156,33 @@ signature = hashlib.md5(query_string.encode("utf-8")).hexdigest()
 10. **CePO Cerebras** → no `reasoning_effort`, no `n>1` (use `re2&cot_reflection`)
 11. **Prisma 7 relations** → Use PascalCase: `include: { Subscription: true }`, NOT `subscription`
 12. **Tailwind v4 CSS vars** → Use `bg-(--var-name)` NOT `bg-[var(--var-name)]`
+13. **Next.js rewrites + self-signed certs** → Use API routes with `https.Agent({ rejectUnauthorized: false })`
+14. **EmailJS env vars** → Use `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID` (not hardcoded)
+15. **Bug button position** → `bottom-4 left-4` (avoid overlap with admin gear at `bottom-4 right-4`)
 
 ## Docker Best Practices (CRITICAL)
 
 ### ⚠️ NEVER mount node_modules as a volume!
 Native modules (better-sqlite3, sharp) compile platform-specific binaries.
 Volume mounts overwrite container binaries with incompatible host binaries.
+
+### ⚠️ Next.js rewrites DON'T work with self-signed HTTPS!
+Use API routes with custom `https.Agent` instead:
+
+```typescript
+// src/app/api/v1/tools/route.ts
+import https from 'https';
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+// Use native https module, NOT fetch()
+const req = https.request({
+  hostname: 'backend',
+  port: 8000,
+  path: '/api/v1/tools',
+  agent: httpsAgent,
+}, callback);
+```
 
 ```yaml
 # ❌ WRONG - causes "bindings file not found" errors

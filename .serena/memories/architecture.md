@@ -7,7 +7,7 @@ GOGGA runs across **two Ubuntu servers** for optimized resource allocation:
 | Server | IP | Role | Services |
 |--------|-----|------|----------|
 | **Primary** | 192.168.0.130 | Main stack, VS Code host | Frontend, Backend, Admin, Proxy |
-| **Worker** | 192.168.0.129 | AI workloads, shared storage | CePO, cAdvisor, NFS DEV-Drive |
+| **Worker** | 192.168.0.198 | AI workloads, shared storage | CePO, cAdvisor, NFS DEV-Drive |
 
 Windows VS Code connects to **Primary only** (10.0.0.1 → 192.168.0.130 via SSH).
 Primary controls Worker via Docker context (`tcp://192.168.0.129:2376`).

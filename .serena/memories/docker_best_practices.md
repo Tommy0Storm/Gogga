@@ -1,5 +1,52 @@
 # Docker Best Practices for Node.js Development (Dec 2025)
 
+## ⚠️ CRITICAL: HTTPS Backend Proxy with Self-Signed Certs
+
+The backend runs HTTPS with self-signed certificates. **Next.js rewrites DO NOT work** with self-signed certs even with `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+
+### Solution: Use API Routes with Custom HTTPS Agent
+
+```typescript
+// src/app/api/v1/tools/route.ts
+import https from 'https';
+
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false, // Accept self-signed certs
+});
+
+// Use native Node.js https module, NOT fetch()
+const response = await new Promise((resolve, reject) => {
+  const url = new URL(backendUrl);
+  const options = {
+    hostname: url.hostname,
+    port: url.port || 443,
+    path: url.pathname + url.search,
+    method: 'GET',
+    agent: url.protocol === 'https:' ? httpsAgent : undefined,
+  };
+  const req = https.request(options, (res) => { /* ... */ });
+  req.end();
+});
+```
+
+### Current Proxy Configuration
+
+| Endpoint | Handler | Notes |
+|----------|---------|-------|
+| `/api/v1/tools` | API route (`src/app/api/v1/tools/route.ts`) | Custom https.Agent |
+| `/api/v1/tools/execute` | API route (`src/app/api/v1/tools/execute/route.ts`) | Custom https.Agent |
+| `/api/v1/images/*` | next.config.js rewrite | Uses HTTP internally |
+| `/api/v1/payments/*` | next.config.js rewrite | Uses HTTP internally |
+| `/health` | next.config.js rewrite | Uses HTTP internally |
+
+### Environment Variables
+
+```yaml
+# docker-compose.yml frontend environment
+BACKEND_URL: https://backend:8000  # HTTPS for secure communication
+NODE_TLS_REJECT_UNAUTHORIZED: "0"  # Accept self-signed (belt-and-suspenders)
+```
+
 ## ⚠️ CRITICAL: node_modules Volume Anti-Pattern
 
 **NEVER mount `node_modules` as a bind mount or volume for Node.js containers!**
