@@ -72,14 +72,7 @@ const nextConfig = {
         source: '/api/v1/payments/:path*',
         destination: `${BACKEND_URL}/api/v1/payments/:path*`,
       },
-      {
-        source: '/api/v1/tools/:path*',
-        destination: `${BACKEND_URL}/api/v1/tools/:path*`,
-      },
-      {
-        source: '/api/v1/tools',
-        destination: `${BACKEND_URL}/api/v1/tools`,
-      },
+      // Tools routes handled by API routes (src/app/api/v1/tools/) for self-signed cert support
       {
         source: '/health',
         destination: `${BACKEND_URL}/health`,

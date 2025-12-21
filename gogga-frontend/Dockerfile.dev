@@ -18,8 +18,10 @@ RUN pnpm install --frozen-lockfile && \
     cd /app && pnpm rebuild better-sqlite3 || true
 
 # Set backend URL for Docker networking
-ENV BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=https://backend:8000
 ENV NODE_ENV=development
+# Accept self-signed certificates for internal Docker proxy
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 
 # Expose port
 EXPOSE 3000
