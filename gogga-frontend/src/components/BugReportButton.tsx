@@ -44,7 +44,7 @@ export function BugReportButton() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 bg-red-600 text-white p-3 rounded-full shadow-lg hover:bg-red-700 transition-colors z-50"
+        className="fixed bottom-4 left-4 bg-red-600 text-white p-3 rounded-full shadow-lg hover:bg-red-700 transition-colors z-40"
         title="Report Bug"
       >
         <AlertCircle className="w-6 h-6" />
