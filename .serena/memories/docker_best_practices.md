@@ -247,7 +247,7 @@ CMD ["npm", "run", "dev"]
 docker compose up --watch frontend
 
 # Force rebuild (after Dockerfile changes)
-docker compose build --no-cache frontend
+docker compose build --no-cache frontend && docker compose up -d frontend
 
 # Start local dev (faster, recommended)
 cd gogga-frontend && pnpm dev:http
@@ -258,6 +258,75 @@ docker volume rm gogga_frontend_node_modules gogga_admin_node_modules
 # Full cleanup and rebuild
 docker compose down -v && docker compose up -d --build
 ```
+
+## 🔧 Frontend Container Rebuild Procedure (Dec 2025)
+
+When you need to rebuild the frontend container (e.g., after Dockerfile changes, package.json changes, or config changes):
+
+```bash
+# Full rebuild with cache clear
+cd /home/ubuntu/Dev-Projects/Gogga
+docker compose down frontend
+docker compose build --no-cache frontend
+docker compose up -d frontend
+
+# Verify the container started correctly
+docker compose logs --tail 30 frontend
+```
+
+### Key Points:
+1. **pnpm version pinned**: Use `pnpm@10.12.1` in Dockerfile.dev (not `pnpm@latest` - causes npm registry timeouts)
+2. **Turbopack filesystem cache**: Disabled in Docker via `DOCKER_ENV=true` environment variable
+3. **No .next volume mount**: Container uses ephemeral .next to prevent cache corruption
+4. **Source bind mount**: `./gogga-frontend:/app` syncs file changes automatically
+
+### Checking for successful rebuild:
+- Look for `⨯ turbopackFileSystemCacheForDev` (crossed out = disabled, which is correct for Docker)
+- Verify `✓ Ready in xxxms` appears in logs
+- First compilation takes ~60-120s (cold cache), subsequent requests ~200-900ms
+
+## ⚠️ Turbopack Cache Corruption in Docker (Fixed Dec 2025)
+
+**Problem**: Turbopack's persistent filesystem cache (`turbopackFileSystemCacheForDev: true`) corrupts when container restarts, causing:
+- `Failed to restore task data from cache`  
+- `Failed to load chunk /_next/static/chunks/...`
+- `Eish! Something went wrong` errors
+
+**Solution**: Disable Turbopack filesystem cache in Docker:
+
+### 1. next.config.js
+```javascript
+experimental: {
+  optimizePackageImports: ['react-icons', 'lucide-react'],
+  // Disable Turbopack filesystem cache in Docker (causes corruption on restart)
+  turbopackFileSystemCacheForDev: process.env.DOCKER_ENV !== 'true',
+}
+```
+
+### 2. docker-compose.yml
+```yaml
+frontend:
+  environment:
+    DOCKER_ENV: "true"  # Triggers cache disable in next.config.js
+  volumes:
+    - ./gogga-frontend:/app
+    - ./gogga-frontend/prisma:/app/prisma
+    - ./gogga-frontend/certs:/app/certs:ro
+    - frontend_node_modules:/app/node_modules
+    # NO .next volume - prevents cache persistence/corruption
+```
+
+### 3. Dockerfile.dev pnpm version
+```dockerfile
+# Use specific version - @latest causes npm registry timeout
+RUN apk update && apk add --no-cache python3 make g++ wget && \
+    corepack enable && corepack prepare pnpm@10.12.1 --activate
+```
+
+### Result:
+- Container restarts cleanly with fresh Turbopack cache
+- Each startup does cold compilation (~60-120s) but no corruption
+- Browser requires hard refresh (`Ctrl+Shift+R`) after container restart to clear stale chunk cache
 
 ## When Docker Dev Fails, Use Local Dev
 

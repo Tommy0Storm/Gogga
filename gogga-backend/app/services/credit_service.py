@@ -28,6 +28,7 @@ class ActionType(str, Enum):
     UPSCALE = "upscale"
     VIDEO_SECOND = "video_second"
     GOGGA_TALK_MIN = "gogga_talk_min"
+    ICON_GENERATE = "icon_generate"
 
 
 class DeductionSource(str, Enum):
@@ -48,6 +49,7 @@ class UsageState:
     upscales_used: int
     video_seconds_used: int
     gogga_talk_mins_used: float
+    icons_used: int
 
 
 @dataclass
@@ -71,6 +73,7 @@ TIER_LIMITS = {
         "upscales": 0,
         "video_seconds": 0,
         "gogga_talk_mins": 0,
+        "icons": settings.TIER_FREE_ICONS,
     },
     "JIVE": {
         "chat_tokens": settings.TIER_JIVE_CHAT_TOKENS,
@@ -79,6 +82,7 @@ TIER_LIMITS = {
         "upscales": settings.TIER_JIVE_UPSCALES,
         "video_seconds": settings.TIER_JIVE_VIDEO_SECONDS,
         "gogga_talk_mins": settings.TIER_JIVE_GOGGA_TALK_MINS,
+        "icons": settings.TIER_JIVE_ICONS,
     },
     "JIGGA": {
         "chat_tokens": settings.TIER_JIGGA_CHAT_TOKENS,
@@ -87,6 +91,7 @@ TIER_LIMITS = {
         "upscales": settings.TIER_JIGGA_UPSCALES,
         "video_seconds": settings.TIER_JIGGA_VIDEO_SECONDS,
         "gogga_talk_mins": settings.TIER_JIGGA_GOGGA_TALK_MINS,
+        "icons": settings.TIER_JIGGA_ICONS,
     },
 }
 
@@ -98,6 +103,7 @@ CREDIT_COSTS = {
     ActionType.UPSCALE: settings.CREDIT_COST_UPSCALE,
     ActionType.VIDEO_SECOND: settings.CREDIT_COST_VIDEO_SECOND,
     ActionType.GOGGA_TALK_MIN: settings.CREDIT_COST_GOGGA_TALK_MIN,
+    ActionType.ICON_GENERATE: settings.CREDIT_COST_ICON,
 }
 
 # JIVE credit restrictions (can only use credits for these)
@@ -105,6 +111,7 @@ JIVE_CREDIT_ALLOWED = {
     ActionType.CHAT_10K_TOKENS,
     ActionType.IMAGE_CREATE,
     ActionType.GOGGA_TALK_MIN,
+    ActionType.ICON_GENERATE,  # Icons allowed for JIVE credits
 }
 
 
@@ -119,6 +126,21 @@ class CreditService:
         if cls._client is None or cls._client.is_closed:
             cls._client = httpx.AsyncClient(timeout=30.0)
         return cls._client
+    
+    @classmethod
+    def get_tier_limit(cls, tier: str, action_type: str) -> int | float:
+        """
+        Get the usage limit for a specific action type and tier.
+        
+        Args:
+            tier: User tier (FREE, JIVE, JIGGA)
+            action_type: Type of action (icons, images, chat_tokens, etc.)
+            
+        Returns:
+            The limit for that action type, or 0 if not found
+        """
+        tier_limits = TIER_LIMITS.get(tier.upper(), TIER_LIMITS["FREE"])
+        return tier_limits.get(action_type, 0)
     
     @classmethod
     async def get_user_state(cls, user_id: str) -> UsageState:
@@ -146,6 +168,7 @@ class CreditService:
                 upscales_used=data.get("usageUpscales", 0),
                 video_seconds_used=data.get("usageVideoSeconds", 0),
                 gogga_talk_mins_used=data.get("usageGoggaTalkMins", 0.0),
+                icons_used=data.get("usageIcons", 0),
             )
         except Exception as e:
             # Default to FREE tier with no usage on error
@@ -159,6 +182,7 @@ class CreditService:
                 upscales_used=0,
                 video_seconds_used=0,
                 gogga_talk_mins_used=0.0,
+                icons_used=0,
             )
     
     @classmethod
@@ -189,6 +213,7 @@ class CreditService:
             ActionType.UPSCALE: ("upscales", state.upscales_used, quantity),
             ActionType.VIDEO_SECOND: ("video_seconds", state.video_seconds_used, quantity),
             ActionType.GOGGA_TALK_MIN: ("gogga_talk_mins", state.gogga_talk_mins_used, quantity),
+            ActionType.ICON_GENERATE: ("icons", state.icons_used, quantity),
         }
         
         limit_key, current_usage, usage_increment = usage_map[action]
@@ -237,6 +262,49 @@ class CreditService:
             allowed=False,
             source=None,
             reason=f"Insufficient credits for {action.value}. Need {credits_needed} credits, have {state.credit_balance}.",
+        )
+    
+    @classmethod
+    async def deduct_action(
+        cls,
+        state: UsageState,
+        action: ActionType,
+        quantity: int = 1,
+    ) -> ActionResult:
+        """
+        Deduct usage for an action after it completes.
+        
+        This is a convenience wrapper that uses check_action result
+        and deducts from the appropriate source.
+        
+        Args:
+            state: User's current usage state
+            action: Action type being billed
+            quantity: Number of units
+            
+        Returns:
+            ActionResult with deduction status
+        """
+        # First check if action is allowed
+        check_result = cls.check_action(state, action, quantity)
+        
+        if not check_result.allowed:
+            return check_result
+        
+        # If using credits, update the state
+        if check_result.source == DeductionSource.CREDITS:
+            # Credits are deducted - this is tracked by the frontend
+            return ActionResult(
+                allowed=True,
+                source=DeductionSource.CREDITS,
+                credits_deducted=check_result.credits_deducted,
+            )
+        
+        # Subscription or free tier - just return success
+        return ActionResult(
+            allowed=True,
+            source=check_result.source,
+            credits_deducted=0,
         )
     
     @classmethod

@@ -83,6 +83,7 @@ class TestActionCheck:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         result = CreditService.check_action(state, ActionType.IMAGE_CREATE, 1)
         
@@ -101,6 +102,7 @@ class TestActionCheck:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         result = CreditService.check_action(state, ActionType.IMAGE_CREATE, 1)
         
@@ -119,6 +121,7 @@ class TestActionCheck:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         result = CreditService.check_action(state, ActionType.CHAT_10K_TOKENS, 1)
         
@@ -137,6 +140,7 @@ class TestActionCheck:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         result = CreditService.check_action(state, ActionType.IMAGE_CREATE, 1)
         
@@ -156,6 +160,7 @@ class TestActionCheck:
             upscales_used=0,
             video_seconds_used=5,  # At limit
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         
         # Video not in JIVE allowed list
@@ -226,6 +231,7 @@ class TestFreeTier:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         result = CreditService.check_action(state, ActionType.CHAT_10K_TOKENS, 1)
         
@@ -243,6 +249,7 @@ class TestFreeTier:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         result = CreditService.check_action(state, ActionType.IMAGE_CREATE, 1)
         
@@ -260,6 +267,7 @@ class TestFreeTier:
             upscales_used=0,
             video_seconds_used=0,
             gogga_talk_mins_used=0,
+            icons_used=0,
         )
         
         # All premium features denied

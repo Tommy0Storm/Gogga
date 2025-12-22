@@ -74,28 +74,29 @@ export function GoggaTalkButton({
           : '0 2px 8px rgba(0, 0, 0, 0.2)',
       }}
     >
-      {/* Speech/Sound Wave Icon */}
+      {/* Transparent Chat Bubble Icon */}
       <div className="absolute inset-0 flex items-center justify-center">
         <svg 
           width={iconSize} 
           height={iconSize} 
           viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="white"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          fill="none"
           style={{
             filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))',
           }}
         >
-          {/* Speech bubble with sound waves */}
-          <path d="M12 18.5C15.5 18.5 18.5 15.5 18.5 12C18.5 8.5 15.5 5.5 12 5.5" />
-          <path d="M12 14.5C13.38 14.5 14.5 13.38 14.5 12C14.5 10.62 13.38 9.5 12 9.5" />
-          <circle cx="8" cy="12" r="2" fill="white" />
-          {/* Sound waves */}
-          <path d="M19 9C20.5 10.5 20.5 13.5 19 15" opacity="0.7" />
-          <path d="M21 7C23.5 9.5 23.5 14.5 21 17" opacity="0.5" />
+          {/* Chat bubble outline */}
+          <path 
+            d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V14C20 15.1046 19.1046 16 18 16H9L5 20V6Z" 
+            stroke="white" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          />
+          {/* Three dots inside bubble */}
+          <circle cx="8" cy="10" r="1.5" fill="white" />
+          <circle cx="12" cy="10" r="1.5" fill="white" />
+          <circle cx="16" cy="10" r="1.5" fill="white" />
         </svg>
       </div>
 

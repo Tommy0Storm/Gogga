@@ -139,7 +139,7 @@ class Settings(BaseSettings):
     MEDIA_JIGGA_VIDEO_AUDIO_MINUTES: int = 10  # 10 minutes/month video+audio
     
     # Vertex AI Configuration
-    VERTEX_PROJECT_ID: str = Field(default="", description="Google Cloud Project ID")
+    VERTEX_PROJECT_ID: str = Field(default="general-dev-480621", description="Google Cloud Project ID")
     VERTEX_LOCATION: str = Field(default="us-central1", description="Vertex AI region")
     
     # Vertex AI Model Names (Dec 2025 - from official docs)
@@ -148,6 +148,7 @@ class Settings(BaseSettings):
     IMAGEN_V4_UPSCALE_MODEL: str = "imagen-4.0-upscale-preview"  # Upscale to 2K/3K/4K
     VEO_MODEL: str = "veo-3.1-generate-001"  # Video generation
     VEO_FAST_MODEL: str = "veo-3.1-fast-generate-001"  # Faster video generation
+    GEMINI_FLASH_MODEL: str = "gemini-3-flash-preview"  # Icon generation (latest)
     
     # Exchange Rate (ZAR/USD) - December 2025
     ZAR_USD_RATE: float = Field(default=19.0, ge=1.0, le=100.0)  # R19 per $1 USD
@@ -177,6 +178,29 @@ class Settings(BaseSettings):
     TIER_JIGGA_GOGGA_TALK_MINS: float = 25      # Cost: $0.56
     # Total JIGGA cost: $8.36 → 47% margin
     
+    # Icon Generation (Gemini 2.0 Flash - Premium Feature)
+    # Pricing: ~$0.10/1M tokens (experimental rate)
+    # Avg icon: ~3000 tokens = $0.0003 USD = R0.006 ZAR
+    # Cost analysis: 99.7% gross margin at current pricing
+    TIER_FREE_ICONS: int = 3                    # FREE: 3 watermarked previews/month
+    TIER_JIVE_ICONS: int = 10                   # JIVE: 10 icons/month (R10/icon)
+    TIER_JIGGA_ICONS: int = 30                  # JIGGA: 30 icons/month (R5/icon)
+    CREDIT_COST_ICON: int = 5                   # 5 credits per icon (R9.50 pay-as-you-go)
+    COST_ICON_PER_1K_TOKENS: float = 0.0001     # Gemini 2.0 Flash experimental
+    
+    # SA-Themed Style Templates (Premium Differentiation)
+    # Apply with: prompt + ". Style: " + SA_STYLE_TEMPLATES[template]
+    SA_STYLE_TEMPLATES: dict = {
+        "ubuntu": "Warm earthy tones (ochre, terracotta, sage), circular harmonious shapes, community-focused composition, soft shadows, African philosophy of interconnectedness",
+        "kente": "Bold geometric patterns, vibrant Ghanaian-inspired colors (red, gold, green, black), woven textile texture, regal symmetry, West African royalty aesthetic",
+        "ndebele": "Bright primary colors (blue, red, yellow, green, white), linear geometric patterns, architectural precision, tribal wall art motifs, bold black outlines",
+        "township": "Graffiti-inspired street art style, vibrant Soweto murals aesthetic, spray paint texture, bold outlines, social commentary undertones, urban energy",
+        "protea": "National flower motifs, organic petal curves, soft gradients (pink to cream), natural South African elegance, botanical heritage symbolism",
+        "beadwork": "Intricate Zulu patterns, glossy glass bead texture, traditional color schemes (red, white, black, blue), handcrafted artisan feel, cultural storytelling",
+        "shweshwe": "Indigo blue base with white geometric print patterns, fabric texture with three-dimensional folds, traditional South African textile design",
+        "madiba": "Nelson Mandela tribute style, rainbow nation colors (all 11 official languages), unity symbolism, iconic hand gestures, legacy of reconciliation",
+    }
+    
     # ============================================
     # CREDIT PACK DEFINITIONS
     # 1 credit = $0.10 USD = R1.90 ZAR
@@ -201,6 +225,7 @@ class Settings(BaseSettings):
     CREDIT_COST_UPSCALE: int = 1             # 1 credit per upscale
     CREDIT_COST_VIDEO_SECOND: int = 2        # 2 credits per second
     CREDIT_COST_GOGGA_TALK_MIN: int = 1      # 1 credit per minute
+    CREDIT_COST_ICON: int = 5                # 5 credits per icon (premium)
     
     # PayFast Configuration (Sandbox credentials by default)
     PAYFAST_MERCHANT_ID: str = Field(default="10043379")
@@ -222,8 +247,8 @@ class Settings(BaseSettings):
     
     # OpenRouter - Free tier text + Image Prompt Enhancement
     OPENROUTER_API_KEY: str = Field(default="", description="OpenRouter API Key for FREE tier and prompt enhancement")
-    OPENROUTER_MODEL_QWEN: str = Field(default="qwen/qwen3-235b-a22b:free")  # FREE tier text
-    OPENROUTER_MODEL_LONGCAT: str = Field(default="meituan/longcat-flash-chat:free")
+    OPENROUTER_MODEL_QWEN: str = Field(default="qwen/qwen3-coder:free")  # FREE tier text (262k context)
+    OPENROUTER_MODEL_LONGCAT: str = Field(default="openai/gpt-oss-20b:free")  # Updated to valid free model
     
     # PostHog Analytics (EU region)
     POSTHOG_API_KEY: str = Field(default="", description="PostHog API Key for analytics")

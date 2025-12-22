@@ -53,6 +53,9 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
     isMuted,
     isPlaying,
     isScreenSharing,
+    isReconnecting,
+    reconnectAttempt,
+    maxReconnectAttempts,
     error,
     logs,
     transcripts,
@@ -144,13 +147,24 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
           
           {/* Status badges */}
           <div className="flex items-center gap-2">
-            {/* Connection status */}
+            {/* Connection status - shows reconnecting state with attempt count */}
             <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1.5 ${
-              isConnected 
-                ? 'bg-green-900/50 text-green-400' 
-                : 'bg-gray-700 text-gray-400'
+              isReconnecting
+                ? 'bg-yellow-900/50 text-yellow-400'
+                : isConnected 
+                  ? 'bg-green-900/50 text-green-400' 
+                  : 'bg-gray-700 text-gray-400'
             }`}>
-              {isConnected ? <><CircleDot size={10} /> Connected</> : <><Circle size={10} /> Disconnected</>}
+              {isReconnecting ? (
+                <>
+                  <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                  Reconnecting ({reconnectAttempt}/{maxReconnectAttempts})
+                </>
+              ) : isConnected ? (
+                <><CircleDot size={10} /> Connected</>
+              ) : (
+                <><Circle size={10} /> Disconnected</>
+              )}
             </span>
             
             {/* Screen sharing indicator */}
@@ -338,15 +352,8 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
               {transcripts.length === 0 ? (
                 <div className="text-gray-500 italic text-center py-8">
                   {isConnected ? (
-                    // Connected but no transcripts yet - show large visualizer
+                    // Connected but no transcripts yet - show helpful prompt (no duplicate visualizer)
                     <div className="flex flex-col items-center gap-4">
-                      <AudioWaveVisualizer
-                        state={visualizerState}
-                        audioLevel={currentAudioLevel}
-                        width={240}
-                        height={48}
-                        showActivityIndicator={true}
-                      />
                       {isRecording && !isMuted ? (
                         <span className="flex items-center gap-2 text-blue-400">
                           <Mic size={16} /> Listening... Speak to start the conversation!

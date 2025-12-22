@@ -890,7 +890,7 @@ function SmartTabContent({ tier }: SmartTabContentProps) {
             <div className="text-xs text-gray-500">Active Skills</div>
           </div>
           <div className="p-3 bg-gray-50 rounded-lg text-center">
-            <div className="text-2xl font-bold text-gray-800">{stats.totalFeedback ?? 0}</div>
+            <div className="text-2xl font-bold text-gray-800">{(stats.totalHelpful ?? 0) + (stats.totalHarmful ?? 0) + (stats.totalNeutral ?? 0)}</div>
             <div className="text-xs text-gray-500">Feedback Given</div>
           </div>
         </div>
@@ -918,11 +918,11 @@ function SmartTabContent({ tier }: SmartTabContentProps) {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-gray-700 truncate">{skill.section || 'Unknown'}</div>
                   <div className="text-[10px] text-gray-400">
-                    Score: {(skill.weight ?? 0).toFixed(2)} • Uses: {skill.usageCount ?? 0}
+                    👍 {skill.helpful ?? 0} • 👎 {skill.harmful ?? 0} • ➖ {skill.neutral ?? 0}
                   </div>
                 </div>
                 <button
-                  onClick={() => removeSkill(skill.id)}
+                  onClick={() => removeSkill(skill.skillId)}
                   className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                   title="Remove skill"
                 >

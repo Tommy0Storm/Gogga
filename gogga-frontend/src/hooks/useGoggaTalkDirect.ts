@@ -73,6 +73,8 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false); // Exposed state for UI feedback
+  const [reconnectAttempt, setReconnectAttempt] = useState(0); // Current attempt number for UI
   const [logs, setLogs] = useState<GoggaTalkLog[]>([]);
   const [transcripts, setTranscripts] = useState<GoggaTalkTranscript[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +135,19 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
   const userTranscriptBufferRef = useRef<string>('');
   const goggaTranscriptBufferRef = useRef<string>('');
   const transcriptFlushTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Inactivity watchdog - detects stale connections where user is talking but no response
+  const lastActivityRef = useRef<number>(Date.now());
+  const watchdogIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const WATCHDOG_INTERVAL = 5000; // Check every 5 seconds
+  const STALE_CONNECTION_THRESHOLD = 30000; // 30 seconds without any server activity = stale
+  const USER_WAITING_THRESHOLD = 15000; // 15 seconds of user waiting without response = check connection
+  
+  // Keepalive mechanism - prevents idle timeout on first connection
+  // Gemini Live API disconnects after ~15-20s of no input
+  const keepaliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const KEEPALIVE_INTERVAL = 10000; // Send keepalive every 10 seconds
+  const lastAudioSentRef = useRef<number>(Date.now()); // Track when we last sent audio
 
   // Add log entry
   const addLog = useCallback(
@@ -297,6 +312,15 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
       // Reset audio levels
       setUserAudioLevel(0);
       setGoggaAudioLevel(0);
+      // Clear keepalive and watchdog timers
+      if (keepaliveIntervalRef.current) {
+        clearInterval(keepaliveIntervalRef.current);
+        keepaliveIntervalRef.current = null;
+      }
+      if (watchdogIntervalRef.current) {
+        clearInterval(watchdogIntervalRef.current);
+        watchdogIntervalRef.current = null;
+      }
       if (
         inputAudioContextRef.current &&
         inputAudioContextRef.current.state !== 'closed'
@@ -536,13 +560,111 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             
             animationFrameRef.current = requestAnimationFrame(updateAudioLevels);
             
+            // Start watchdog timer to detect stale connections
+            // Clear any existing watchdog first
+            if (watchdogIntervalRef.current) {
+              clearInterval(watchdogIntervalRef.current);
+            }
+            lastActivityRef.current = Date.now();
+            
+            watchdogIntervalRef.current = setInterval(() => {
+              const now = Date.now();
+              const timeSinceActivity = now - lastActivityRef.current;
+              
+              // Check for completely stale connection (no server messages at all)
+              if (timeSinceActivity > STALE_CONNECTION_THRESHOLD && isSessionOpenRef.current) {
+                addLog('warning', 'Connection appears stale - no server activity for 30s');
+                // Force a reconnect by closing the session
+                sessionPromise.then((session) => {
+                  try {
+                    session.close?.();
+                  } catch (e) {
+                    // Ignore close errors
+                  }
+                }).catch(() => {});
+              }
+              
+              // Check for user waiting without response (spoke but no Gogga response)
+              if (
+                !lastTurnCompleteRef.current && 
+                timeSinceActivity > USER_WAITING_THRESHOLD &&
+                isSessionOpenRef.current &&
+                !isReconnectingRef.current
+              ) {
+                addLog('warning', 'No response received - checking connection health...');
+                // Try sending a ping-like message to check if connection is alive
+                sessionPromise.then((session) => {
+                  try {
+                    session.sendRealtimeInput({ text: '' });
+                  } catch (e) {
+                    addLog('error', 'Connection health check failed - reconnecting...');
+                    session.close?.();
+                  }
+                }).catch(() => {});
+              }
+            }, WATCHDOG_INTERVAL);
+            
+            // Start keepalive timer to prevent idle timeout on first connection
+            // Gemini Live API disconnects after ~15-20s of no input
+            // Clear any existing keepalive first
+            if (keepaliveIntervalRef.current) {
+              clearInterval(keepaliveIntervalRef.current);
+            }
+            lastAudioSentRef.current = Date.now();
+            
+            keepaliveIntervalRef.current = setInterval(() => {
+              const now = Date.now();
+              const timeSinceLastAudio = now - lastAudioSentRef.current;
+              
+              // If no audio sent in last 10 seconds and session is open, send a keepalive
+              // This prevents the Gemini Live API from disconnecting due to idle timeout
+              if (
+                timeSinceLastAudio > KEEPALIVE_INTERVAL &&
+                isSessionOpenRef.current &&
+                !isMutedRef.current
+              ) {
+                // Send silent audio frame as keepalive (more reliable than empty text)
+                // Create a small silent PCM buffer
+                const silentSamples = new Int16Array(160); // 10ms of silence at 16kHz
+                const silentBase64 = arrayBufferToBase64(silentSamples.buffer as ArrayBuffer);
+                
+                sessionPromise.then((session) => {
+                  try {
+                    session.sendRealtimeInput({
+                      media: {
+                        data: silentBase64,
+                        mimeType: `audio/pcm;rate=${SEND_SAMPLE_RATE}`,
+                      },
+                    });
+                    lastAudioSentRef.current = Date.now();
+                    // Debug log only in development
+                    if (process.env.NODE_ENV === 'development') {
+                      console.debug('[GoggaTalk] Sent keepalive');
+                    }
+                  } catch (e) {
+                    // Silently ignore keepalive errors
+                  }
+                }).catch(() => {});
+              }
+            }, KEEPALIVE_INTERVAL);
+            
             setIsRecording(true);
             setIsMuted(false);
             isMutedRef.current = false;
 
-            // Set up audio processor to send audio chunks
-            // NOISE GATE: Threshold to filter background noise (adjust 0.01-0.05 as needed)
-            const NOISE_GATE_THRESHOLD = 0.02; // Audio below this RMS level is ignored
+            // Audio health monitoring - track audio quality over time
+            // Detects when mic stops sending good audio (degradation)
+            let audioChunksSent = 0;
+            let lowRmsChunksInRow = 0;
+            let lastAudioHealthLog = Date.now();
+            const AUDIO_HEALTH_LOG_INTERVAL = 10000; // Log every 10 seconds
+            const LOW_RMS_THRESHOLD = 0.005; // Very low audio (almost silence)
+            const LOW_RMS_CONSECUTIVE_LIMIT = 20; // 20 consecutive low chunks = problem
+
+            // REMOVED: Aggressive noise gate - Gemini's VAD handles speech detection well
+            // The noise gate was causing valid speech to be cut, especially as sessions got longer
+            // Gemini's built-in voice activity detection (VAD) with our tuned sensitivity settings
+            // (START_SENSITIVITY_HIGH, END_SENSITIVITY_LOW, silenceDurationMs: 1500) is sufficient
 
             // Resampling function: convert from input sample rate to 16kHz
             const resample = (
@@ -570,18 +692,36 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
               return output;
             };
 
+            // Echo suppression state - with timeout to prevent permanent muting
+            let echoMuteStartTime = 0;
+            const MAX_ECHO_MUTE_DURATION = 5000; // Don't mute for more than 5 seconds
+
             processor.onaudioprocess = (e) => {
-              // Only send if not muted AND not currently playing audio
-              // This prevents echo loop where Gogga hears herself through speakers
+              // Only send if not muted
               if (isMutedRef.current || !isSessionOpenRef.current) return;
 
-              // CRITICAL: Auto-mute mic while Gogga is speaking to prevent echo
-              // This is especially important when not using headphones
-              if (activeSourcesRef.current.size > 0) return; // Skip if audio is playing
+              // IMPROVED: Echo suppression with timeout
+              // Mute mic while Gogga is speaking to prevent echo loop
+              // But cap the muting duration to prevent stuck states
+              if (activeSourcesRef.current.size > 0) {
+                if (echoMuteStartTime === 0) {
+                  echoMuteStartTime = Date.now();
+                }
+                const muteDuration = Date.now() - echoMuteStartTime;
+                if (muteDuration < MAX_ECHO_MUTE_DURATION) {
+                  return; // Normal echo suppression
+                }
+                // Muted too long - likely a bug, allow audio through
+                if (muteDuration >= MAX_ECHO_MUTE_DURATION && muteDuration < MAX_ECHO_MUTE_DURATION + 100) {
+                  console.warn('[GoggaTalk] Echo mute timeout - forcing audio through');
+                }
+              } else {
+                echoMuteStartTime = 0; // Reset when playback stops
+              }
 
               const inputData = e.inputBuffer.getChannelData(0);
 
-              // Calculate RMS (root mean square) to detect if there's actual speech
+              // Calculate RMS (root mean square) for audio health monitoring only
               let sumSquares = 0;
               for (let i = 0; i < inputData.length; i++) {
                 const sample = inputData[i]!;
@@ -589,10 +729,28 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
               }
               const rms = Math.sqrt(sumSquares / inputData.length);
 
-              // Apply noise gate - skip audio chunks below threshold (likely background noise)
-              if (rms < NOISE_GATE_THRESHOLD) {
-                return; // Don't send quiet/background noise
+              // Audio health monitoring (no gating - just tracking)
+              if (rms < LOW_RMS_THRESHOLD) {
+                lowRmsChunksInRow++;
+              } else {
+                lowRmsChunksInRow = 0;
               }
+
+              // Log audio health periodically
+              const now = Date.now();
+              if (now - lastAudioHealthLog > AUDIO_HEALTH_LOG_INTERVAL) {
+                const avgRms = (rms * 100).toFixed(3);
+                addLog('debug', `🎤 Audio health: ${audioChunksSent} chunks sent, current RMS: ${avgRms}%`);
+                lastAudioHealthLog = now;
+                
+                // Warn if too many consecutive low RMS chunks (mic might be failing)
+                if (lowRmsChunksInRow > LOW_RMS_CONSECUTIVE_LIMIT) {
+                  addLog('warning', `⚠️ Microphone may have degraded - ${lowRmsChunksInRow} low audio chunks in a row`);
+                }
+              }
+
+              // REMOVED: Noise gate - send ALL audio and let Gemini's VAD decide
+              // This matches the working GoggaSpeech implementation which has no noise gate
 
               // Resample from hardware rate (44100/48000) to Gemini's expected 16kHz
               const resampledData = resample(
@@ -605,7 +763,7 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                 int16Data.buffer as ArrayBuffer
               );
 
-              // CRITICAL FIX: Use 'media' key not 'audio' like tested examples
+              // Send audio to Gemini
               sessionPromise.then((session) => {
                 try {
                   session.sendRealtimeInput({
@@ -614,6 +772,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                       mimeType: `audio/pcm;rate=${SEND_SAMPLE_RATE}`,
                     },
                   });
+                  audioChunksSent++;
+                  // Update lastAudioSentRef to prevent unnecessary keepalives
+                  lastAudioSentRef.current = Date.now();
                 } catch (err) {
                   // Silently ignore send errors if session closes
                 }
@@ -621,6 +782,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             };
           },
           onmessage: async (msg: any) => {
+            // Update activity timestamp on any server message - this keeps the watchdog happy
+            lastActivityRef.current = Date.now();
+            
             // DEBUG: Log incoming messages to understand structure
             if (process.env.NODE_ENV === 'development') {
               console.log(
@@ -846,6 +1010,19 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
               addTranscript('gogga', goggaTranscriptBufferRef.current.trim());
               goggaTranscriptBufferRef.current = '';
             }
+            
+            // Clear watchdog timer on close
+            if (watchdogIntervalRef.current) {
+              clearInterval(watchdogIntervalRef.current);
+              watchdogIntervalRef.current = null;
+            }
+            
+            // Clear keepalive timer on close
+            if (keepaliveIntervalRef.current) {
+              clearInterval(keepaliveIntervalRef.current);
+              keepaliveIntervalRef.current = null;
+            }
+            
             if (processorRef.current) {
               processorRef.current.disconnect();
               processorRef.current.onaudioprocess = null;
@@ -913,6 +1090,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             if (shouldReconnect) {
               isReconnectingRef.current = true;
               reconnectAttemptsRef.current++;
+              // Update exposed state for UI feedback
+              setIsReconnecting(true);
+              setReconnectAttempt(reconnectAttemptsRef.current);
 
               addLog(
                 'warning',
@@ -928,6 +1108,7 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                   console.debug(
                     '[GoggaTalk] Skipping reconnect - another connection in progress or cancelled'
                   );
+                  setIsReconnecting(false);
                   return;
                 }
 
@@ -974,6 +1155,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                     isReconnectingRef.current = false;
                     reconnectAttemptsRef.current = 0;
                     reconnectDelayRef.current = 1000; // Reset to initial delay
+                    // Update exposed state for UI
+                    setIsReconnecting(false);
+                    setReconnectAttempt(0);
 
                     // Clear the timeout ref
                     if (reconnectTimeoutRef.current) {
@@ -996,6 +1180,8 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
 
                     // Reset reconnecting state to allow next attempt
                     isReconnectingRef.current = false;
+                    // Note: Don't reset isReconnecting/reconnectAttempt here - 
+                    // the onclose handler will trigger another attempt if under max
 
                     // Clear the timeout ref
                     if (reconnectTimeoutRef.current) {
@@ -1005,6 +1191,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                   });
               }, reconnectDelayRef.current);
             } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+              // Max attempts reached - update UI state
+              setIsReconnecting(false);
+              setReconnectAttempt(0);
               addLog(
                 'error',
                 `Maximum reconnection attempts (${maxReconnectAttempts}) reached. Please try connecting manually.`
@@ -1081,6 +1270,12 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
     isReconnectingRef.current = false;
     reconnectAttemptsRef.current = 0;
     reconnectDelayRef.current = 1000;
+    
+    // Clear the watchdog timer
+    if (watchdogIntervalRef.current) {
+      clearInterval(watchdogIntervalRef.current);
+      watchdogIntervalRef.current = null;
+    }
 
     // Set flag to prevent auto-reconnection
     isSessionOpenRef.current = false;
@@ -1310,6 +1505,9 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
     isMuted,
     isPlaying,
     isScreenSharing,
+    isReconnecting, // True when auto-reconnecting after unexpected disconnect
+    reconnectAttempt, // Current reconnection attempt number (0-5)
+    maxReconnectAttempts, // Maximum reconnection attempts allowed
     error,
     logs,
     transcripts,

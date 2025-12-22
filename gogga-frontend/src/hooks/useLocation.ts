@@ -35,7 +35,9 @@ const DEBUG_LOCATION = process.env.NODE_ENV === 'development' ||
 
 function debugLog(category: string, message: string, data?: unknown) {
   if (!DEBUG_LOCATION) return;
-  const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+  const isoString = new Date().toISOString();
+  const timePart = isoString.split('T')[1] ?? '00:00:00.000Z';
+  const timestamp = timePart.split('.')[0] ?? '00:00:00';
   const prefix = `[Location:${category}] ${timestamp}`;
   if (data !== undefined) {
     console.log(prefix, message, data);

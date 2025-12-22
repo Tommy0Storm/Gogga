@@ -10,6 +10,7 @@ import ImageThumbnail from '@/components/ImageThumbnail';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { GoggaLogo, GoggaIcon, GoggaCricket } from '@/components/GoggaLogo';
 import { GoggaSpinner } from '@/components/GoggaSpinner';
+import IconGeneratorModal from '@/components/IconGeneratorModal';
 import {
   FileStoreIcon,
   SendArrowIcon,
@@ -168,6 +169,8 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const [showReportIssue, setShowReportIssue] = useState(false);
   // PDF export modal state
   const [showExportModal, setShowExportModal] = useState(false);
+  // Icon Studio modal state
+  const [showIconStudio, setShowIconStudio] = useState(false);
   // Copy feedback state (tracks which message was just copied)
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   // AI Power dropdown state
@@ -1133,7 +1136,7 @@ ${comment}
         await trackTokens(tier, inputTokens, outputTokens, costZar);
       }
 
-      const botMsg: ChatMessage = {
+      let botMsg: ChatMessage = {
         role: 'assistant',
         content: data.response,
         ...(data.thinking ? { thinking: data.thinking } : {}), // JIGGA thinking block
@@ -1199,6 +1202,12 @@ ${comment}
       };
 
       // Handle tool calls if present (JIGGA tier only)
+      // IMPORTANT: We need to work with a mutable copy of botMsg because state updates
+      // may freeze the original object (Immer/React). Create a deep clone for tool handling.
+      // Use JSON parse/stringify to ensure we get a fully mutable object (structuredClone 
+      // might not be available in all environments, and spread might preserve frozen state)
+      let mutableBotMsg: typeof botMsg = JSON.parse(JSON.stringify(botMsg));
+      
       if (
         data.tool_calls &&
         Array.isArray(data.tool_calls) &&
@@ -1229,16 +1238,17 @@ ${comment}
           );
 
           // Add temporary "painting" message for image generation
-          if (hasImageTool && botMsg.content) {
-            const tempContent =
-              botMsg.content + '\n\n*🎨 GOGGA is painting your image...*';
+          // Use a separate temp object to avoid state freezing issues
+          if (hasImageTool && mutableBotMsg.content) {
+            const tempMsg = { 
+              ...mutableBotMsg, 
+              content: mutableBotMsg.content + '\n\n*🎨 GOGGA is painting your image...*',
+              meta: { ...mutableBotMsg.meta }
+            };
             if (isPersistenceEnabled) {
-              await addMessage({ ...botMsg, content: tempContent });
+              await addMessage(tempMsg);
             } else {
-              setFreeMessages((prev) => [
-                ...prev,
-                { ...botMsg, content: tempContent },
-              ]);
+              setFreeMessages((prev) => [...prev, tempMsg]);
             }
           }
 
@@ -1255,20 +1265,21 @@ ${comment}
             const hasImages = toolSummary.includes('![Generated Image');
             const prefix = ''; // No prefix - results speak for themselves
 
-            // Append tool results to the response
-            botMsg.content = botMsg.content
-              ? `${botMsg.content}\n\n---\n${prefix}${toolSummary}`
+            // Append tool results to the response - modify our mutable copy
+            mutableBotMsg.content = mutableBotMsg.content
+              ? `${mutableBotMsg.content}\n\n---\n${prefix}${toolSummary}`
               : toolSummary;
           }
 
-          // Mark that tools were executed
-          if (botMsg.meta) {
-            botMsg.meta.tools_executed = true;
-          }
+          // Mark that tools were executed on our mutable copy
+          mutableBotMsg.meta = { ...mutableBotMsg.meta, tools_executed: true };
         } catch (toolError) {
           console.error('[GOGGA] Tool execution failed:', toolError);
         }
       }
+      
+      // Use the mutable copy for the rest of the function
+      botMsg = mutableBotMsg;
 
       // Auto-inject contextual images for long CePO/Qwen responses
       // Only for informal educational content, every 2nd-3rd response
@@ -2973,6 +2984,18 @@ ${comment}
                   )}
                 </button>
 
+                {/* Icon Studio Button - Premium Feature */}
+                {(tier === 'jive' || tier === 'jigga') && (
+                  <button
+                    onClick={() => setShowIconStudio(true)}
+                    className="action-btn h-12 w-12 bg-gradient-to-br from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
+                    aria-label="Icon Studio"
+                    title="Icon Studio - Generate SA-themed icons"
+                  >
+                    <MagicWandIcon size={20} />
+                  </button>
+                )}
+
                 {/* Send Button */}
                 <button
                   onClick={() => sendMessage(input)}
@@ -3180,6 +3203,16 @@ ${comment}
         {...(currentSessionTitle ? { sessionTitle: currentSessionTitle } : {})}
         tier={tier}
       />
+
+      {/* Icon Studio Modal (JIVE/JIGGA only) */}
+      {(tier === 'jive' || tier === 'jigga') && (
+        <IconGeneratorModal
+          isOpen={showIconStudio}
+          onClose={() => setShowIconStudio(false)}
+          userId={userEmail || 'anonymous'}
+          tier={tier === 'jive' ? 'JIVE' : 'JIGGA'}
+        />
+      )}
 
       {/* 7-Day Forecast Modal */}
       {showForecastModal && (

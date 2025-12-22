@@ -39,6 +39,7 @@
     "dotenv": "^16.5.0",
     "flexsearch": "^0.8.212",
     "gpt-tokenizer": "^3.4.0",
+    "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.12.1",
     "jspdf": "^3.0.4",

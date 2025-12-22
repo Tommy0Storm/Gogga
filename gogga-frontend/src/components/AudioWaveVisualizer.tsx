@@ -105,20 +105,51 @@ export function AudioWaveVisualizer({
   const [smoothedLevel, setSmoothedLevel] = useState(0);
   const smoothingRef = useRef(0);
   
+  // Speaking hold timer - keeps "Speaking" state for a brief period after audio drops
+  // This prevents rapid flickering between Speaking/Silent during natural speech pauses
+  const [isSpeakingHeld, setIsSpeakingHeld] = useState(false);
+  const speakingHoldTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const SPEAKING_HOLD_MS = 600; // Hold speaking state for 600ms after audio drops
+  const SPEAKING_THRESHOLD = 0.05; // Very sensitive detection for better responsiveness
+  
   useEffect(() => {
     if (audioLevel !== undefined) {
-      // Exponential smoothing for natural feel
-      const smoothingFactor = 0.3;
+      // More responsive smoothing - faster rise and faster fall for better wave movement
+      // Rise: 0.6 (quick response), Fall: 0.25 (smooth but not sluggish)
+      const isRising = audioLevel > smoothingRef.current;
+      const smoothingFactor = isRising ? 0.6 : 0.25;
       smoothingRef.current = smoothingRef.current * (1 - smoothingFactor) + audioLevel * smoothingFactor;
       setSmoothedLevel(smoothingRef.current);
+      
+      // Speaking hold logic - if audio is above threshold, set speaking and reset timer
+      if (smoothingRef.current > SPEAKING_THRESHOLD) {
+        setIsSpeakingHeld(true);
+        // Clear any existing hold timer
+        if (speakingHoldTimerRef.current) {
+          clearTimeout(speakingHoldTimerRef.current);
+          speakingHoldTimerRef.current = null;
+        }
+      } else if (isSpeakingHeld && !speakingHoldTimerRef.current) {
+        // Audio dropped below threshold - start hold timer
+        speakingHoldTimerRef.current = setTimeout(() => {
+          setIsSpeakingHeld(false);
+          speakingHoldTimerRef.current = null;
+        }, SPEAKING_HOLD_MS);
+      }
     }
-  }, [audioLevel]);
+    
+    return () => {
+      if (speakingHoldTimerRef.current) {
+        clearTimeout(speakingHoldTimerRef.current);
+      }
+    };
+  }, [audioLevel, isSpeakingHeld]);
   
   // Determine effective audio level (use prop if provided, otherwise use state-based default)
   const effectiveAudioLevel = audioLevel !== undefined ? smoothedLevel : (state === 'idle' ? 0.3 : 1);
   
-  // Voice activity detection threshold
-  const isVoiceActive = effectiveAudioLevel > 0.15;
+  // Voice activity detection - use held state for stable indicator
+  const isVoiceActive = isSpeakingHeld || effectiveAudioLevel > SPEAKING_THRESHOLD;
   
   // Color based on state
   const colors = useMemo(() => {
@@ -149,7 +180,8 @@ export function AudioWaveVisualizer({
   const isActive = state !== 'idle';
 
   // Generate multiple wave paths for layered effect
-  const baseAmplitude = isActive ? height * 0.35 : height * 0.1;
+  // Increased amplitude multiplier for more visible wave movement
+  const baseAmplitude = isActive ? height * 0.45 : height * 0.12;
 
   return (
     <div 

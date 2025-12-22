@@ -35,7 +35,7 @@ import {
   Sunset,
   Calendar,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import type { WeatherForecast, ForecastDay } from '@/lib/weatherService';
 import { getWeatherComment, getDayName, getUVLevel } from '@/lib/weatherService';
 
@@ -138,29 +138,67 @@ export const GoggaForecast: React.FC<GoggaForecastProps> = ({
       setFunnyComment(getWeatherComment(forecast));
     }
   }, [forecast]);
-  
+
   /**
-   * Export the forecast as PNG
+   * Export the forecast as PNG using html-to-image
+   * html-to-image uses SVG foreignObject which handles modern CSS colors better than html2canvas
    */
   const handleExport = useCallback(async () => {
-    if (!forecastRef.current || !forecast) return;
+    if (!forecastRef.current || !forecast) {
+      console.warn('[GoggaForecast] Export skipped: no ref or forecast');
+      return;
+    }
     
     setIsExporting(true);
     try {
-      const canvas = await html2canvas(forecastRef.current, {
-        backgroundColor: '#f9fafb', // Match bg-gray-50
-        scale: 2, // Higher quality
-        logging: false,
-        useCORS: true,
+      console.log('[GoggaForecast] Starting export with html-to-image...');
+      
+      // Use html-to-image's toPng function
+      // It uses SVG foreignObject which handles modern CSS colors (lab, oklch, etc.)
+      const dataUrl = await toPng(forecastRef.current, {
+        quality: 1.0,
+        pixelRatio: 2,
+        backgroundColor: '#f9fafb',
+        // Filter function to skip problematic elements
+        filter: (node: Node) => {
+          // Skip script tags and hidden elements
+          if (node instanceof HTMLElement) {
+            if (node.tagName === 'SCRIPT') return false;
+            if (node.tagName === 'NOSCRIPT') return false;
+          }
+          return true;
+        },
+        // Style function to normalize colors before export
+        style: {
+          // Ensure background is set
+          backgroundColor: '#f9fafb',
+        },
       });
+      
+      if (!dataUrl || dataUrl === 'data:,') {
+        throw new Error('Failed to generate image data');
+      }
+      
+      console.log('[GoggaForecast] Image generated successfully');
       
       // Create download link
       const link = document.createElement('a');
-      link.download = `gogga-weather-${forecast.location.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.png`;
-      link.href = canvas.toDataURL('image/png');
+      const filename = `gogga-weather-${forecast.location.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.png`;
+      link.download = filename;
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      
+      console.log('[GoggaForecast] Export complete:', filename);
     } catch (err) {
-      console.error('[GoggaForecast] Export failed:', err);
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : typeof err === 'string' 
+          ? err 
+          : JSON.stringify(err);
+      console.error('[GoggaForecast] Export failed:', errorMessage, err);
+      alert(`Weather image export failed: ${errorMessage}`);
     } finally {
       setIsExporting(false);
     }

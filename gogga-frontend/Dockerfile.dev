@@ -7,7 +7,7 @@ WORKDIR /app
 # Install build dependencies for native modules (better-sqlite3, sharp, etc.)
 # Install pnpm globally and wget for healthchecks
 RUN apk update && apk add --no-cache python3 make g++ wget && \
-    corepack enable && corepack prepare pnpm@latest --activate
+    corepack enable && corepack prepare pnpm@10.12.1 --activate
 
 # Copy package files and .npmrc for build config
 COPY package.json pnpm-lock.yaml .npmrc ./
