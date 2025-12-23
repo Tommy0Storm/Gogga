@@ -1,0 +1,1723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux Monitor - Real-time SSH Dashboard</title>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Quicksand', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+            font-weight: 400;
+            background: #0b0b0c;
+            color: #f2f2f2;
+            padding: 18px;
+            overflow: hidden;
+        }
+
+        :root {
+            --bg: #0b0b0c;
+            --panel: #111113;
+            --panel2: #141418;
+            --border: rgba(255,255,255,0.10);
+            --border2: rgba(255,255,255,0.16);
+            --muted: rgba(255,255,255,0.70);
+            --muted2: rgba(255,255,255,0.50);
+            --good: rgba(255,255,255,0.92);
+            --bad: rgba(255,255,255,0.70);
+            --shadow: 0 18px 60px rgba(0,0,0,0.60);
+            --radius: 14px;
+            --radius2: 12px;
+            --mono: #f2f2f2;
+            --mono2: rgba(242,242,242,0.75);
+            --primary: #4da3ff;
+            --worker: #ff4d6d;
+        }
+
+        a { color: inherit; }
+
+        .app {
+            height: calc(100vh - 36px);
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 14px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            color: var(--mono);
+        }
+
+        .subtitle {
+            margin-top: 3px;
+            color: var(--muted2);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .add-server-btn {
+            background: rgba(255,255,255,0.08);
+            color: var(--mono);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            font-weight: 600;
+            border: 1px solid var(--border);
+        }
+
+        .add-server-btn:hover {
+            background: rgba(255,255,255,0.12);
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.06);
+            color: var(--mono);
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s, transform 0.1s;
+            font-weight: 800;
+            letter-spacing: 0.1px;
+        }
+
+        .control-btn:hover { background: rgba(255,255,255,0.10); }
+        .control-btn:active { transform: translateY(1px); }
+
+        .control-btn[disabled] {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.04);
+            padding: 14px;
+            border-radius: var(--radius2);
+            border: 1px solid var(--border);
+            text-align: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .stat-body {
+            display: grid;
+            grid-template-rows: auto auto auto;
+            gap: 8px;
+        }
+
+        .stat-lines {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+            text-align: left;
+        }
+
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            color: rgba(255,255,255,0.82);
+        }
+
+        .stat-line .k {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 900;
+        }
+
+        .mini {
+            height: 54px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.02);
+            overflow: hidden;
+            padding: 8px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted2);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--mono);
+            transition: filter 260ms ease, transform 260ms ease;
+        }
+
+        .stat-value.pulse {
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.18));
+            transform: translateY(-0.5px);
+        }
+
+        .accent {
+            font-weight: 700;
+        }
+
+        .accent.primary { color: var(--primary); }
+        .accent.worker { color: var(--worker); }
+
+        .hotlist {
+            background: rgba(0,0,0,0.40);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 10px;
+            margin-bottom: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.25;
+            max-height: 128px;
+            overflow: auto;
+        }
+
+        .hot-head {
+            display: flex;
+            gap: 10px;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.55);
+            font-weight: 900;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            font-size: 10px;
+            position: sticky;
+            top: 0;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(8px);
+        }
+
+        .hot-row {
+            display: flex;
+            gap: 10px;
+            padding: 2px 0;
+            align-items: baseline;
+        }
+
+        .hot-name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: rgba(255,255,255,0.90);
+            font-weight: 800;
+        }
+
+        .hot-col {
+            width: 64px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: rgba(255,255,255,0.85);
+            font-weight: 800;
+        }
+
+        .hot-io {
+            width: 128px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: rgba(255,255,255,0.78);
+            font-weight: 800;
+        }
+
+        .hot-muted {
+            color: rgba(255,255,255,0.55);
+            font-weight: 700;
+            padding: 3px 0;
+        }
+
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+            gap: 20px;
+            align-content: start;
+            overflow: auto;
+            padding-bottom: 14px;
+        }
+
+        .server-card {
+            background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03));
+            border-radius: var(--radius);
+            padding: 18px;
+            border: 1px solid var(--border);
+            position: relative;
+            box-shadow: 0 18px 60px rgba(0,0,0,0.40);
+        }
+
+        .server-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .server-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--mono);
+            letter-spacing: -0.2px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.04);
+            color: var(--mono2);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.35);
+        }
+
+        .dot.ok { background: rgba(255,255,255,0.92); }
+        .dot.warn { background: rgba(255,255,255,0.55); }
+        .dot.bad { background: rgba(255,255,255,0.25); }
+
+        .dot.primary { background: var(--primary); }
+        .dot.worker { background: var(--worker); }
+
+        .server-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .server-btn {
+            background: rgba(255,255,255,0.06);
+            color: var(--mono);
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s;
+            font-weight: 600;
+        }
+
+        .server-btn:hover {
+            background: rgba(255,255,255,0.10);
+        }
+
+        .server-btn.connecting {
+            background: rgba(255,255,255,0.10);
+        }
+
+        .server-btn.connected {
+            background: rgba(255,255,255,0.12);
+        }
+
+        .server-btn.disconnected {
+            background: rgba(255,255,255,0.06);
+        }
+
+        .server-btn.remove {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .server-btn.remove:hover {
+            background: rgba(255,255,255,0.08);
+        }
+
+        .server-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .info-label {
+            color: var(--muted2);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .info-value {
+            color: var(--mono);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .terminal-container {
+            background: rgba(0,0,0,0.55);
+            border-radius: 12px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            line-height: 1.2;
+            white-space: pre-wrap;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .terminal-log {
+            color: rgba(255,255,255,0.90);
+        }
+
+        .terminal-prompt {
+            color: #0ff;
+        }
+
+        .terminal-error {
+            color: #f00;
+        }
+
+        .docker-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .docker-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .docker-running {
+            background-color: rgba(255,255,255,0.90);
+        }
+
+        .docker-stopped {
+            background-color: rgba(255,255,255,0.35);
+        }
+
+        .docker-unknown {
+            background-color: rgba(255,255,255,0.55);
+        }
+
+        .add-server-form {
+            background: rgba(0,0,0,0.75);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border2);
+            box-shadow: var(--shadow);
+            width: min(680px, calc(100vw - 32px));
+            max-height: calc(100vh - 80px);
+            overflow: auto;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--muted2);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--mono);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: rgba(255,255,255,0.30);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .form-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .form-btn.save {
+            background: rgba(255,255,255,0.12);
+            color: var(--mono);
+            border: 1px solid var(--border);
+        }
+
+        .form-btn.cancel {
+            background: rgba(255,255,255,0.06);
+            color: var(--mono);
+            border: 1px solid var(--border);
+        }
+
+        .chart-container {
+            height: 184px;
+            margin-top: 15px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.02);
+            overflow: hidden;
+            padding: 10px;
+        }
+
+        .chart-container canvas {
+            display: block;
+        }
+
+        .chart-inner {
+            height: 100%;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 8px;
+        }
+
+        .chart-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .chart-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: rgba(255,255,255,0.78);
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chart-legend {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        @media (max-width: 980px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .terminals-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 980px) {
+            .terminals-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .scroll-to-bottom {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.08);
+            color: var(--mono);
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 10px;
+            display: none;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(0,0,0,0.55);
+            z-index: 50;
+        }
+
+        .overlay[hidden] {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .servers-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .title {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <!--
+        NOTE (single-file design): This dashboard is intentionally a single HTML file.
+
+        Browsers cannot open raw SSH (TCP/22) connections directly.
+        This page expects EACH server to expose a WebSocket endpoint that proxies SSH/commands
+        (or a central WebSocket proxy you control). No mock/random data is used.
+
+        Default assumption:
+          ws://<server-ip>:8080/ssh-monitor
+    -->
+
+    <!-- UI is rendered by React into #app -->
+
+    <!-- Hard-coded servers (requested): embedded in HTML (not fetched, not generated) -->
+    <script type="application/json" id="builtin-servers">
+        [
+            {
+                "id": "primary-macbook",
+                "name": "Primary-Macbook",
+                "host": "192.168.0.130",
+                "username": "ubuntu",
+                "password": "Pingpong5$%$%",
+                "wsUrl": "ws://localhost:8080/ssh-monitor"
+            },
+            {
+                "id": "worker-macbook",
+                "name": "Worker-Macbook",
+                "host": "192.168.0.198",
+                "username": "hybridwolvin",
+                "password": "Pingpong5$%$%",
+                "wsUrl": "ws://localhost:8080/ssh-monitor"
+            }
+        ]
+    </script>
+
+    <script type="text/babel">
+        const { useEffect, useMemo, useRef, useState } = React;
+
+        const BUILD_ID = '2025-12-21T-react-monochrome-hotcontainers-v2';
+        const MAX_POINTS = 180;
+        const MAX_LOG_CHARS = 200_000;
+
+        // Local control service (to start/stop the bridge from the dashboard)
+        const CONTROL_BASE = 'http://127.0.0.1:8081';
+
+        function clamp(n, lo, hi) {
+            return Math.max(lo, Math.min(hi, n));
+        }
+
+        function fmtPct(v) {
+            const n = Number(v);
+            if (!Number.isFinite(n)) return '—';
+            return (Math.round(n * 10) / 10).toFixed(n % 1 === 0 ? 0 : 1);
+        }
+
+        function shortenWsUrl(url) {
+            const s = String(url || '');
+            if (s.length <= 34) return s;
+            return s.slice(0, 18) + '…' + s.slice(-12);
+        }
+
+        function dockerClass(status) {
+            const s = String(status || 'unknown').toLowerCase();
+            if (s === 'running') return 'docker-running';
+            if (s === 'stopped') return 'docker-stopped';
+            return 'docker-unknown';
+        }
+
+        function serverAccent(serverId) {
+            if (serverId === 'primary-macbook') return 'primary';
+            if (serverId === 'worker-macbook') return 'worker';
+            return 'primary';
+        }
+
+        function serverColor(serverId) {
+            if (serverId === 'primary-macbook') return 'rgba(77,163,255,0.95)';
+            if (serverId === 'worker-macbook') return 'rgba(255,77,109,0.95)';
+            return 'rgba(255,255,255,0.85)';
+        }
+
+        function serverFillColor(serverId) {
+            if (serverId === 'primary-macbook') return 'rgba(77,163,255,0.10)';
+            if (serverId === 'worker-macbook') return 'rgba(255,77,109,0.10)';
+            return 'rgba(255,255,255,0.06)';
+        }
+
+        function connDot(connected, connecting) {
+            if (connecting) return 'warn';
+            if (connected) return 'ok';
+            return 'bad';
+        }
+
+        function readBuiltins() {
+            const el = document.getElementById('builtin-servers');
+            try {
+                const base = JSON.parse((el?.textContent || '[]').trim());
+                return base.map(s => ({
+                    ...s,
+                    connected: false,
+                    connecting: false,
+                    lastMetrics: null,
+                    dockerStatus: 'unknown',
+                    docker: { status: 'unknown', containers: null, stats: null, statsError: null, swarm: null, usedSudo: false, daemonError: null },
+                    series: { cpu: [], mem: [], disk: [], lat: [] },
+                    reconnectAttempt: 0,
+                    bridge: null,
+                    terminalLog: `[${new Date().toLocaleTimeString()}] Boot: dashboard loaded. Attempting WS → SSH…\n`
+                }));
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function useStableCallback(fn) {
+            const ref = useRef(fn);
+            ref.current = fn;
+            return (...args) => ref.current(...args);
+        }
+
+        function mergeSeries(labels, series) {
+            const map = new Map();
+            (Array.isArray(series) ? series : []).forEach(p => {
+                if (p && typeof p.t === 'string') map.set(p.t, p.v);
+            });
+            return labels.map(t => (map.has(t) ? map.get(t) : null));
+        }
+
+        function Sparkline({ id, datasets }) {
+            const canvasRef = useRef(null);
+            const chartRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                chartRef.current = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: [], datasets: [] },
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        elements: { line: { tension: 0.35 }, point: { radius: 0 } },
+                        scales: { x: { display: false }, y: { display: false } }
+                    }
+                });
+
+                return () => {
+                    try { chartRef.current?.destroy?.(); } catch (_) {}
+                    chartRef.current = null;
+                };
+            }, [id]);
+
+            useEffect(() => {
+                const ch = chartRef.current;
+                if (!ch) return;
+
+                const ds = Array.isArray(datasets) ? datasets : [];
+                const allLabels = [];
+                const seen = new Set();
+                for (const d of ds) {
+                    const s = Array.isArray(d.series) ? d.series : [];
+                    for (const p of s) {
+                        if (!p || typeof p.t !== 'string') continue;
+                        if (seen.has(p.t)) continue;
+                        seen.add(p.t);
+                        allLabels.push(p.t);
+                    }
+                }
+
+                ch.data.labels = allLabels;
+                ch.data.datasets = ds.map(d => ({
+                    label: d.label,
+                    data: mergeSeries(allLabels, d.series),
+                    borderColor: d.color,
+                    backgroundColor: 'rgba(0,0,0,0)',
+                    fill: false,
+                    spanGaps: true,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }));
+                ch.update('none');
+            }, [datasets]);
+
+            return (
+                <div className="mini">
+                    <canvas ref={canvasRef} aria-label="sparkline" role="img"></canvas>
+                </div>
+            );
+        }
+
+        function CombinedChart({ id, title, datasets, unit = '%', yMin = 0, yMax = 100 }) {
+            const canvasRef = useRef(null);
+            const chartRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                chartRef.current = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: []
+                    },
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: {
+                            padding: { bottom: 10 }
+                        },
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            title: { display: false },
+                            legend: { display: false },
+                            tooltip: {
+                                enabled: true,
+                                backgroundColor: 'rgba(0,0,0,0.75)',
+                                titleColor: 'rgba(255,255,255,0.92)',
+                                bodyColor: 'rgba(255,255,255,0.82)',
+                                borderColor: 'rgba(255,255,255,0.12)',
+                                borderWidth: 1
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: 'rgba(255,255,255,0.45)',
+                                    maxTicksLimit: 6,
+                                    padding: 8,
+                                    font: { size: 10 },
+                                    maxRotation: 0,
+                                    minRotation: 0
+                                },
+                                grid: { color: 'rgba(255,255,255,0.06)' }
+                            },
+                            y: {
+                                min: (typeof yMin === 'number') ? yMin : 0,
+                                max: (typeof yMax === 'number') ? yMax : undefined,
+                                ticks: {
+                                    color: 'rgba(255,255,255,0.45)',
+                                    padding: 6,
+                                    font: { size: 10 },
+                                    callback: (v) => `${v}${unit}`
+                                },
+                                grid: { color: 'rgba(255,255,255,0.06)' }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    try { chartRef.current?.destroy?.(); } catch (_) {}
+                    chartRef.current = null;
+                };
+            }, [id, title]);
+
+            useEffect(() => {
+                const ch = chartRef.current;
+                if (!ch) return;
+
+                const ds = Array.isArray(datasets) ? datasets : [];
+                const allLabels = [];
+                const seen = new Set();
+                for (const d of ds) {
+                    const s = Array.isArray(d.series) ? d.series : [];
+                    for (const p of s) {
+                        if (!p || typeof p.t !== 'string') continue;
+                        if (seen.has(p.t)) continue;
+                        seen.add(p.t);
+                        allLabels.push(p.t);
+                    }
+                }
+
+                ch.data.labels = allLabels;
+                ch.data.datasets = ds.map(d => ({
+                    label: d.label,
+                    data: mergeSeries(allLabels, d.series),
+                    borderColor: d.color,
+                    backgroundColor: d.fill,
+                    fill: true,
+                    spanGaps: true,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    tension: 0.35
+                }));
+                ch.update('none');
+            }, [datasets]);
+
+            return (
+                <div className="chart-container">
+                    <div className="chart-inner">
+                        <div className="chart-top">
+                            <div className="chart-title" title={title}>{title}</div>
+                            <div className="chart-legend">
+                                {(Array.isArray(datasets) ? datasets : []).map(d => (
+                                    <span key={d.label} className="legend-item" style={{ color: d.color }}>
+                                        <span className="swatch" style={{ background: d.color }}></span>
+                                        {d.label}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                        <canvas ref={canvasRef} aria-label={title} role="img"></canvas>
+                    </div>
+                </div>
+            );
+        }
+
+        function Terminal({ text }) {
+            const containerRef = useRef(null);
+            const [showJump, setShowJump] = useState(false);
+
+            useEffect(() => {
+                const el = containerRef.current;
+                if (!el) return;
+                const onScroll = () => {
+                    const atBottom = (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 8);
+                    setShowJump(!atBottom && el.scrollHeight > el.clientHeight);
+                };
+                el.addEventListener('scroll', onScroll);
+                onScroll();
+                return () => el.removeEventListener('scroll', onScroll);
+            }, []);
+
+            useEffect(() => {
+                const el = containerRef.current;
+                if (!el) return;
+                const atBottom = (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 24);
+                if (atBottom) el.scrollTop = el.scrollHeight;
+            }, [text]);
+
+            return (
+                <div className="terminal-container" ref={containerRef}>
+                    <div className="terminal-log">{text || ''}</div>
+                    {(!text || String(text).trim().length === 0) ? (
+                        <div style={{ position: 'absolute', inset: 14, pointerEvents: 'none', color: 'rgba(255,255,255,0.45)', fontWeight: 700 }}>
+                            No output yet. If this stays empty, the WS bridge is likely down or unreachable.
+                        </div>
+                    ) : null}
+                    <button
+                        className="scroll-to-bottom"
+                        style={{ display: showJump ? 'block' : 'none' }}
+                        onClick={() => { if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight; }}
+                        type="button"
+                    >
+                        ▼
+                    </button>
+                </div>
+            );
+        }
+
+        function fmtBytes(n) {
+            const v = Number(n);
+            if (!Number.isFinite(v)) return '—';
+            if (v === 0) return '0B';
+            const k = 1024;
+            const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+            const i = Math.min(units.length - 1, Math.floor(Math.log(v) / Math.log(k)));
+            const val = v / Math.pow(k, i);
+            const digits = val >= 100 ? 0 : val >= 10 ? 1 : 2;
+            return `${val.toFixed(digits)}${units[i]}`;
+        }
+
+        function HotContainers({ server, labelColor }) {
+            const status = String(server?.dockerStatus || server?.docker?.status || 'unknown');
+            const stats = server?.docker?.stats;
+            const statsError = server?.docker?.statsError;
+            const daemonError = server?.docker?.daemonError;
+            const usedSudo = !!server?.docker?.usedSudo;
+
+            const items = Array.isArray(stats) ? stats.slice() : null;
+            if (items) {
+                items.sort((a, b) => {
+                    const ac = Number(a?.cpuPct) || 0;
+                    const bc = Number(b?.cpuPct) || 0;
+                    if (bc !== ac) return bc - ac;
+                    const am = Number(a?.memPct) || 0;
+                    const bm = Number(b?.memPct) || 0;
+                    if (bm !== am) return bm - am;
+                    const ai = Number(a?.blockTotalBytes) || 0;
+                    const bi = Number(b?.blockTotalBytes) || 0;
+                    return bi - ai;
+                });
+            }
+
+            const top = items ? items.slice(0, 10) : [];
+
+            return (
+                <div className="hotlist">
+                    <div className="hot-head">
+                        <div className="hot-name" style={{ color: labelColor }}>Hot containers</div>
+                        <div className="hot-col">CPU</div>
+                        <div className="hot-col">MEM</div>
+                        <div className="hot-io">BLK I/O</div>
+                    </div>
+
+                    {status.toLowerCase() !== 'running' ? (
+                        <div className="hot-muted">
+                            Docker: {status}{usedSudo ? ' (via sudo)' : ''}{daemonError ? ` • ${String(daemonError)}` : ''}
+                        </div>
+                    ) : (!items ? (
+                        <div className="hot-muted">
+                            {statsError
+                                ? `docker stats unavailable: ${String(statsError)}`
+                                : 'Waiting for docker stats… (if this never updates, the bridge may be old or lacks permission)'}
+                        </div>
+                    ) : (top.length === 0 ? (
+                        <div className="hot-muted">No running containers</div>
+                    ) : (
+                        top.map(c => {
+                            const cpu = (c?.cpuPct == null) ? (c?.raw?.cpu ?? '—') : `${fmtPct(c.cpuPct)}%`;
+                            const mem = (c?.memPct == null) ? (c?.raw?.memPct ?? '—') : `${fmtPct(c.memPct)}%`;
+                            const blk = (c?.blockReadBytes != null || c?.blockWriteBytes != null)
+                                ? `${fmtBytes(c.blockReadBytes || 0)} / ${fmtBytes(c.blockWriteBytes || 0)}`
+                                : (c?.raw?.blockIO ?? '—');
+                            return (
+                                <div className="hot-row" key={c?.id || c?.name} title={(c?.image ? `${c.image} • ` : '') + (c?.id || '')}>
+                                    <div className="hot-name">{c?.name || c?.id || '—'}</div>
+                                    <div className="hot-col">{cpu}</div>
+                                    <div className="hot-col">{mem}</div>
+                                    <div className="hot-io">{blk}</div>
+                                </div>
+                            );
+                        })
+                    ))) }
+                </div>
+            );
+        }
+
+        function AddServerModal({ open, onClose, onSave }) {
+            const [name, setName] = useState('');
+            const [host, setHost] = useState('');
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [wsUrl, setWsUrl] = useState('ws://localhost:8080/ssh-monitor');
+
+            useEffect(() => {
+                if (open) {
+                    setName('');
+                    setHost('');
+                    setUsername('');
+                    setPassword('');
+                    setWsUrl('ws://localhost:8080/ssh-monitor');
+                }
+            }, [open]);
+
+            if (!open) return null;
+
+            return (
+                <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+                    <form
+                        className="add-server-form"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (!name || !host || !username || !password) {
+                                alert('Please fill in all fields');
+                                return;
+                            }
+                            onSave({
+                                id: `server-${Date.now()}`,
+                                name,
+                                host,
+                                username,
+                                password,
+                                wsUrl
+                            });
+                        }}
+                    >
+                        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 14 }}>Add Server</h3>
+
+                        <div className="form-group">
+                            <label className="form-label">Server Name</label>
+                            <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Build Box" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Hostname / IP</label>
+                            <input className="form-input" value={host} onChange={e => setHost(e.target.value)} placeholder="e.g., 192.168.0.50" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Username</label>
+                            <input className="form-input" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., ubuntu" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Password</label>
+                            <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter password" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">WebSocket URL</label>
+                            <input className="form-input" value={wsUrl} onChange={e => setWsUrl(e.target.value)} placeholder="ws://localhost:8080/ssh-monitor" />
+                        </div>
+
+                        <div className="form-actions" style={{ marginTop: 10 }}>
+                            <button className="form-btn cancel" type="button" onClick={onClose}>Cancel</button>
+                            <button className="form-btn save" type="submit">Save</button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        function App() {
+            const [servers, setServers] = useState(() => readBuiltins());
+            const [addOpen, setAddOpen] = useState(false);
+            const wsMapRef = useRef(new Map());
+            const reconnectTimersRef = useRef(new Map());
+
+            const [holdoff, setHoldoff] = useState(false); // when true, we intentionally stop auto-connect/reconnect
+            const holdoffRef = useRef(false);
+            useEffect(() => { holdoffRef.current = holdoff; }, [holdoff]);
+
+            const [control, setControl] = useState({
+                ok: false,
+                lastTs: null,
+                bridge: { running: false, pid: null, reachable: false, startedByController: false, probe: null },
+                error: null,
+                busy: false
+            });
+
+            const updateServer = useStableCallback((id, patch) => {
+                setServers(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+            });
+
+            const appendLog = useStableCallback((id, line, ts = Date.now()) => {
+                const prefix = `[${new Date(ts).toLocaleTimeString()}] `;
+                setServers(prev => prev.map(s => {
+                    if (s.id !== id) return s;
+                    let next = (s.terminalLog || '') + prefix + String(line).replace(/\n?$/, '\n');
+                    if (next.length > MAX_LOG_CHARS) next = next.slice(next.length - MAX_LOG_CHARS);
+                    return { ...s, terminalLog: next };
+                }));
+            });
+
+            const scheduleReconnect = useStableCallback((id) => {
+                if (holdoffRef.current) return;
+                // Avoid duplicate timers
+                const existing = reconnectTimersRef.current.get(id);
+                if (existing) return;
+
+                setServers(prev => prev.map(s => {
+                    if (s.id !== id) return s;
+                    const attempt = Number(s.reconnectAttempt || 0) + 1;
+                    return { ...s, reconnectAttempt: attempt };
+                }));
+
+                // Compute backoff based on latest state (best-effort)
+                const s = servers.find(x => x.id === id);
+                const attemptNow = Number(s?.reconnectAttempt || 0) + 1;
+                const delayMs = Math.min(30000, 1000 * Math.pow(2, Math.min(6, attemptNow))); // 2s..64s capped
+                appendLog(id, `Auto-reconnect scheduled in ${Math.round(delayMs / 1000)}s…`);
+
+                const t = setTimeout(() => {
+                    reconnectTimersRef.current.delete(id);
+                    connectServer(id);
+                }, delayMs);
+                reconnectTimersRef.current.set(id, t);
+            });
+
+            const pushMetric = useStableCallback((id, key, value, ts) => {
+                const n = Number(value);
+                if (!Number.isFinite(n)) return;
+                const t = new Date(ts || Date.now()).toLocaleTimeString();
+                setServers(prev => prev.map(s => {
+                    if (s.id !== id) return s;
+                    const series = s.series || { cpu: [], mem: [], disk: [], lat: [] };
+                    const nextSeries = { ...series };
+                    const arr = Array.isArray(nextSeries[key]) ? [...nextSeries[key]] : [];
+                    const hi = (key === 'lat') ? 2000 : 100;
+                    arr.push({ t, v: clamp(n, 0, hi) });
+                    while (arr.length > MAX_POINTS) arr.shift();
+                    nextSeries[key] = arr;
+                    return { ...s, series: nextSeries };
+                }));
+            });
+
+            const handleWsMessage = useStableCallback((id, raw) => {
+                let msg;
+                try {
+                    msg = JSON.parse(raw);
+                } catch (_) {
+                    appendLog(id, String(raw));
+                    return;
+                }
+                const ts = msg.ts || Date.now();
+
+                if (msg.type === 'bridge_info') {
+                    updateServer(id, { bridge: msg });
+                    appendLog(id, `Bridge: build=${msg.build || '—'} python=${msg.python || '—'} path=${msg.path || '—'}`, ts);
+                    return;
+                }
+
+                if (msg.type === 'metrics') {
+                    updateServer(id, {
+                        lastUpdateTs: ts,
+                        lastMetrics: {
+                            cpuPct: Number.isFinite(Number(msg.cpuPct)) ? Number(msg.cpuPct) : null,
+                            memPct: Number.isFinite(Number(msg.memPct)) ? Number(msg.memPct) : null,
+                            diskBusyPct: Number.isFinite(Number(msg.diskBusyPct)) ? Number(msg.diskBusyPct) : null,
+                            uptime: msg.uptime ?? null,
+                            load1: msg.load1 ?? null,
+                            load5: msg.load5 ?? null,
+                            load15: msg.load15 ?? null,
+                            rootUsedPct: msg.rootUsedPct ?? null,
+                            latencyMs: msg.latencyMs ?? null,
+                            ts
+                        }
+                    });
+                    pushMetric(id, 'cpu', msg.cpuPct, ts);
+                    pushMetric(id, 'mem', msg.memPct, ts);
+                    pushMetric(id, 'disk', msg.diskBusyPct, ts);
+                    pushMetric(id, 'lat', msg.latencyMs, ts);
+                    return;
+                }
+
+                if (msg.type === 'docker') {
+                    // Log docker-stats failures (but avoid spamming)
+                    const nextErr = (typeof msg.statsError === 'string' && msg.statsError.trim().length) ? msg.statsError.trim() : null;
+                    const prev = servers.find(s => s.id === id);
+                    const prevErr = (prev?.docker?.statsError && String(prev.docker.statsError).trim().length) ? String(prev.docker.statsError).trim() : null;
+                    if (nextErr && nextErr !== prevErr) {
+                        appendLog(id, `WARN: docker stats failed: ${nextErr}`);
+                    }
+                    updateServer(id, {
+                        dockerStatus: String(msg.status || 'unknown'),
+                        docker: {
+                            status: String(msg.status || 'unknown'),
+                            containers: Array.isArray(msg.containers) ? msg.containers : null,
+                            stats: Array.isArray(msg.stats) ? msg.stats : null,
+                            statsError: (typeof msg.statsError === 'string' && msg.statsError.trim().length) ? msg.statsError.trim() : null,
+                            swarm: (msg.swarm && typeof msg.swarm === 'object') ? msg.swarm : null,
+                            usedSudo: !!msg.usedSudo,
+                            daemonError: (typeof msg.daemonError === 'string' && msg.daemonError.trim().length) ? msg.daemonError.trim() : null
+                        }
+                    });
+                    return;
+                }
+
+                if (msg.type === 'terminal') {
+                    appendLog(id, msg.line ?? msg.data ?? '', ts);
+                    return;
+                }
+
+                if (msg.type === 'error') {
+                    appendLog(id, `ERROR: ${msg.message || 'Unknown error'}`, ts);
+                    return;
+                }
+
+                appendLog(id, `WS: ${JSON.stringify(msg)}`, ts);
+            });
+
+            const connectServer = useStableCallback((id) => {
+                if (holdoffRef.current) return;
+                const server = servers.find(s => s.id === id);
+                if (!server || server.connected || server.connecting) return;
+
+                // Close old if present
+                const old = wsMapRef.current.get(id);
+                if (old) {
+                    try { old.close(); } catch (_) {}
+                    wsMapRef.current.delete(id);
+                }
+
+                updateServer(id, { connecting: true, connected: false });
+                appendLog(id, `Connecting WS -> ${server.wsUrl}`);
+
+                let ws;
+                try {
+                    ws = new WebSocket(server.wsUrl);
+                } catch (e) {
+                    updateServer(id, { connecting: false, connected: false });
+                    appendLog(id, `ERROR: WebSocket init failed: ${String(e)}`);
+                    return;
+                }
+
+                wsMapRef.current.set(id, ws);
+
+                ws.onopen = () => {
+                    // Clear any pending reconnect timer
+                    const t = reconnectTimersRef.current.get(id);
+                    if (t) {
+                        clearTimeout(t);
+                        reconnectTimersRef.current.delete(id);
+                    }
+
+                    updateServer(id, { connecting: false, connected: true, reconnectAttempt: 0 });
+                    appendLog(id, 'WS connected. Authenticating…');
+
+                    try {
+                        ws.send(JSON.stringify({ type: 'hello', client: 'LinuxMonitor.html', version: 1, target: { host: server.host } }));
+                        ws.send(JSON.stringify({ type: 'auth', username: server.username, password: server.password }));
+                        ws.send(JSON.stringify({ type: 'subscribe', streams: { metrics: true, docker: true, terminal: true }, intervalMs: 5000 }));
+                    } catch (e) {
+                        appendLog(id, `ERROR: send failed: ${String(e)}`);
+                    }
+                };
+
+                ws.onmessage = (evt) => handleWsMessage(id, evt.data);
+                ws.onerror = () => {
+                    appendLog(id, 'WS error (network/bridge down?).');
+                };
+                ws.onclose = (ev) => {
+                    wsMapRef.current.delete(id);
+                    updateServer(id, { connecting: false, connected: false });
+                    appendLog(id, `WS disconnected (code=${ev?.code ?? '—'} reason=${ev?.reason ? JSON.stringify(ev.reason) : '—'})`);
+                    // Keep trying forever; bridge may start later
+                    scheduleReconnect(id);
+                };
+            });
+
+            const disconnectServer = useStableCallback((id) => {
+                const ws = wsMapRef.current.get(id);
+                if (ws) {
+                    try { ws.close(); } catch (_) {}
+                    wsMapRef.current.delete(id);
+                }
+                updateServer(id, { connecting: false, connected: false });
+                appendLog(id, 'Disconnected');
+            });
+
+            const disconnectAll = useStableCallback(() => {
+                const ids = Array.isArray(servers) ? servers.map(s => s.id) : [];
+                ids.forEach(id => {
+                    const ws = wsMapRef.current.get(id);
+                    if (ws) {
+                        try { ws.close(); } catch (_) {}
+                        wsMapRef.current.delete(id);
+                    }
+                    updateServer(id, { connecting: false, connected: false });
+                });
+            });
+
+            const connectAll = useStableCallback(() => {
+                const ids = Array.isArray(servers) ? servers.map(s => s.id) : [];
+                ids.forEach(id => connectServer(id));
+            });
+
+            const fetchControl = useStableCallback(async (path, method = 'GET') => {
+                const url = `${CONTROL_BASE}${path}`;
+                const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' } });
+                const txt = await res.text();
+                let data;
+                try { data = JSON.parse(txt); } catch (_) { data = { ok: false, error: txt || `HTTP ${res.status}` }; }
+                if (!res.ok || data?.ok === false) {
+                    const msg = data?.error || `HTTP ${res.status}`;
+                    throw new Error(msg);
+                }
+                return data;
+            });
+
+            const refreshControl = useStableCallback(async () => {
+                try {
+                    const data = await fetchControl('/_/status', 'GET');
+                    setControl(prev => ({ ...prev, ok: true, lastTs: Date.now(), bridge: data.bridge || prev.bridge, error: null }));
+                } catch (e) {
+                    setControl(prev => ({
+                        ...prev,
+                        ok: false,
+                        lastTs: Date.now(),
+                        error: String(e?.message || e)
+                    }));
+                }
+            });
+
+            const startBridge = useStableCallback(async () => {
+                setControl(prev => ({ ...prev, busy: true, error: null }));
+                try {
+                    const data = await fetchControl('/_/start', 'GET');
+                    setControl(prev => ({ ...prev, ok: true, lastTs: Date.now(), bridge: data.bridge || prev.bridge, error: null, busy: false }));
+                    setHoldoff(false);
+                    // Try reconnect now; otherwise normal auto-reconnect will catch up
+                    connectAll();
+                    servers.forEach(s => appendLog(s.id, 'Bridge start requested from dashboard.'));
+                } catch (e) {
+                    setControl(prev => ({ ...prev, busy: false, error: String(e?.message || e) }));
+                }
+            });
+
+            const stopBridge = useStableCallback(async () => {
+                setControl(prev => ({ ...prev, busy: true, error: null }));
+                try {
+                    const data = await fetchControl('/_/stop', 'GET');
+                    setControl(prev => ({ ...prev, ok: true, lastTs: Date.now(), bridge: data.bridge || prev.bridge, error: null, busy: false }));
+                    setHoldoff(true);
+                    disconnectAll();
+                    servers.forEach(s => appendLog(s.id, 'Bridge stop requested from dashboard. Auto-reconnect paused.'));
+                } catch (e) {
+                    setControl(prev => ({ ...prev, busy: false, error: String(e?.message || e) }));
+                }
+            });
+
+            const removeServer = useStableCallback((id) => {
+                disconnectServer(id);
+                setServers(prev => prev.filter(s => s.id !== id));
+            });
+
+            useEffect(() => {
+                console.log('LinuxMonitor build:', BUILD_ID);
+            }, []);
+
+            useEffect(() => {
+                // Poll control server status (if it's running)
+                refreshControl();
+                const t = setInterval(refreshControl, 1500);
+                return () => clearInterval(t);
+            }, []);
+
+            useEffect(() => {
+                return () => {
+                    for (const t of reconnectTimersRef.current.values()) {
+                        try { clearTimeout(t); } catch (_) {}
+                    }
+                    reconnectTimersRef.current.clear();
+                    for (const ws of wsMapRef.current.values()) {
+                        try { ws.close(); } catch (_) {}
+                    }
+                    wsMapRef.current.clear();
+                };
+            }, []);
+
+            useEffect(() => {
+                // Auto-connect built-ins
+                if (!holdoffRef.current) {
+                    servers.forEach(s => {
+                        if (!s.connected && !s.connecting) connectServer(s.id);
+                    });
+                }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+            }, []);
+
+            const primary = useMemo(() => servers.find(s => s.id === 'primary-macbook') || null, [servers]);
+            const worker = useMemo(() => servers.find(s => s.id === 'worker-macbook') || null, [servers]);
+
+            const isPulsing = (s) => {
+                const ts = Number(s?.lastUpdateTs);
+                if (!Number.isFinite(ts)) return false;
+                return (Date.now() - ts) < 900;
+            };
+
+            const charts = useMemo(() => {
+                const a = primary;
+                const b = worker;
+                const mk = (key, title) => ({
+                    id: `${key}-combined`,
+                    title,
+                    datasets: [
+                        a ? { label: `Primary (${a.host})`, color: serverColor(a.id), fill: serverFillColor(a.id), series: a.series?.[key] || [] } : null,
+                        b ? { label: `Worker (${b.host})`, color: serverColor(b.id), fill: serverFillColor(b.id), series: b.series?.[key] || [] } : null
+                    ].filter(Boolean)
+                });
+                return {
+                    cpu: mk('cpu', 'CPU % (Primary vs Worker)'),
+                    mem: mk('mem', 'MEM % (Primary vs Worker)'),
+                    disk: mk('disk', 'DISK BUSY % (Primary vs Worker)'),
+                    lat: mk('lat', 'LATENCY ms (Primary vs Worker)')
+                };
+            }, [primary, worker]);
+
+            const spark = useMemo(() => {
+                const a = primary;
+                const b = worker;
+                const mk = (key) => ([
+                    a ? { label: 'Primary', color: serverColor(a.id), series: a.series?.[key] || [] } : null,
+                    b ? { label: 'Worker', color: serverColor(b.id), series: b.series?.[key] || [] } : null
+                ].filter(Boolean));
+                return {
+                    cpu: mk('cpu'),
+                    mem: mk('mem'),
+                    disk: mk('disk')
+                };
+            }, [primary, worker]);
+
+            return (
+                <div className="app">
+                    <div className="header">
+                        <div>
+                            <div className="title">Linux Monitor</div>
+                            <div className="subtitle">Monochrome Live Dashboard • Build {BUILD_ID}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                            <span className="pill" title={control?.error ? String(control.error) : `${CONTROL_BASE} /_/status`}>
+                                <span className={`dot ${control?.bridge?.reachable ? 'ok' : control?.ok ? 'warn' : 'bad'}`}></span>
+                                Bridge {control?.bridge?.reachable ? (control?.bridge?.running ? `running (pid ${control.bridge.pid || '—'})` : 'reachable') : (control?.ok ? 'not reachable' : 'control server down')}
+                            </span>
+                            <button
+                                className="control-btn"
+                                type="button"
+                                onClick={startBridge}
+                                disabled={!!control.busy}
+                                title="Starts the local ws://localhost:8080/ssh-monitor bridge via the control server"
+                            >
+                                Start
+                            </button>
+                            <button
+                                className="control-btn"
+                                type="button"
+                                onClick={stopBridge}
+                                disabled={!!control.busy || !(control?.bridge?.running && control?.bridge?.startedByController)}
+                                title={control?.bridge?.startedByController ? 'Stops the bridge process started by this controller' : 'Stop disabled unless the controller started the bridge'}
+                            >
+                                Stop
+                            </button>
+                            {primary ? (
+                                <span className="pill" title={primary.wsUrl}>
+                                    <span className={`dot ${primary.connected ? 'ok' : primary.connecting ? 'warn' : 'bad'} primary`}></span>
+                                    <span className="accent primary">Primary</span> {primary.host}
+                                </span>
+                            ) : null}
+                            {worker ? (
+                                <span className="pill" title={worker.wsUrl}>
+                                    <span className={`dot ${worker.connected ? 'ok' : worker.connecting ? 'warn' : 'bad'} worker`}></span>
+                                    <span className="accent worker">Worker</span> {worker.host}
+                                </span>
+                            ) : null}
+                            <button className="add-server-btn" onClick={() => setAddOpen(true)} type="button">Add Server</button>
+                        </div>
+                    </div>
+
+                    <div className="stats-row">
+                        <div className="stat-card">
+                            <div className="stat-label">CPU %</div>
+                            <div className="stat-body">
+                                <div className="stat-lines">
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot primary"></span><span className="accent primary">Primary</span></span>
+                                        <span className={`stat-value ${isPulsing(primary) ? 'pulse' : ''}`} style={{ fontSize: 18 }}>{primary?.lastMetrics?.cpuPct == null ? '—' : `${fmtPct(primary.lastMetrics.cpuPct)}%`}</span>
+                                    </div>
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot worker"></span><span className="accent worker">Worker</span></span>
+                                        <span className={`stat-value ${isPulsing(worker) ? 'pulse' : ''}`} style={{ fontSize: 18 }}>{worker?.lastMetrics?.cpuPct == null ? '—' : `${fmtPct(worker.lastMetrics.cpuPct)}%`}</span>
+                                    </div>
+                                </div>
+                                <Sparkline id="spark-cpu" datasets={spark.cpu} />
+                            </div>
+                        </div>
+
+                        <div className="stat-card">
+                            <div className="stat-label">MEM %</div>
+                            <div className="stat-body">
+                                <div className="stat-lines">
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot primary"></span><span className="accent primary">Primary</span></span>
+                                        <span className={`stat-value ${isPulsing(primary) ? 'pulse' : ''}`} style={{ fontSize: 18 }}>{primary?.lastMetrics?.memPct == null ? '—' : `${fmtPct(primary.lastMetrics.memPct)}%`}</span>
+                                    </div>
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot worker"></span><span className="accent worker">Worker</span></span>
+                                        <span className={`stat-value ${isPulsing(worker) ? 'pulse' : ''}`} style={{ fontSize: 18 }}>{worker?.lastMetrics?.memPct == null ? '—' : `${fmtPct(worker.lastMetrics.memPct)}%`}</span>
+                                    </div>
+                                </div>
+                                <Sparkline id="spark-mem" datasets={spark.mem} />
+                            </div>
+                        </div>
+
+                        <div className="stat-card">
+                            <div className="stat-label">DISK BUSY %</div>
+                            <div className="stat-body">
+                                <div className="stat-lines">
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot primary"></span><span className="accent primary">Primary</span></span>
+                                        <span className={`stat-value ${isPulsing(primary) ? 'pulse' : ''}`} style={{ fontSize: 18 }}>{primary?.lastMetrics?.diskBusyPct == null ? '—' : `${fmtPct(primary.lastMetrics.diskBusyPct)}%`}</span>
+                                    </div>
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot worker"></span><span className="accent worker">Worker</span></span>
+                                        <span className={`stat-value ${isPulsing(worker) ? 'pulse' : ''}`} style={{ fontSize: 18 }}>{worker?.lastMetrics?.diskBusyPct == null ? '—' : `${fmtPct(worker.lastMetrics.diskBusyPct)}%`}</span>
+                                    </div>
+                                </div>
+                                <Sparkline id="spark-disk" datasets={spark.disk} />
+                            </div>
+                        </div>
+
+                        <div className="stat-card">
+                            <div className="stat-label">Docker</div>
+                            <div className="stat-body" style={{ gridTemplateRows: 'auto auto' }}>
+                                <div className="stat-lines">
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot primary"></span><span className="accent primary">Primary</span></span>
+                                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.82)' }}>
+                                            {primary?.dockerStatus || '—'}
+                                            {Array.isArray(primary?.docker?.containers) ? ` (${primary.docker.containers.length})` : ''}
+                                            {primary?.docker?.swarm?.localNodeState ? ` • swarm:${String(primary.docker.swarm.localNodeState)}` : ''}
+                                            {Array.isArray(primary?.docker?.swarm?.nodes) ? ` • nodes:${primary.docker.swarm.nodes.length}` : ''}
+                                            {primary?.docker?.usedSudo ? ' • sudo' : ''}
+                                        </span>
+                                    </div>
+                                    <div className="stat-line">
+                                        <span className="k"><span className="dot worker"></span><span className="accent worker">Worker</span></span>
+                                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.82)' }}>
+                                            {worker?.dockerStatus || '—'}
+                                            {Array.isArray(worker?.docker?.containers) ? ` (${worker.docker.containers.length})` : ''}
+                                            {worker?.docker?.swarm?.localNodeState ? ` • swarm:${String(worker.docker.swarm.localNodeState)}` : ''}
+                                            {Array.isArray(worker?.docker?.swarm?.nodes) ? ` • nodes:${worker.docker.swarm.nodes.length}` : ''}
+                                            {worker?.docker?.usedSudo ? ' • sudo' : ''}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 800, textAlign: 'left' }}>
+                                    Root used: {primary?.lastMetrics?.rootUsedPct != null ? `${fmtPct(primary.lastMetrics.rootUsedPct)}%` : '—'} / {worker?.lastMetrics?.rootUsedPct != null ? `${fmtPct(worker.lastMetrics.rootUsedPct)}%` : '—'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ overflow: 'auto', paddingBottom: 14 }}>
+                        <div className="charts-grid">
+                            <CombinedChart id={charts.cpu.id} title={charts.cpu.title} datasets={charts.cpu.datasets} />
+                            <CombinedChart id={charts.mem.id} title={charts.mem.title} datasets={charts.mem.datasets} />
+                            <CombinedChart id={charts.disk.id} title={charts.disk.title} datasets={charts.disk.datasets} />
+                            <CombinedChart id={charts.lat.id} title={charts.lat.title} datasets={charts.lat.datasets} unit="ms" yMin={0} yMax={null} />
+                        </div>
+
+                        <div className="terminals-grid">
+                            <div className="server-card" style={{ padding: 14 }}>
+                                <div className="server-header" style={{ marginBottom: 10 }}>
+                                    <div className="server-title"><span className="accent primary">Primary</span> terminal</div>
+                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                        <span className="pill"><span className={`dot ${primary?.connected ? 'ok' : primary?.connecting ? 'warn' : 'bad'} primary`}></span>{primary?.connected ? 'Connected' : primary?.connecting ? 'Connecting' : 'Disconnected'}</span>
+                                    </div>
+                                </div>
+                                <HotContainers server={primary} labelColor={serverColor('primary-macbook')} />
+                                <Terminal text={primary?.terminalLog || ''} />
+                            </div>
+                            <div className="server-card" style={{ padding: 14 }}>
+                                <div className="server-header" style={{ marginBottom: 10 }}>
+                                    <div className="server-title"><span className="accent worker">Worker</span> terminal</div>
+                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                        <span className="pill"><span className={`dot ${worker?.connected ? 'ok' : worker?.connecting ? 'warn' : 'bad'} worker`}></span>{worker?.connected ? 'Connected' : worker?.connecting ? 'Connecting' : 'Disconnected'}</span>
+                                    </div>
+                                </div>
+                                <HotContainers server={worker} labelColor={serverColor('worker-macbook')} />
+                                <Terminal text={worker?.terminalLog || ''} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <AddServerModal
+                        open={addOpen}
+                        onClose={() => setAddOpen(false)}
+                        onSave={(srv) => {
+                            setServers(prev => [...prev, {
+                                ...srv,
+                                connected: false,
+                                connecting: false,
+                                lastMetrics: null,
+                                lastUpdateTs: null,
+                                dockerStatus: 'unknown',
+                                docker: { status: 'unknown', containers: null, stats: null, statsError: null, swarm: null, usedSudo: false, daemonError: null },
+                                series: { cpu: [], mem: [], disk: [], lat: [] },
+                                reconnectAttempt: 0,
+                                bridge: null,
+                                terminalLog: `[${new Date().toLocaleTimeString()}] Boot: server added. Attempting WS → SSH…\n`
+                            }]);
+                            setAddOpen(false);
+                            // slight delay so state commits before connect
+                            setTimeout(() => connectServer(srv.id), 50);
+                        }}
+                    />
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+    </script>
+</body>
+</html>

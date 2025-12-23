@@ -2,11 +2,17 @@
  * useRightPanel hook
  * 
  * Manages the state of the unified right side panel
+ * 
+ * Tabs:
+ * - documents: RAG and session documents
+ * - tools: ToolShed for forcing AI tools
+ * - smart: GoggaSmart learning stats
+ * - media: ImageStudio and VideoStudio access
  */
 
 import { create } from 'zustand';
 
-type TabId = 'tools' | 'documents' | 'weather' | 'search' | 'smart';
+type TabId = 'tools' | 'documents' | 'weather' | 'search' | 'smart' | 'media';
 
 interface RightPanelState {
   isOpen: boolean;

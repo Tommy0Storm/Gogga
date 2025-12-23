@@ -1,11 +1,48 @@
 # RxDB Implementation for GOGGA
 
-> **Last Updated:** December 21, 2025
-> **Status:** ✅ COMPLETE - db.ts shim switchover done, performance optimizations applied, **COL23/DB8 collection limit fix applied**
+> **Last Updated:** December 24, 2025
+> **Status:** ✅ COMPLETE - Dexie fully removed, RxDB is the only client-side database
 
 ## Overview
-Complete RxDB 16.21.1 implementation replacing/augmenting Dexie for client-side storage.
+Complete RxDB 16.21.1 implementation for client-side storage.
 Uses Distance-to-Samples vector indexing for efficient similarity search without external dependencies.
+
+## ID Generation Consolidation (December 24, 2025)
+
+### Problem Solved
+Two different `generateSessionId()` implementations existed with inconsistent formats:
+- `db.ts`: `session-{base36_timestamp}-{random}` (hyphens)
+- `database.ts`: `session_{timestamp}_{random}` (underscores, different format)
+
+### Solution: Single Canonical Format
+Both files now use the same format: `session-{base36_timestamp}-{random}`
+
+| Function | Location | Format | Notes |
+|----------|----------|--------|-------|
+| `generateSessionId()` | `lib/db.ts` | `session-{base36}-{random}` | **CANONICAL** |
+| `generateSessionId()` | `lib/rxdb/database.ts` | `session-{base36}-{random}` | Mirrors db.ts |
+| `generateId()` | `lib/db.ts` | `{base36}-{random}` | Document IDs |
+| `generateId()` | `lib/rxdb/database.ts` | `{base36}-{random}` | Mirrors db.ts |
+
+### Why Base36?
+- Human-readable (alphanumeric)
+- Sorts chronologically
+- Compact representation
+- Avoids special characters
+
+## Final Migration (December 23, 2025)
+
+### Dexie Fully Removed
+- **Removed `dexie` from package.json** - No longer a direct dependency
+- **Archived legacy files** to `.archive/dexie-legacy/`:
+  - `db-dexie-legacy.ts` - Old Dexie database implementation
+  - `migration.ts` - One-time Dexie→RxDB migration utility
+- **RxDB uses Dexie internally** via `rxdb/plugins/storage-dexie` as IndexedDB backend (this is expected)
+
+### Naming Cleanup
+- Renamed `DexieMaintenance.tsx` → `DatabaseMaintenance.tsx`
+- Renamed `DexieStorageStats` → `StorageStats`
+- Updated all imports and UI labels
 
 ## Collection Limit Fix (December 21, 2025)
 
@@ -195,15 +232,15 @@ Also includes `RxDBPerf` namespace with helper patterns:
 | `ragManager.ts` | `batchArray`, `requestIdlePromise` | Parallel embedding with idle callbacks, 3x faster |
 | `vectorCollection.ts` | `batchArray`, `bulkRemove` | Fast vector deletion and re-indexing |
 
-## DB Switchover (December 15-16, 2025)
+## Database Architecture (Current)
 
-**db.ts is the PRIMARY database file using RxDB. Dexie is DEPRECATED.**
+**RxDB is the ONLY client-side database. Migration complete December 23, 2025.**
 
 | File | Purpose |
 |------|---------|
-| `lib/db.ts` | **PRIMARY** - Full RxDB implementation (NOT Dexie) |
-| `lib/db-dexie-legacy.ts` | DEPRECATED - Legacy Dexie backup (do not use) |
+| `lib/db.ts` | **PRIMARY** - RxDB implementation with Dexie-like API shim |
 | `lib/rxdb/` | RxDB schemas, vector search, pipelines |
+| `.archive/dexie-legacy/` | Archived legacy files (kept for reference only) |
 
 **Key Architecture:**
 - `db.ts` exports `db` object with `RxDBProxy` class for collection access
@@ -217,12 +254,12 @@ Also includes `RxDBPerf` namespace with helper patterns:
 - Date fields converted to `.toISOString()` for RxDB compatibility
 - `skillId` now includes timestamp for uniqueness: `output-m5x7k2j-001`
 
-**Tests:** 25 tests passing (11 integration + 14 shim)
+**Tests:** 66 tests passing (15 memoryStorage + 24 rxdb + 27 advanced)
 
 ## Files Created
 
 ### Core Database
-- `gogga-frontend/src/lib/rxdb/schemas.ts` - 12 collection schemas with TypeScript types
+- `gogga-frontend/src/lib/rxdb/schemas.ts` - 15 collection schemas with TypeScript types
 - `gogga-frontend/src/lib/rxdb/database.ts` - Database factory, singleton, ID generation
 - `gogga-frontend/src/lib/rxdb/index.ts` - Public exports
 
@@ -258,7 +295,7 @@ Also includes `RxDBPerf` namespace with helper patterns:
 - `gogga-frontend/src/lib/rxdb/__tests__/rxdb.test.ts` - 24 passing tests
 - `gogga-frontend/vitest.config.ts` - Test configuration
 
-## Collections (14 total in goggadb)
+## Collections (15 total in goggadb)
 1. `documents` - Uploaded documents with content
 2. `documentChunks` - Document chunks for RAG
 3. `chatSessions` - Chat session metadata
@@ -273,6 +310,7 @@ Also includes `RxDBPerf` namespace with helper patterns:
 12. `vectorEmbeddings` - Vector embeddings with idx0-idx4 indexes
 13. `offlineQueue` - Offline message queue
 14. `goggaSmartSkills` - GoggaSmart learned skills
+15. `iconGenerations` - Premium SA-themed 3D SVG icons (Icon Studio)
 
 **Note**: RxDB open-source limits to 16 collections max. Memory storage now uses JavaScript Maps (not RxDB) to stay under limit.
 

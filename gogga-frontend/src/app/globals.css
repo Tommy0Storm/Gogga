@@ -362,11 +362,11 @@
     @apply text-primary-800 bg-primary-100;
   }
   
-  /* Header buttons - uniform size */
+  /* Header buttons - uniform size, works with transparent header */
   .header-btn {
     @apply flex items-center gap-1.5 text-xs h-9 px-3 
-           bg-primary-700 hover:bg-primary-600 rounded-lg 
-           transition-all font-medium whitespace-nowrap;
+           bg-primary-200 hover:bg-primary-300 text-primary-800 rounded-lg 
+           transition-all font-medium whitespace-nowrap border border-primary-300;
     transition-timing-function: var(--ease-smooth);
     transition-duration: var(--duration-fast);
   }

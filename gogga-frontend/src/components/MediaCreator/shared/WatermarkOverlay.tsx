@@ -71,7 +71,7 @@ export function WatermarkOverlay({
               className="inline-flex items-center gap-2 px-4 py-2 bg-white text-neutral-900 
                        text-sm font-medium rounded-lg hover:bg-neutral-100 transition-colors"
             >
-              Upgrade for R49/mo
+              Upgrade for R99/mo
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

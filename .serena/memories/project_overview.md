@@ -23,7 +23,7 @@ GOGGA (named after the South African colloquial term for "insect") is a **Sovere
 3. **User-First Loyalty** - Champion, not neutral party
 4. Automatic intent classification for model routing
 5. Cost tracking with ZAR conversion
-6. Subscription tiers (FREE, JIVE R49, JIGGA R149)
+6. Subscription tiers (FREE, JIVE R99, JIGGA R299)
 7. Voice recording and transcription
 8. Local RAG with semantic search (JIGGA tier)
 

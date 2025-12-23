@@ -1,12 +1,12 @@
 /**
  * useTextToSpeech Hook
  * 
- * Synthesizes speech from text using Google's Gemini TTS model.
- * Uses the Charon voice for consistent GOGGA identity (same as GoggaTalk).
+ * Synthesizes speech from text using Gemini TTS with Charon voice via the backend.
+ * Uses 50-word sentence-boundary chunking for cost savings on cancellation.
  * 
- * OPTIMIZATION: Splits text into 2-3 sentence chunks for faster initial playback.
- * First chunk starts playing quickly while remaining chunks are fetched.
- * Uses a single AudioContext to avoid browser crashes.
+ * OPTIMIZATION: Splits text into ~50 word chunks ending at sentence boundaries.
+ * First chunk starts playing quickly while remaining chunks are fetched sequentially.
+ * When user cancels, remaining chunks are NOT fetched - saving API costs.
  * 
  * JIGGA tier only - provides a "read aloud" feature for assistant responses.
  */
@@ -14,16 +14,22 @@
 
 import { useState, useRef, useCallback } from 'react';
 
-// Audio settings matching Gemini output
-const OUTPUT_SAMPLE_RATE = 24000;
+// Chunk size: split every ~50 words at sentence boundaries for cost savings on cancel
+const WORDS_PER_CHUNK = 50;
 
-// Chunk size: 2-3 sentences for good prosody and quick start
-const SENTENCES_PER_CHUNK = 3;
+// Default voice - Charon for consistent GOGGA identity
+const DEFAULT_VOICE = 'Charon';
 
 interface UseTextToSpeechOptions {
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (error: string) => void;
+  voiceName?: string;
+}
+
+interface TTSResponse {
+  audio_content: string;  // Base64 encoded WAV
+  duration_estimate: number;
 }
 
 /**
@@ -44,21 +50,55 @@ function cleanTextForSpeech(text: string): string {
 }
 
 /**
- * Split text into chunks of 2-3 sentences for optimal TTS
+ * Split text into chunks of ~50 words, ending at sentence boundaries.
+ * 
+ * This ensures cancellation stops at a natural pause point and
+ * prevents API calls for unsent chunks (saving costs).
  */
-function splitIntoChunks(text: string): string[] {
-  // Split on sentence boundaries
-  const sentences = text.match(/[^.!?]*[.!?]+/g) || [text];
+function splitIntoChunks(text: string, maxWords: number = WORDS_PER_CHUNK): string[] {
   const chunks: string[] = [];
   
-  for (let i = 0; i < sentences.length; i += SENTENCES_PER_CHUNK) {
-    const chunk = sentences.slice(i, i + SENTENCES_PER_CHUNK).join(' ').trim();
-    if (chunk) {
-      chunks.push(chunk);
+  // Split into sentences first (preserving punctuation)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  let currentChunk: string[] = [];
+  let currentWordCount = 0;
+  
+  for (const sentence of sentences) {
+    const trimmedSentence = sentence.trim();
+    const sentenceWords = trimmedSentence.split(/\s+/).length;
+    
+    // If this sentence alone exceeds maxWords, split it
+    if (sentenceWords > maxWords && currentChunk.length === 0) {
+      // Split long sentence at word boundaries
+      const words = trimmedSentence.split(/\s+/);
+      for (let i = 0; i < words.length; i += maxWords) {
+        const slice = words.slice(i, i + maxWords).join(' ');
+        if (slice.trim()) {
+          chunks.push(slice.trim());
+        }
+      }
+      continue;
     }
+    
+    // If adding this sentence exceeds limit, finalize current chunk
+    if (currentWordCount + sentenceWords > maxWords && currentChunk.length > 0) {
+      chunks.push(currentChunk.join(' ').trim());
+      currentChunk = [];
+      currentWordCount = 0;
+    }
+    
+    // Add sentence to current chunk
+    currentChunk.push(trimmedSentence);
+    currentWordCount += sentenceWords;
   }
   
-  return chunks.length > 0 ? chunks : [text];
+  // Don't forget the last chunk
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join(' ').trim());
+  }
+  
+  return chunks.filter(c => c.length > 0);
 }
 
 export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
@@ -66,42 +106,29 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<AudioBuffer[]>([]);
-  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioElementsRef = useRef<HTMLAudioElement[]>([]);
+  const currentIndexRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isCancelledRef = useRef(false);
-  const isPlayingQueueRef = useRef(false);
-
-  /**
-   * Get or create AudioContext (reuse single instance)
-   */
-  const getAudioContext = useCallback(async (): Promise<AudioContext> => {
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
-    }
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
-    return audioContextRef.current;
-  }, []);
+  const isFetchingRef = useRef(false);
 
   /**
    * Stop any currently playing audio and cancel pending requests
    */
   const stop = useCallback(() => {
     isCancelledRef.current = true;
-    isPlayingQueueRef.current = false;
-    audioQueueRef.current = [];
+    isFetchingRef.current = false;
     
-    if (currentSourceRef.current) {
-      try {
-        currentSourceRef.current.stop();
-      } catch {
-        // Already stopped
+    // Stop and clean up all audio elements
+    audioElementsRef.current.forEach(audio => {
+      if (audio) {
+        audio.pause();
+        audio.src = '';
       }
-      currentSourceRef.current = null;
-    }
+    });
+    audioElementsRef.current = [];
+    currentIndexRef.current = 0;
+    
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -111,94 +138,95 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
   }, []);
 
   /**
-   * Fetch TTS audio for a chunk of text
+   * Fetch TTS audio for a chunk of text from backend
    */
   const fetchChunkAudio = useCallback(async (
     chunkText: string,
-    apiKey: string,
+    voiceName: string,
     signal: AbortSignal
-  ): Promise<AudioBuffer | null> => {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: chunkText }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Charon' } // Same as GoggaTalk
-              }
-            }
-          }
-        }),
-        signal,
-      }
-    );
+  ): Promise<HTMLAudioElement | null> => {
+    const response = await fetch('/api/v1/tts/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: chunkText,
+        voice_name: voiceName,
+        language_code: 'en-US',
+        speaking_rate: 1.0,
+      }),
+      signal,
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      throw new Error(errorData.detail || `TTS error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const audioData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const data: TTSResponse = await response.json();
     
-    if (!audioData) {
+    if (!data.audio_content) {
       return null;
     }
 
-    // Decode base64 and convert PCM Int16 to AudioBuffer
-    const audioBytes = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
-    const audioContext = await getAudioContext();
+    // Create audio element from base64 WAV (Gemini TTS returns WAV)
+    const audio = new Audio(`data:audio/wav;base64,${data.audio_content}`);
+    await new Promise<void>((resolve, reject) => {
+      audio.oncanplaythrough = () => resolve();
+      audio.onerror = () => reject(new Error('Failed to load audio'));
+      audio.load();
+    });
     
-    const pcmData = new Int16Array(audioBytes.buffer);
-    const floatData = new Float32Array(pcmData.length);
-    for (let i = 0; i < pcmData.length; i++) {
-      const sample = pcmData[i];
-      floatData[i] = sample !== undefined ? sample / 32768.0 : 0;
-    }
-    
-    const audioBuffer = audioContext.createBuffer(1, floatData.length, OUTPUT_SAMPLE_RATE);
-    audioBuffer.getChannelData(0).set(floatData);
-    
-    return audioBuffer;
-  }, [getAudioContext]);
+    return audio;
+  }, []);
 
   /**
-   * Play next buffer from queue
+   * Play the next audio element in sequence
    */
-  const playNextFromQueue = useCallback(async () => {
-    if (isCancelledRef.current || !isPlayingQueueRef.current) {
+  const playNext = useCallback(() => {
+    if (isCancelledRef.current) {
       return;
     }
 
-    const buffer = audioQueueRef.current.shift();
-    if (!buffer) {
-      // Queue empty, we're done
+    const index = currentIndexRef.current;
+    const audioElements = audioElementsRef.current;
+    
+    if (index >= audioElements.length) {
+      // No more audio ready - are we still fetching?
+      if (isFetchingRef.current) {
+        // Still fetching, retry in 100ms
+        setTimeout(() => playNext(), 100);
+        return;
+      }
+      // All done
       setIsPlaying(false);
-      isPlayingQueueRef.current = false;
       options.onEnd?.();
       return;
     }
 
-    const audioContext = await getAudioContext();
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContext.destination);
-    
-    currentSourceRef.current = source;
-    
-    source.onended = () => {
-      currentSourceRef.current = null;
-      // Play next buffer when this one ends
-      playNextFromQueue();
+    const audio = audioElements[index];
+    if (!audio) {
+      // This chunk isn't ready yet, wait
+      if (isFetchingRef.current) {
+        setTimeout(() => playNext(), 100);
+        return;
+      }
+      // No more coming
+      setIsPlaying(false);
+      options.onEnd?.();
+      return;
+    }
+
+    audio.onended = () => {
+      currentIndexRef.current++;
+      playNext();
     };
-    
-    source.start();
-  }, [getAudioContext, options]);
+
+    audio.play().catch(err => {
+      console.error('[TTS] Playback error:', err);
+      options.onError?.(err.message);
+      stop();
+    });
+  }, [options, stop]);
 
   /**
    * Synthesize and play speech with chunked streaming for fast start
@@ -209,18 +237,11 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
     
     if (!text.trim()) return;
 
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-    if (!apiKey) {
-      const errorMsg = 'Google API key not configured';
-      setError(errorMsg);
-      options.onError?.(errorMsg);
-      return;
-    }
-
     const cleanText = cleanTextForSpeech(text);
     if (!cleanText) return;
 
     const chunks = splitIntoChunks(cleanText);
+    const voiceName = options.voiceName || DEFAULT_VOICE;
     
     setIsLoading(true);
     setError(null);
@@ -228,49 +249,48 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
 
     try {
       abortControllerRef.current = new AbortController();
-      audioQueueRef.current = [];
-      isPlayingQueueRef.current = true;
+      audioElementsRef.current = new Array(chunks.length).fill(null);
+      currentIndexRef.current = 0;
+      isFetchingRef.current = chunks.length > 1;
 
       // Fetch first chunk immediately for quick playback start
-      const firstBuffer = await fetchChunkAudio(
+      const firstAudio = await fetchChunkAudio(
         chunks[0],
-        apiKey,
+        voiceName,
         abortControllerRef.current.signal
       );
 
-      if (isCancelledRef.current || !firstBuffer) {
+      if (isCancelledRef.current || !firstAudio) {
         setIsLoading(false);
         return;
       }
 
+      audioElementsRef.current[0] = firstAudio;
+
       // Start playing immediately
       setIsLoading(false);
       setIsPlaying(true);
-      
-      const audioContext = await getAudioContext();
-      const source = audioContext.createBufferSource();
-      source.buffer = firstBuffer;
-      source.connect(audioContext.destination);
-      currentSourceRef.current = source;
-      
-      source.onended = () => {
-        currentSourceRef.current = null;
-        playNextFromQueue();
-      };
-      
-      source.start();
+      playNext();
 
       // Fetch remaining chunks in background
       for (let i = 1; i < chunks.length && !isCancelledRef.current; i++) {
-        const buffer = await fetchChunkAudio(
-          chunks[i],
-          apiKey,
-          abortControllerRef.current.signal
-        );
-        if (buffer && !isCancelledRef.current) {
-          audioQueueRef.current.push(buffer);
+        try {
+          const audio = await fetchChunkAudio(
+            chunks[i],
+            voiceName,
+            abortControllerRef.current.signal
+          );
+          if (audio && !isCancelledRef.current) {
+            audioElementsRef.current[i] = audio;
+          }
+        } catch (err) {
+          // Don't fail the whole playback for one chunk
+          console.warn(`[TTS] Failed to fetch chunk ${i}:`, err);
         }
       }
+      
+      // Mark fetching complete
+      isFetchingRef.current = false;
 
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -285,7 +305,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
       setIsPlaying(false);
       options.onError?.(errorMsg);
     }
-  }, [options, stop, fetchChunkAudio, getAudioContext, playNextFromQueue]);
+  }, [options, stop, fetchChunkAudio, playNext]);
 
   /**
    * Toggle play/stop

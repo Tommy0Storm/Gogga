@@ -268,7 +268,7 @@ export function AdminPanel({ tier, onTierChange, onAdminChange, documentCount = 
             {health ? (
               <div className="space-y-2">
                 {/* Only show services relevant to current tier */}
-                {Object.entries(health.services)
+                {Object.entries(health.services ?? {})
                   .filter(([name]) => TIER_SERVICES[tier].includes(name))
                   .map(([name, svc]) => (
                     <div

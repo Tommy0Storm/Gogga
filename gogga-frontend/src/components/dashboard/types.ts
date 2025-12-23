@@ -4,7 +4,7 @@
  * 
  * Architecture:
  * - Real-time metrics from ragMetrics
- * - Dexie storage statistics
+ * - RxDB storage statistics (uses Dexie internally as IndexedDB backend)
  * - Embedding engine status
  * - Context memory management
  */
@@ -48,7 +48,7 @@ export interface VectorInfo {
 // Storage & Database Types
 // ============================================================================
 
-export interface DexieStorageStats {
+export interface StorageStats {
   documents: number;
   chunks: number;
   messages: number;

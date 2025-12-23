@@ -396,4 +396,79 @@ export const GoggaWordmark = memo(({
 
 GoggaWordmark.displayName = 'GoggaWordmark';
 
+// PNG-based Gogga Icon - uses the transparent goggaicon.png
+// Ideal for header branding and assistant avatars
+// Uses native img tag for simplicity (Next/Image would require configuration for animation classes)
+export const GoggaPngIcon = memo(({ 
+  size = 'md', 
+  className = '' 
+}: { 
+  size?: 'sm' | 'md' | 'lg' | 'xl'; 
+  className?: string;
+}) => {
+  const dimensions = {
+    sm: 24,
+    md: 40,
+    lg: 56,
+    xl: 64,
+  };
+  const dimension = dimensions[size];
+  
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/assets/images/goggaicon.png"
+      alt="Gogga AI"
+      width={dimension}
+      height={dimension}
+      className={`object-contain ${className}`}
+      style={{ width: dimension, height: dimension }}
+      loading="eager"
+      decoding="async"
+      onError={(e) => {
+        // Fallback to SVG cricket if PNG fails
+        e.currentTarget.style.display = 'none';
+      }}
+    />
+  );
+});
+
+GoggaPngIcon.displayName = 'GoggaPngIcon';
+
+// Animated PNG Icon variant with subtle bounce
+// Perfect for header branding - preloaded for immediate visibility
+export const GoggaPngIconAnimated = memo(({ 
+  size = 'xl', 
+  className = '' 
+}: { 
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl'; 
+  className?: string;
+}) => {
+  const dimensions = {
+    sm: 24,
+    md: 40,
+    lg: 56,
+    xl: 64,
+    xxl: 77, // 20% larger than xl for header
+  };
+  const dimension = dimensions[size];
+  
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/assets/images/goggaicon.png"
+      alt="Gogga AI"
+      width={dimension}
+      height={dimension}
+      className={`object-contain gogga-bounce ${className}`}
+      style={{ width: dimension, height: dimension }}
+      loading="eager"
+      decoding="async"
+      fetchPriority="high"
+    />
+  );
+});
+
+GoggaPngIconAnimated.displayName = 'GoggaPngIconAnimated';
+
 export default GoggaLogo;

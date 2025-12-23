@@ -39,6 +39,9 @@ class TieredChatRequest(BaseModel):
     # Personality & Language parameters for GOGGA voice
     personality_mode: str = Field(default="goody", description="User's personality preference: system/dark/goody")
     detected_language: str = Field(default="en", description="Detected user language code (en/af/zu/xh/etc.)")
+    detected_language_confidence: float = Field(default=0.0, description="Confidence of frontend language detection")
+    # Raw user message for language detection (without context injection)
+    raw_user_message: str | None = Field(default=None, description="Original user message before context was added - use for language detection")
 
 
 @router.post("", response_model=ChatResponse)
@@ -319,7 +322,8 @@ async def chat_stream(request: TieredChatRequest):
             history=request.history,
             layer=layer,
             thinking_mode=thinking_mode,
-            append_no_think=append_no_think
+            append_no_think=append_no_think,
+            raw_user_message=request.raw_user_message,  # For accurate language detection
         ):
             yield chunk
     
@@ -390,6 +394,7 @@ async def chat_stream_with_tools(request: TieredChatRequest):
             append_no_think=append_no_think,
             tier=tier,
             force_tool=request.force_tool,  # ToolShed: Force specific tool
+            raw_user_message=request.raw_user_message,  # For accurate language detection
         ):
             yield chunk
     

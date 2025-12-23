@@ -1,13 +1,19 @@
 import type { Metadata, Viewport } from 'next'
-import { Quicksand } from 'next/font/google'
+import localFont from 'next/font/local'
 import { AuthProvider } from '@/components/AuthProvider'
 import { GlobalErrorBoundary } from '@/components/ErrorBoundary'
 import { BugReportButton } from '@/components/BugReportButton'
 import './globals.css'
 
-const quicksand = Quicksand({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+// Use local font to avoid Turbopack Google Fonts resolution bug in Next.js 16
+const quicksand = localFont({
+  src: [
+    {
+      path: '../../public/fonts/quicksand-latin.woff2',
+      weight: '400 700',
+      style: 'normal',
+    },
+  ],
   display: 'swap',
   preload: true,
   variable: '--font-quicksand',

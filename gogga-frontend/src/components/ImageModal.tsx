@@ -1,12 +1,15 @@
 /**
  * ImageModal Component
  * Full-screen scrollable modal for viewing generated images
+ * 
+ * OPTIMIZATION: Uses object URLs instead of inline base64 to prevent
+ * browser memory issues with large Imagen 3.0 images (5-10MB).
  */
 
 'use client';
 
-import { useEffect, useCallback, useEffectEvent } from 'react';
-import { X, Download, Trash2 } from 'lucide-react';
+import { useEffect, useState, useEffectEvent } from 'react';
+import { X, Download, Trash2, Loader2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface ImageModalProps {
@@ -30,6 +33,10 @@ function ImageModalContent({
   onDelete,
   isUrl = false,
 }: ImageModalProps) {
+  const [isImageLoading, setIsImageLoading] = useState(true);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+
   // React 19.2: useEffectEvent for stable keyboard handler
   // Prevents event listener re-attachment on every render
   // Always uses latest onClose without being in dependency array
@@ -39,10 +46,45 @@ function ImageModalContent({
     }
   });
 
+  // Convert base64 to object URL for better memory handling
+  // Object URLs are more efficient than inline base64 for large images
+  useEffect(() => {
+    if (!isOpen || isUrl) {
+      setObjectUrl(null);
+      return;
+    }
+
+    // For base64 data, convert to blob and create object URL
+    try {
+      const base64Data = imageData.startsWith('data:') 
+        ? imageData.split(',')[1] 
+        : imageData;
+      
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType || 'image/png' });
+      const url = URL.createObjectURL(blob);
+      setObjectUrl(url);
+      setImageError(false);
+      
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } catch (err) {
+      console.error('[ImageModal] Failed to create object URL:', err);
+      setImageError(true);
+    }
+  }, [isOpen, imageData, mimeType, isUrl]);
+
   useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
+      setIsImageLoading(true);
     }
     
     return () => {
@@ -53,12 +95,8 @@ function ImageModalContent({
 
   if (!isOpen) return null;
 
-  // Handle both URLs and base64 data
-  const imageSrc = isUrl 
-    ? imageData 
-    : (imageData.startsWith('data:') 
-        ? imageData 
-        : `data:${mimeType};base64,${imageData}`);
+  // Use object URL for base64, or direct URL
+  const imageSrc = isUrl ? imageData : objectUrl;
 
   const handleDownload = async () => {
     if (isUrl) {
@@ -78,10 +116,11 @@ function ImageModalContent({
         // Fallback: open in new tab
         window.open(imageData, '_blank');
       }
-    } else {
+    } else if (objectUrl) {
+      // Use the already-created object URL
       const link = document.createElement('a');
-      link.href = imageSrc;
-      link.download = `gogga-image-${Date.now()}.${mimeType.split('/')[1]}`;
+      link.href = objectUrl;
+      link.download = `gogga-image-${Date.now()}.${mimeType.split('/')[1] || 'png'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -135,13 +174,43 @@ function ImageModalContent({
 
       {/* Scrollable content */}
       <div className="min-h-full w-full max-w-5xl py-16 px-4 flex flex-col items-center">
-        {/* Image */}
-        <img
-          src={imageSrc}
-          alt={prompt}
-          className="max-w-full h-auto rounded-lg shadow-2xl"
-          style={{ maxHeight: 'none' }} // Allow full height
-        />
+        {/* Loading state */}
+        {(isImageLoading || (!imageSrc && !imageError)) && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 size={48} className="text-white animate-spin" />
+            <p className="text-white/70 mt-4">Loading image...</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {imageError && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <p className="text-red-400">Failed to load image</p>
+            <button
+              onClick={onClose}
+              className="mt-4 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30"
+            >
+              Close
+            </button>
+          </div>
+        )}
+
+        {/* Image - only render when we have a valid src */}
+        {imageSrc && !imageError && (
+          <img
+            src={imageSrc}
+            alt={prompt}
+            className={`max-w-full h-auto rounded-lg shadow-2xl transition-opacity duration-300 ${
+              isImageLoading ? 'opacity-0' : 'opacity-100'
+            }`}
+            style={{ maxHeight: 'none' }} // Allow full height
+            onLoad={() => setIsImageLoading(false)}
+            onError={() => {
+              setIsImageLoading(false);
+              setImageError(true);
+            }}
+          />
+        )}
         
         {/* Prompt info */}
         <div className="mt-6 w-full max-w-2xl bg-white/10 rounded-lg p-4 text-white">

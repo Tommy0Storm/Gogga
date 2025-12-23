@@ -5,6 +5,7 @@
  * - Documents (Session Docs + RAG Store)
  * - Tools (ToolShed with icon grid for forcing)
  * - Smart (GoggaSmart stats and skills)
+ * - Media (ImageStudio + VideoStudio for AI media creation)
  * 
  * Monochrome design with grey gradients, Quicksand font.
  */
@@ -12,13 +13,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Upload, Trash2, Lock, Shield, BookOpen, Paperclip, AlertTriangle, Info, FileSearch, Wrench, Brain, Zap, Target, TrendingUp, RotateCcw, ChevronRight, Calculator, Code, Image, Search } from 'lucide-react';
+import { X, FileText, Upload, Trash2, Lock, Shield, BookOpen, Paperclip, AlertTriangle, Info, FileSearch, Wrench, Brain, Zap, Target, TrendingUp, RotateCcw, ChevronRight, Calculator, Code, Image, Search, Video, Wand2, Crown, Sparkles, Film, Edit, ArrowUpCircle } from 'lucide-react';
 import { useDocumentStore } from '@/lib/documentStore';
 import { useRightPanel } from '@/hooks/useRightPanel';
 import { RAGUploadButton } from '@/components/rag/RAGUploadButton';
 import { useToolShed, TOOL_CATEGORIES, getFilteredTools, type ToolCategory } from '@/lib/toolshedStore';
 import { useGoggaSmart } from '@/hooks/useGoggaSmart';
 import { getToolIcon } from '@/lib/iconMapping';
+import { ImageStudio } from '@/components/MediaCreator/ImageStudio';
+import { VideoStudio } from '@/components/MediaCreator/VideoStudio';
+import type { UserTier } from '@/components/MediaCreator/shared/types';
 
 // Documents Tab Content
 interface DocumentsTabContentProps {
@@ -969,6 +973,210 @@ function SmartTabContent({ tier }: SmartTabContentProps) {
   );
 }
 
+// ============================================================================
+// Media Tab Content - ImageStudio and VideoStudio
+// ============================================================================
+
+interface MediaTabContentProps {
+  tier: UserTier;
+}
+
+type MediaView = 'home' | 'image' | 'video';
+
+function MediaTabContent({ tier }: MediaTabContentProps) {
+  const [view, setView] = useState<MediaView>('home');
+  
+  const isFree = tier === 'free';
+  const isPaidTier = tier === 'jive' || tier === 'jigga';
+  
+  // TODO: In production, fetch from /api/v1/media/quota endpoint
+  // For now, using tier-based static limits
+  const quota = {
+    images: { used: 0, limit: isFree ? 1 : tier === 'jive' ? 50 : 200 },
+    videos: { used: 0, limit: isFree ? 0 : tier === 'jive' ? 5 : 20 },
+  };
+  
+  // Render home view with studio cards
+  if (view === 'home') {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full mb-3">
+            <Sparkles size={14} className="text-purple-600" />
+            <span className="text-xs font-medium text-purple-700">AI Media Creation</span>
+          </div>
+          <h3 className="text-lg font-bold text-gray-800">Create Amazing Visuals</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Generate images & videos with Google&apos;s AI
+          </p>
+        </div>
+        
+        {/* Image Studio Card */}
+        <button
+          onClick={() => setView('image')}
+          className="w-full group p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 transition-all text-left"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-lg group-hover:scale-110 transition-transform">
+              <Image size={20} className="text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-800">Image Studio</h4>
+              <p className="text-xs text-gray-500 mt-0.5 mb-2">
+                Create, edit & upscale with Imagen 3/4
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {['Create', 'Edit', 'Upscale'].map((label) => (
+                  <span key={label} className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-600">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Quota */}
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Monthly</span>
+              <span>{quota.images.used}/{quota.images.limit}</span>
+            </div>
+            <div className="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-blue-500 rounded-full"
+                style={{ width: `${Math.min(100, (quota.images.used / Math.max(1, quota.images.limit)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </button>
+        
+        {/* Video Studio Card */}
+        <button
+          onClick={() => setView('video')}
+          className="w-full group p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-purple-500 transition-all text-left relative"
+        >
+          {/* Premium badge for FREE */}
+          {isFree && (
+            <div className="absolute -top-2 -right-2 flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-white text-[10px] font-medium shadow-md">
+              <Crown size={10} />
+              Premium
+            </div>
+          )}
+          
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg group-hover:scale-110 transition-transform">
+              <Video size={20} className="text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-800">Video Studio</h4>
+              <p className="text-xs text-gray-500 mt-0.5 mb-2">
+                Generate videos with Veo 3.1
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {['Text2Vid', 'Img2Vid', 'Audio'].map((label) => (
+                  <span key={label} className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-600">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Quota or upgrade */}
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            {isFree ? (
+              <div className="flex items-center gap-1 text-xs text-amber-600">
+                <Sparkles size={12} />
+                <span>Upgrade to create videos</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Monthly mins</span>
+                  <span>{quota.videos.used}/{quota.videos.limit}</span>
+                </div>
+                <div className="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-purple-500 rounded-full"
+                    style={{ width: `${Math.min(100, (quota.videos.used / Math.max(1, quota.videos.limit)) * 100)}%` }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </button>
+        
+        {/* Feature highlights */}
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: 'HD Quality', icon: '✨' },
+            { label: 'Fast Gen', icon: '⚡' },
+            { label: 'Edit & Refine', icon: '🎨' },
+            { label: 'R Pricing', icon: '🇿🇦' },
+          ].map((f) => (
+            <div key={f.label} className="p-2 bg-gray-50 rounded-lg text-center">
+              <div className="text-sm mb-0.5">{f.icon}</div>
+              <div className="text-[10px] font-medium text-gray-700">{f.label}</div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Tier info */}
+        <div className="text-[10px] text-gray-400 text-center">
+          {tier.toUpperCase()} tier • {isFree ? 'Limited access' : 'Full access'}
+        </div>
+      </div>
+    );
+  }
+  
+  // Render ImageStudio
+  if (view === 'image') {
+    return (
+      <div className="h-full flex flex-col -m-4">
+        {/* Back button */}
+        <button
+          onClick={() => setView('home')}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border-b border-gray-200"
+          aria-label="Back to Media Studio home"
+        >
+          <ChevronRight size={16} className="rotate-180" />
+          Back to Media
+        </button>
+        
+        {/* ImageStudio component */}
+        <div className="flex-1 overflow-y-auto">
+          <ImageStudio tier={tier} />
+        </div>
+      </div>
+    );
+  }
+  
+  // Render VideoStudio
+  if (view === 'video') {
+    return (
+      <div className="h-full flex flex-col -m-4">
+        {/* Back button */}
+        <button
+          onClick={() => setView('home')}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border-b border-gray-200"
+          aria-label="Back to Media Studio home"
+        >
+          <ChevronRight size={16} className="rotate-180" />
+          Back to Media
+        </button>
+        
+        {/* VideoStudio component */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <VideoStudio tier={tier} quota={quota.videos} />
+        </div>
+      </div>
+    );
+  }
+  
+  return null;
+}
+
 // Vertical Tab Button - Stacked with vertical text
 interface VerticalTabProps {
   icon: React.ReactNode;
@@ -1041,6 +1249,7 @@ export function RightSidePanel() {
       case 'documents': return 'Documents';
       case 'tools': return 'Tools';
       case 'smart': return 'GoggaSmart';
+      case 'media': return 'Media Studio';
       default: return 'Panel';
     }
   };
@@ -1084,6 +1293,19 @@ export function RightSidePanel() {
               closePanel();
             } else {
               setActiveTab('smart');
+            }
+          }}
+        />
+        {/* Media Tab - Image & Video Studio */}
+        <VerticalTab
+          icon={<Film size={18} />}
+          label="Media"
+          isActive={isOpen && activeTab === 'media'}
+          onClick={() => {
+            if (isOpen && activeTab === 'media') {
+              closePanel();
+            } else {
+              setActiveTab('media');
             }
           }}
         />
@@ -1158,6 +1380,10 @@ export function RightSidePanel() {
           
           {activeTab === 'smart' && (
             <SmartTabContent tier={tier} />
+          )}
+          
+          {activeTab === 'media' && (
+            <MediaTabContent tier={tier as UserTier} />
           )}
         </div>
       </div>

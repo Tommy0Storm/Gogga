@@ -3,6 +3,10 @@
  * 
  * Handles all API calls to the media endpoints.
  * Supports idempotency keys for duplicate cost prevention.
+ * 
+ * Uses the Next.js API proxy (/api/v1/media/*) which handles:
+ * - Session-based tier authentication (no need for X-User-Tier header)
+ * - Self-signed certificate bypass for Docker backend
  */
 
 import type {
@@ -15,7 +19,9 @@ import type {
   MediaQuota,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use Next.js API proxy for proper session-based auth
+// The proxy validates the session and adds the correct tier header
+const API_BASE = '';
 
 interface ApiOptions {
   userTier?: string;

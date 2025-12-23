@@ -1,126 +1,79 @@
 """
-Text-to-Speech API endpoint using Google Cloud TTS.
+Text-to-Speech API endpoint using Vertex AI Gemini TTS.
 
-Uses service account authentication for secure API access.
-WaveNet voices for quality at reasonable cost ($16/million chars).
-1 million free chars/month for Neural voices.
+Uses Vertex AI with Charon voice for cost-effective chat read-aloud.
+Same authentication as Imagen (service account / ADC).
+
+Voice: Charon - Deep, gravelly warmth (GOGGA's signature voice)
 """
-import os
-import base64
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from google.cloud import texttospeech
-from google.oauth2 import service_account
+
+from app.services.gemini_tts_service import get_gemini_tts_service
 
 router = APIRouter(prefix="/tts", tags=["tts"])
+logger = logging.getLogger(__name__)
 
-# Service account credentials path
-CREDENTIALS_PATH = os.getenv(
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "/app/credentials/general-dev-480621-a3928a694851.json"
-)
-
-# Also check local dev path
-LOCAL_CREDENTIALS_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "credentials",
-    "general-dev-480621-a3928a694851.json"
-)
-
-# Lazy-loaded client
-_tts_client: texttospeech.TextToSpeechClient | None = None
-
-
-def get_tts_client() -> texttospeech.TextToSpeechClient:
-    """Get or create TTS client with service account auth."""
-    global _tts_client
-    
-    if _tts_client is None:
-        # Try multiple credential paths
-        cred_path = None
-        for path in [CREDENTIALS_PATH, LOCAL_CREDENTIALS_PATH]:
-            if os.path.exists(path):
-                cred_path = path
-                break
-        
-        if cred_path:
-            credentials = service_account.Credentials.from_service_account_file(
-                cred_path
-            )
-            _tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
-        else:
-            # Fall back to default credentials (ADC)
-            _tts_client = texttospeech.TextToSpeechClient()
-    
-    return _tts_client
+# Default voice - Charon for GOGGA identity
+DEFAULT_VOICE = "Charon"
 
 
 class TTSRequest(BaseModel):
     """TTS synthesis request."""
     text: str
-    voice_name: str = "en-US-Wavenet-D"  # Male WaveNet voice
-    language_code: str = "en-US"
-    speaking_rate: float = 1.0
-    pitch: float = 0.0
+    voice_name: str = DEFAULT_VOICE
+    language_code: str = "en-US"  # Kept for API compat, not used by Gemini
+    speaking_rate: float = 1.0    # Kept for API compat, not used by Gemini
+    pitch: float = 0.0            # Kept for API compat, not used by Gemini
 
 
 class TTSResponse(BaseModel):
     """TTS synthesis response."""
-    audio_content: str  # Base64 encoded MP3
+    audio_content: str  # Base64 encoded WAV
     duration_estimate: float  # Rough estimate in seconds
 
 
 @router.post("/synthesize", response_model=TTSResponse)
 async def synthesize_speech(request: TTSRequest) -> TTSResponse:
     """
-    Synthesize speech from text using Google Cloud TTS.
+    Synthesize speech from text using Vertex AI Gemini TTS with Charon voice.
     
-    Returns base64-encoded MP3 audio.
+    Returns base64-encoded WAV audio.
     Limited to 5000 chars per request for cost control.
+    
+    Uses same Vertex AI authentication as Imagen (service account / ADC).
+    Text is chunked on the frontend for cancellation cost savings.
     """
-    # Limit text length for cost control
     text = request.text[:5000]
     
     if not text.strip():
         raise HTTPException(status_code=400, detail="No text provided")
     
+    # Map old WaveNet voice names to Gemini voices for backward compatibility
+    voice_name = request.voice_name
+    if voice_name.startswith("en-") and "Wavenet" in voice_name:
+        voice_name = DEFAULT_VOICE  # Use Charon for all legacy voice requests
+    
     try:
-        client = get_tts_client()
+        service = get_gemini_tts_service()
+        result = await service.synthesize(text=text, voice_name=voice_name)
         
-        # Build the synthesis request
-        synthesis_input = texttospeech.SynthesisInput(text=text)
-        
-        voice = texttospeech.VoiceSelectionParams(
-            language_code=request.language_code,
-            name=request.voice_name,
-        )
-        
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=request.speaking_rate,
-            pitch=request.pitch,
-        )
-        
-        # Perform the synthesis
-        response = client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config,
-        )
-        
-        # Encode audio to base64
-        audio_base64 = base64.b64encode(response.audio_content).decode("utf-8")
-        
-        # Rough duration estimate: ~150 words per minute, ~5 chars per word
-        # So about 750 chars per minute = 12.5 chars per second
-        duration_estimate = len(text) / 12.5
+        if not result.success:
+            raise HTTPException(
+                status_code=500,
+                detail=result.error or "TTS synthesis failed"
+            )
         
         return TTSResponse(
-            audio_content=audio_base64,
-            duration_estimate=duration_estimate,
+            audio_content=result.audio_content or "",
+            duration_estimate=result.duration_estimate,
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception(f"TTS synthesis error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"TTS synthesis failed: {str(e)}"
@@ -129,26 +82,19 @@ async def synthesize_speech(request: TTSRequest) -> TTSResponse:
 
 @router.get("/voices")
 async def list_voices():
-    """List available TTS voices."""
-    try:
-        client = get_tts_client()
-        response = client.list_voices()
-        
-        # Filter to English WaveNet voices for simplicity
-        voices = [
-            {
-                "name": voice.name,
-                "language_codes": list(voice.language_codes),
-                "gender": texttospeech.SsmlVoiceGender(voice.ssml_gender).name,
-            }
-            for voice in response.voices
-            if "en-" in voice.name and "Wavenet" in voice.name
-        ]
-        
-        return {"voices": voices}
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list voices: {str(e)}"
-        )
+    """
+    List available Gemini TTS voices.
+    
+    Gemini TTS provides several prebuilt voices with distinct personalities.
+    """
+    # Gemini TTS prebuilt voices (from official docs)
+    voices = [
+        {"name": "Charon", "description": "Deep, gravelly warmth (GOGGA default)", "gender": "MALE"},
+        {"name": "Kore", "description": "Natural, professional", "gender": "FEMALE"},
+        {"name": "Puck", "description": "Upbeat, energetic", "gender": "NEUTRAL"},
+        {"name": "Fenrir", "description": "Serious, firm", "gender": "MALE"},
+        {"name": "Aoede", "description": "Melodic, soft", "gender": "FEMALE"},
+        {"name": "Zephyr", "description": "Calm, balanced", "gender": "NEUTRAL"},
+    ]
+    
+    return {"voices": voices, "default": "Charon"}

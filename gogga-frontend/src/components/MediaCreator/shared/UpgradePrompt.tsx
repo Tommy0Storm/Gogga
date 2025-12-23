@@ -34,8 +34,8 @@ interface UpgradePromptProps {
 
 const TIER_PRICING: Record<UserTier, string> = {
   free: 'R0',
-  jive: 'R49/mo',
-  jigga: 'R149/mo',
+  jive: 'R99/mo',
+  jigga: 'R299/mo',
 };
 
 const UPGRADE_BENEFITS: Record<UserTier, { icon: typeof Sparkles; benefits: string[] }> = {
@@ -161,7 +161,7 @@ export function UpgradePrompt({
         
         {currentTier === 'free' && targetTier === 'jive' && (
           <p className="text-center text-xs text-neutral-500 mt-3">
-            Or go big with <button onClick={onUpgrade} className="underline">JIGGA (R149/mo)</button>
+            Or go big with <button onClick={onUpgrade} className="underline">JIGGA (R299/mo)</button>
           </p>
         )}
       </div>

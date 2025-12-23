@@ -143,7 +143,7 @@ export function VideoStudio({
                   Video Generation is a Premium Feature
                 </h4>
                 <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                  Upgrade to JIVE (R49/month) or JIGGA (R149/month) to create stunning AI videos.
+                  Upgrade to JIVE (R99/month) or JIGGA (R299/month) to create stunning AI videos.
                   Check out the examples below to see what&apos;s possible!
                 </p>
               </div>

@@ -141,6 +141,9 @@ export function ModernLoginForm() {
               <p className="font-quicksand text-sm text-green-800">
                 {state.message}
               </p>
+              <p className="font-quicksand text-xs text-green-600 mt-2">
+                💡 Can&apos;t find it? Check your spam or junk folder.
+              </p>
             </div>
           )}
 

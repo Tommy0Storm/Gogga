@@ -30,8 +30,8 @@ const TIER_ORDER: UserTier[] = ['free', 'jive', 'jigga'];
 
 const TIER_LABELS: Record<UserTier, string> = {
   free: 'FREE',
-  jive: 'JIVE (R49/mo)',
-  jigga: 'JIGGA (R149/mo)',
+  jive: 'JIVE (R99/mo)',
+  jigga: 'JIGGA (R299/mo)',
 };
 
 const TIER_FEATURES: Record<UserTier, string[]> = {

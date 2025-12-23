@@ -26,17 +26,21 @@ const RAGDashboard = dynamic(
 );
 
 export default function DashboardPage() {
-  // In a real app, get tier from user context/auth
-  const tier = 'jigga' as const;
-  
   // Use state to avoid hydration mismatch - only read localStorage after mount
   const [sessionId, setSessionId] = useState<string>('default-session');
+  const [tier, setTier] = useState<'free' | 'jive' | 'jigga'>('free');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     const storedSessionId = localStorage.getItem('gogga_session_id') || 'default-session';
     setSessionId(storedSessionId);
+    
+    // Get actual tier from localStorage (set by ChatClient from session)
+    const storedTier = localStorage.getItem('gogga_tier') as 'free' | 'jive' | 'jigga' | null;
+    if (storedTier && ['free', 'jive', 'jigga'].includes(storedTier)) {
+      setTier(storedTier);
+    }
   }, []);
 
   // Don't render dashboard until client-side mounted to avoid hydration issues

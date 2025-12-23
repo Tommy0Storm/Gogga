@@ -1,6 +1,9 @@
 /**
- * GOGGA Dexie Maintenance Panel
- * Performance monitoring and maintenance tools for IndexedDB
+ * GOGGA Database Maintenance Panel
+ * Performance monitoring and maintenance tools for RxDB/IndexedDB
+ * 
+ * Note: RxDB uses Dexie internally as its IndexedDB storage backend,
+ * but the API exposed here is the RxDB shim from db.ts.
  * 
  * Features:
  * - Real-time database health metrics
@@ -102,7 +105,7 @@ async function getTableCount(tableName: string): Promise<number> {
 // Main Component
 // ============================================================================
 
-export const DexieMaintenance: React.FC = () => {
+export const DatabaseMaintenance: React.FC = () => {
   const [metrics, setMetrics] = useState<DatabaseMetrics | null>(null);
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -369,7 +372,7 @@ export const DexieMaintenance: React.FC = () => {
               <Database className="w-5 h-5 text-primary-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-primary-900">Dexie Database</h3>
+              <h3 className="font-semibold text-primary-900">RxDB Database</h3>
               <p className="text-sm text-primary-500">
                 {metrics?.isConnected ? (
                   <span className="text-green-600">● Connected</span>
@@ -566,4 +569,4 @@ export const DexieMaintenance: React.FC = () => {
   );
 };
 
-export default DexieMaintenance;
+export default DatabaseMaintenance;

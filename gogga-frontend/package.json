@@ -35,7 +35,6 @@
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
     "crypto-browserify": "^3.12.1",
-    "dexie": "^4.2.1",
     "dotenv": "^16.5.0",
     "flexsearch": "^0.8.212",
     "gpt-tokenizer": "^3.4.0",

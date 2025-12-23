@@ -528,6 +528,8 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
             
             const updateAudioLevels = () => {
               // Calculate input (user) audio level
+              // IMPROVED: Use lower normalization divisor (48) for more sensitivity
+              // and apply power curve (0.7) to amplify mid-range voice levels
               if (inputAnalyserRef.current && !isMutedRef.current) {
                 inputAnalyserRef.current.getByteFrequencyData(inputDataArray);
                 let sum = 0;
@@ -535,13 +537,17 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                   sum += inputDataArray[i]!;
                 }
                 const avg = sum / inputDataArray.length;
-                // Normalize to 0-1 range (byte values are 0-255)
-                setUserAudioLevel(Math.min(1, avg / 128));
+                // Normalize with lower divisor for better sensitivity, apply power curve
+                // Power curve < 1 amplifies mid-range values for more visible wave movement
+                const normalized = Math.min(1, avg / 48);
+                const boosted = Math.pow(normalized, 0.7);
+                setUserAudioLevel(boosted);
               } else {
                 setUserAudioLevel(0);
               }
               
               // Calculate output (Gogga) audio level
+              // IMPROVED: Same sensitivity improvements for Gogga's voice
               if (outputAnalyserRef.current && activeSourcesRef.current.size > 0) {
                 outputAnalyserRef.current.getByteFrequencyData(outputDataArray);
                 let sum = 0;
@@ -549,8 +555,10 @@ export function useGoggaTalkDirect(options: UseGoggaTalkDirectOptions = {}) {
                   sum += outputDataArray[i]!;
                 }
                 const avg = sum / outputDataArray.length;
-                // Normalize to 0-1 range
-                setGoggaAudioLevel(Math.min(1, avg / 128));
+                // Same normalization and power curve for consistent visualization
+                const normalized = Math.min(1, avg / 48);
+                const boosted = Math.pow(normalized, 0.7);
+                setGoggaAudioLevel(boosted);
               } else {
                 setGoggaAudioLevel(0);
               }

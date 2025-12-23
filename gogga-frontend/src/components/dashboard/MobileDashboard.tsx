@@ -26,7 +26,7 @@ import { VectorPreview } from './VectorHeatmap';
 import { DocumentManager, QuickDocList } from './DocumentManager';
 import { MemoryManager } from './MemoryManager';
 import type { 
-  DexieStorageStats, 
+  StorageStats, 
   ModelStatus, 
   EmbeddingStats, 
   RetrievalStats,
@@ -39,7 +39,7 @@ import type {
 // ============================================================================
 
 interface MobileDashboardProps {
-  storageStats: DexieStorageStats | null;
+  storageStats: StorageStats | null;
   modelStatus: ModelStatus | null;
   embeddingStats: EmbeddingStats | null;
   retrievalStats: RetrievalStats | null;

@@ -1054,7 +1054,8 @@ class AIService:
         history: list[MessageDict] | None,
         layer: CognitiveLayer,
         thinking_mode: bool = False,
-        append_no_think: bool = False
+        append_no_think: bool = False,
+        raw_user_message: str | None = None,
     ):
         """
         JIVE/JIGGA tier: Cerebras streaming response.
@@ -1063,11 +1064,12 @@ class AIService:
 
         Args:
             user_id: User identifier for tracking
-            message: The user's message
+            message: The user's message (may include context injection)
             history: Previous conversation history
             layer: The cognitive layer (JIVE_DIRECT, JIGGA_THINK, etc.)
             thinking_mode: Use Qwen thinking settings (JIGGA)
             append_no_think: Append /no_think to message (JIGGA fast)
+            raw_user_message: Original user message without context - used for language detection
 
         Yields:
             SSE-formatted strings: "data: {json}\n\n"
@@ -1294,6 +1296,7 @@ class AIService:
         append_no_think: bool = False,
         tier: str = "jive",
         force_tool: str | None = None,  # ToolShed: Force specific tool by name
+        raw_user_message: str | None = None,  # Original message for language detection
     ):
         """
         Generate response with streaming tool execution logs.
@@ -1317,11 +1320,16 @@ class AIService:
         system_prompt = tier_router.get_system_prompt(layer)
         
         # RUN LANGUAGE DETECTION PLUGIN (streaming path)
+        # Use raw_user_message if available (without context injection) for accurate detection
+        # This prevents SA location/weather context from influencing language detection
+        message_for_detection = raw_user_message or message
+        
         # Build request dict for plugin processing
         request = {"messages": [], "metadata": {}}
         if history:
             request["messages"].extend(history[-MAX_HISTORY_TURNS:])
-        request["messages"].append({"role": "user", "content": message})
+        # Use raw message for detection to avoid context pollution
+        request["messages"].append({"role": "user", "content": message_for_detection})
         
         # Run language detection
         request = await run_plugins_before_request(request)

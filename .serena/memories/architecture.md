@@ -22,14 +22,41 @@ GOGGA uses **two separate databases** that never connect directly:
 
 | Database | Purpose | Scope | Persistence |
 |----------|---------|-------|-------------|
-| **SQLite** (Prisma) | Identity & billing | Server instance | Until deleted |
-| **Dexie** (IndexedDB) | User content | Per-browser, per-device | User controlled |
+| **SQLite** (Prisma 7) | Identity & billing | Server instance | Until deleted |
+| **RxDB** (IndexedDB) | User content | Per-browser, per-device | User controlled |
+
+### SQLite ↔ RxDB Correlation (Dec 2025 Audit)
+
+**Key Finding**: The two databases are intentionally separate with minimal correlation:
+
+| Data Type | SQLite (Server) | RxDB (Client) | Sync Method |
+|-----------|-----------------|---------------|-------------|
+| User Identity | `User.id` (cuid) | `userId` field | Via NextAuth session |
+| Tier | `Subscription.tier` | `localStorage.gogga_tier` | Session callback refresh |
+| Usage Tokens | `Usage`, `UsageSummary` | `tokenUsage` | Dual-write (both updated) |
+| Chat History | ❌ None | `chatSessions`, `chatMessages` | Client-only |
+| RAG Docs | ❌ None | `documents`, `documentChunks` | Client-only |
+| Credits | `Subscription.credits` | ❌ None | Server authoritative |
+| Admin State | `User.isAdmin` | ❌ None | Server-only |
+
+**Session ID Formats** (Consolidated Dec 24, 2025):
+- Format: `session-{base36_timestamp}-{random}` 
+- Canonical implementation: `lib/db.ts:generateSessionId()`
+- RxDB mirrors same format for consistency
+
+**Tier Sync Flow**:
+1. User logs in → JWT contains tier from `Subscription`
+2. Session callback (`auth.ts:197-207`) fetches fresh tier from DB
+3. Client stores in `localStorage.gogga_tier`
+4. RxDB documents use tier from localStorage
 
 ### SQLite (Server-Side)
 - User identity (email, id)
 - Login tokens (magic links)
 - Auth logs (connection audit)
 - Subscriptions (tier, status, PayFast token)
+- Usage tracking (tokens, costs, billing)
+- Admin features (vouchers, adjustments)
 
 ### RxDB (Client-Side, Per-User-Per-Device) - Dec 2025 Migration
 **Primary:** `lib/db.ts` - RxDB shim with Dexie API compatibility
@@ -100,6 +127,7 @@ Exchange Rate: R18.50 = $1 USD
 | Legal Search | $0.001/query | JIVE, JIGGA |
 | Places Search | $0.001/query | ALL |
 | GoggaTalk Voice | $0.015/sec (~$3 in + $12 out /M audio) | JIVE, JIGGA |
+| **Chat TTS (Read Aloud)** | Per-request (Gemini 2.5 Flash TTS) | JIGGA |
 | RAG Search | Free (client-side) | ALL |
 | Math Tools | Free | ALL |
 | Chart Gen | Free | ALL |
@@ -166,6 +194,7 @@ When 235B receives a complex math query:
 | RAG Authoritative | Quotes directly from documents only |
 | RAG Analytics Dashboard | Document usage, query patterns, retrieval stats |
 | Cross-Session Selection | Select docs from other sessions |
+| **Chat TTS (Read Aloud)** | Vertex AI Gemini 2.5 Flash TTS with Charon voice, 50-word chunking |
 
 ---
 

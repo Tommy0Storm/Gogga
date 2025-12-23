@@ -260,10 +260,143 @@ cd gogga-frontend && pnpm dev
 
 # Open https://192.168.0.130:3000
 # Click microphone icon to open GoggaTalk modal
-# Run through test cases TC-001 to TC-012
+# Run through test cases TC-001 to TC-018
 ```
 
 ### Related Files for Reference
 - Component: `gogga-frontend/src/components/AudioWaveVisualizer.tsx`
 - Terminal: `gogga-frontend/src/components/GoggaTalkTerminal.tsx`
 - Hook: `gogga-frontend/src/hooks/useGoggaTalkDirect.ts`
+
+---
+
+## UX Audit Changes (December 23, 2025)
+
+### Changes Made
+
+#### 1. Improved Audio Level Sensitivity (`useGoggaTalkDirect.ts`)
+- **CHANGED**: Normalization divisor from 128 to 48 for better voice level detection
+- **NEW**: Power curve (0.7) applied to amplify mid-range voice levels
+- **RESULT**: Wave now moves more visibly when speaking at normal volume
+
+#### 2. Enhanced Wave Responsiveness (`AudioWaveVisualizer.tsx`)
+- **CHANGED**: Smoothing factors: rise 0.6→0.75, fall 0.25→0.35 for faster response
+- **CHANGED**: Base amplitude multiplier from 0.45 to 0.55 for more visible movement
+- **CHANGED**: Minimum audio level from 0.1 to 0.2 for better baseline wave visibility
+- **NEW**: 1.3x audio level boost in `generateSinePath` for more dramatic wave movement
+
+#### 3. Simplified Status UI (`GoggaTalkTerminal.tsx`)
+- **REMOVED**: Redundant text status indicators ("Listening...", "Mic muted", "Gogga speaking")
+- **KEPT**: VoiceActivityIndicator (pulsing dot) as the single source of status truth
+- **RESULT**: Cleaner UI, no visual "duplication"
+
+#### 4. Contextual Status Text (`AudioWaveVisualizer.tsx`)
+- **CHANGED**: VoiceActivityIndicator now shows contextual status based on state:
+  - `gogga-speaking` + active → "Gogga speaking..."
+  - `user-speaking` + active → "Listening..."
+  - `idle` → "Muted"
+  - When not active → "Ready" / "Gogga" / "Muted"
+
+---
+
+### TC-013: Improved Wave Sensitivity - Quiet Speech
+**Steps:**
+1. Connect to GoggaTalk
+2. Speak quietly (normal conversational volume)
+3. Observe wave amplitude
+
+**Expected:**
+- Wave amplitude noticeably increases when speaking quietly
+- More visible movement than before (previous version had minimal movement at low volumes)
+- Wave should fill ~40-60% of height during normal speech
+
+---
+
+### TC-014: Improved Wave Sensitivity - Loud Speech
+**Steps:**
+1. Connect to GoggaTalk
+2. Speak loudly
+3. Observe wave amplitude
+
+**Expected:**
+- Wave amplitude reaches near-maximum (80-100% of height)
+- No clipping or distortion in visualization
+- Smooth response to volume changes
+
+---
+
+### TC-015: Contextual Status Text - User Speaking
+**Steps:**
+1. Connect to GoggaTalk
+2. Unmute microphone
+3. Speak into microphone
+4. Observe status indicator above wave
+
+**Expected:**
+- Shows "Listening..." when voice detected (blue dot pulsing)
+- Shows "Ready" during pauses when unmuted but not speaking
+- Dot color is blue
+
+---
+
+### TC-016: Contextual Status Text - Gogga Speaking
+**Steps:**
+1. Ask Gogga a question
+2. Wait for response
+3. Observe status indicator above wave
+
+**Expected:**
+- Shows "Gogga speaking..." during AI audio response (white dot pulsing)
+- Shows "Gogga" when response ends
+- Dot color is white
+
+---
+
+### TC-017: Contextual Status Text - Muted State
+**Steps:**
+1. Connect to GoggaTalk
+2. Click "Mute" button
+3. Observe status indicator
+
+**Expected:**
+- Shows "Muted" (gray dot, not pulsing)
+- Wave is gray/idle
+- Status persists until unmuted
+
+---
+
+### TC-018: No Redundant Status Indicators
+**Steps:**
+1. Connect to GoggaTalk
+2. Observe the control bar area
+
+**Expected:**
+- Only ONE status indicator visible (the VoiceActivityIndicator above the wave)
+- No separate "Listening...", "Mic muted", or "Gogga speaking" text badges
+- Cleaner, less cluttered interface
+
+---
+
+### TC-019: Transcript Source Verification (API vs Built-in)
+**Steps:**
+1. Connect to GoggaTalk
+2. Speak a sentence with unusual words or names
+3. Observe transcript accuracy
+4. Compare what you said vs what was transcribed
+
+**Expected:**
+- Transcripts come from Google Gemini's inputTranscription (not browser's Web Speech API)
+- May have slight accuracy variations (this is expected from Google's STT)
+- Transcripts appear after brief buffering delay (1-1.5 seconds)
+
+---
+
+## UX Audit Findings Summary
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| Transcript uses built-in vs Google API | ✅ Verified | Using Google LiveAPI `inputTranscription`/`outputTranscription` |
+| Duplicate sine wave | ✅ Fixed | Only ONE wave - removed redundant status indicators |
+| Wave doesn't move enough | ✅ Fixed | Increased sensitivity, amplitude, responsiveness |
+| Status text clarity | ✅ Improved | Contextual text based on state |
+

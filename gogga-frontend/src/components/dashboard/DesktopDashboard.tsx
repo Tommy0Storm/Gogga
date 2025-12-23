@@ -21,13 +21,16 @@ import {
   HardDrive,
   Layers,
   ChevronRight,
+  ChevronLeft,
   Clock,
   CheckCircle2,
   XCircle,
   Info,
   Wrench,
   Package,
+  MessageCircle,
 } from 'lucide-react';
+import Link from 'next/link';
 import {
   StatCard,
   MetricCard,
@@ -55,13 +58,13 @@ import {
 import { DocumentManager } from './DocumentManager';
 import { MemoryManager } from './MemoryManager';
 import { BuddyPanel } from './BuddyPanel';
-import { DexieMaintenance } from './DexieMaintenance';
+import { DatabaseMaintenance } from './DatabaseMaintenance';
 import { LLMMonitor } from './LLMMonitor';
 import { EmbeddingMonitor } from './EmbeddingMonitor';
 // useBrowserPerformance removed - no longer monitoring OS metrics
 import type { VectorData } from './useRagDashboard';
 import type {
-  DexieStorageStats,
+  StorageStats,
   ModelStatus,
   EmbeddingStats,
   RetrievalStats,
@@ -169,7 +172,7 @@ const DataFreshnessIndicator: React.FC<DataFreshnessIndicatorProps> = ({
 // ============================================================================
 
 interface DesktopDashboardProps {
-  storageStats: DexieStorageStats | null;
+  storageStats: StorageStats | null;
   modelStatus: ModelStatus | null;
   embeddingStats: EmbeddingStats | null;
   retrievalStats: RetrievalStats | null;
@@ -349,13 +352,25 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
         {/* Header */}
         <header className="sticky top-0 z-40 bg-white border-b border-primary-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-primary-900">
-                {NAV_ITEMS.find((n) => n.id === activeTab)?.label}
-              </h2>
-              <p className="text-sm text-primary-500">
-                Real-time RAG monitoring and context management
-              </p>
+            <div className="flex items-center gap-4">
+              {/* Back to Gogga button */}
+              <Link
+                href="/"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary-300 bg-primary-50 hover:bg-primary-100 text-primary-700 transition-colors"
+                title="Back to Gogga Chat"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-sm font-medium hidden sm:inline">Chat</span>
+              </Link>
+              <div>
+                <h2 className="text-xl font-bold text-primary-900">
+                  {NAV_ITEMS.find((n) => n.id === activeTab)?.label}
+                </h2>
+                <p className="text-sm text-primary-500">
+                  Real-time RAG monitoring and context management
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               {/* Data freshness indicator */}
@@ -459,7 +474,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
 
           {activeTab === 'embedding-model' && <EmbeddingMonitor />}
 
-          {activeTab === 'maintenance' && <DexieMaintenance />}
+          {activeTab === 'maintenance' && <DatabaseMaintenance />}
         </div>
       </main>
     </div>
@@ -472,7 +487,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
 
 // Overview Tab
 interface OverviewTabProps {
-  storageStats: DexieStorageStats | null;
+  storageStats: StorageStats | null;
   modelStatus: ModelStatus | null;
   embeddingStats: EmbeddingStats | null;
   retrievalStats: RetrievalStats | null;
@@ -647,7 +662,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
 
 // Storage Tab
 interface StorageTabProps {
-  storageStats: DexieStorageStats | null;
+  storageStats: StorageStats | null;
   documents: ContextDocument[];
 }
 

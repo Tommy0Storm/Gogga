@@ -209,12 +209,13 @@ Every new user is automatically assigned FREE tier on first login:
 
 ```typescript
 // In auth.ts authorize callback
+// NOTE: Prisma 7 uses PascalCase for relation fields in create/include
 const user = await prisma.user.upsert({
   where: { email: tokenRecord.email },
   update: { updatedAt: new Date() },
   create: {
     email: tokenRecord.email,
-    subscription: {
+    Subscription: {
       create: {
         tier: 'FREE',
         status: 'active',
@@ -222,11 +223,11 @@ const user = await prisma.user.upsert({
       }
     }
   },
-  include: { subscription: true }
+  include: { Subscription: true }
 })
 
 // Backfill for existing users without subscription
-if (!user.subscription) {
+if (!user.Subscription) {
   await prisma.subscription.create({...})
 }
 ```

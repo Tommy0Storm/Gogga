@@ -285,46 +285,26 @@ export function GoggaTalkTerminal({ onClose, isVisible, userTier = 'FREE' }: Gog
           </div>
           
           {/* Status indicators with Audio Visualizer */}
-          <div className="flex items-center gap-3 mt-3">
-            {/* Audio Visualizer - Central focus */}
-            {isConnected && (
-              <div className="flex-1 flex justify-center">
+          {/* IMPROVED: Simplified layout - visualizer with activity indicator is the primary status */}
+          {/* Removed redundant text indicators that duplicated the VoiceActivityIndicator information */}
+          <div className="flex items-center justify-center gap-3 mt-3">
+            {/* Audio Visualizer - Central focus with built-in activity indicator */}
+            {isConnected ? (
+              <div className="flex items-center gap-4">
                 <AudioWaveVisualizer
                   state={visualizerState}
                   audioLevel={currentAudioLevel}
-                  width={180}
-                  height={32}
+                  width={200}
+                  height={36}
                   showActivityIndicator={true}
                 />
               </div>
+            ) : (
+              /* Disconnected state - show headphones tip */
+              <span className="text-gray-600 flex items-center justify-center gap-1.5 py-2">
+                <Headphones size={14} /> Headphones recommended for best experience
+              </span>
             )}
-            
-            {/* Status text indicators */}
-            <div className="flex items-center gap-3 text-xs shrink-0">
-              {isConnected && isRecording && !isMuted && !isPlaying && (
-                <span className="flex items-center gap-1 text-blue-400">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                  Listening...
-                </span>
-              )}
-              {isConnected && (isMuted || !isRecording) && !isPlaying && (
-                <span className="flex items-center gap-1 text-gray-500">
-                  <span className="w-2 h-2 bg-gray-500 rounded-full" />
-                  Mic muted
-                </span>
-              )}
-              {isPlaying && (
-                <span className="flex items-center gap-1 text-white font-medium">
-                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                  Gogga speaking
-                </span>
-              )}
-              {!isConnected && (
-                <span className="flex-1 text-gray-600 flex items-center justify-center gap-1">
-                  <Headphones size={12} /> Headphones recommended
-                </span>
-              )}
-            </div>
           </div>
         </div>
         

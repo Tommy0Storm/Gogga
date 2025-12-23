@@ -27,7 +27,8 @@ MAC-1 PRIMARY (192.168.0.130)        MAC-2 WORKER (192.168.0.198)
 ### Dual Database Strategy
 - **SQLite (Prisma 7)**: Server-side auth & subscriptions (`gogga-frontend/prisma/schema.prisma`)
 - **RxDB (IndexedDB)**: Client-side chat, RAG, images, GoggaSmart (`gogga-frontend/src/lib/db.ts`)
-  - **Dexie is DEPRECATED** - legacy backup at `db-dexie-legacy.ts`
+  - **Migration complete** - Dexie removed from dependencies (Dec 2025)
+  - RxDB uses Dexie internally via `rxdb/plugins/storage-dexie` as IndexedDB backend
   - Use `generateId()` for RxDB primary keys
   - All Date fields must use `.toISOString()` (RxDB requires JSON-serializable data)
 
@@ -35,8 +36,8 @@ MAC-1 PRIMARY (192.168.0.130)        MAC-2 WORKER (192.168.0.198)
 | Tier | Default Model | Complex/Legal Model | Image | Provider |
 |------|---------------|---------------------|-------|----------|
 | FREE | Qwen 235B | Qwen 235B | Pollinations (50/mo) | OpenRouter |
-| JIVE (R49) | Qwen 32B | Qwen 235B | Imagen 3.0 (200/mo) | Cerebras |
-| JIGGA (R149) | Qwen 32B | Qwen 235B | Imagen 3.0 (1000/mo) | Cerebras |
+| JIVE (R99) | Qwen 32B | Qwen 235B | Imagen 3.0 (200/mo) | Cerebras |
+| JIGGA (R299) | Qwen 32B | Qwen 235B | Imagen 3.0 (1000/mo) | Cerebras |
 
 **JIVE & JIGGA are IDENTICAL in features** - only token/image limits differ.
 
@@ -61,7 +62,7 @@ MAC-1 PRIMARY (192.168.0.130)        MAC-2 WORKER (192.168.0.198)
 | Math Tools | `gogga-backend/app/tools/math_definitions.py` |
 | Config | `gogga-backend/app/config.py` |
 | Frontend Chat | `gogga-frontend/src/app/ChatClient.tsx` |
-| Client DB | `gogga-frontend/src/lib/db.ts` (RxDB - NOT Dexie) |
+| Client DB | `gogga-frontend/src/lib/db.ts` (RxDB) |
 | RxDB Schemas | `gogga-frontend/src/lib/rxdb/schemas.ts` |
 | RAG Manager | `gogga-frontend/src/lib/ragManager.ts` |
 | BuddySystem | `gogga-frontend/src/lib/buddySystem.ts` |

@@ -135,7 +135,10 @@ function LoginForm() {
           {/* Success Message */}
           {success && (
             <div className="mb-4 p-3 bg-green-950/50 border border-green-900 rounded-lg text-green-400 text-sm">
-              {success}
+              <p>{success}</p>
+              <p className="mt-2 text-xs text-green-500">
+                💡 Can&apos;t find it? Check your spam or junk folder.
+              </p>
             </div>
           )}
 

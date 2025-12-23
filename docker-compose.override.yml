@@ -13,8 +13,8 @@
 
 services:
   # ============================================================
-  # FRONTEND - Increased memory for Next.js 16 + RxDB
-  # Optimized Dec 2025: +1G from admin (5G total)
+  # FRONTEND - Tuned memory for Next.js 16 + RxDB
+  # Optimized Dec 2025: 2.5G (was 5G - excessive for 8GB system)
   # ============================================================
   frontend:
     entrypoint: []
@@ -25,15 +25,15 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 5G
+          memory: 2.5G
         reservations:
           cpus: '0.5'
-          memory: 2G
+          memory: 1G
     # OOM protection: keep frontend alive as priority service
     oom_score_adj: -500
     environment:
-      # V8 heap: ~4.5GB (leave room for native memory)
-      NODE_OPTIONS: --max-old-space-size=4608
+      # V8 heap: ~2GB (leave room for native memory)
+      NODE_OPTIONS: --max-old-space-size=2048
       # Point to worker's CePO
       CEPO_URL: http://192.168.0.198:8080
       # Magic-link base URL (what users click in email) - HTTPS for GoggaTalk
@@ -73,21 +73,21 @@ services:
     command: python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --ssl-keyfile /app/certs/key.pem --ssl-certfile /app/certs/cert.pem
 
   # ============================================================
-  # ADMIN - Reduced memory (dashboard doesn't need much)
-  # Optimized Dec 2025: -1G transferred to frontend (1.5G total)
+  # ADMIN - Minimal memory (dashboard doesn't need much)
+  # Optimized Dec 2025: 768M (was 1.5G - excessive)
   # ============================================================
   admin:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1.5G
+          cpus: '0.5'
+          memory: 768M
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          cpus: '0.1'
+          memory: 256M
     environment:
-      # V8 heap: ~1.2GB
-      NODE_OPTIONS: --max-old-space-size=1228
+      # V8 heap: ~512MB
+      NODE_OPTIONS: --max-old-space-size=512
       # Point to worker's CePO
       CEPO_URL: http://192.168.0.198:8080
 

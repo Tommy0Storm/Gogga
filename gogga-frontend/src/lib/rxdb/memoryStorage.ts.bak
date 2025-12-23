@@ -1,0 +1,638 @@
+/**
+ * GOGGA RxDB Memory Storage
+ * 
+ * Fast in-memory storage for ephemeral data like:
+ * - Active session state
+ * - Typing indicators
+ * - Temporary UI state
+ * - Cache for frequently accessed data
+ * 
+ * Uses RxDB's Memory RxStorage for maximum performance.
+ * Data is NOT persisted - lost on page refresh.
+ */
+
+import {
+  createRxDatabase,
+  addRxPlugin,
+  type RxDatabase,
+  type RxCollection,
+  type RxJsonSchema,
+} from 'rxdb';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
+import { Observable, Subject } from 'rxjs';
+
+// Add local documents plugin for settings storage
+addRxPlugin(RxDBLocalDocumentsPlugin);
+// Add query builder plugin for .sort() and .limit() methods
+addRxPlugin(RxDBQueryBuilderPlugin);
+
+// ============================================
+// Schema Definitions for In-Memory Collections
+// ============================================
+
+/**
+ * Active session state - tracks what the user is currently doing
+ */
+export interface ActiveSessionDoc {
+  id: string;
+  sessionId: string;
+  lastActivity: number;
+  isTyping: boolean;
+  currentModel: string;
+  pendingMessages: number;
+  viewportState?: {
+    scrollPosition: number;
+    visibleMessageCount: number;
+  };
+}
+
+const activeSessionSchema: RxJsonSchema<ActiveSessionDoc> = {
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    sessionId: { type: 'string', maxLength: 100 },
+    lastActivity: { type: 'number', minimum: 0, maximum: 9999999999999, multipleOf: 1 },
+    isTyping: { type: 'boolean' },
+    currentModel: { type: 'string', maxLength: 50 },
+    pendingMessages: { type: 'number', minimum: 0, maximum: 1000, multipleOf: 1 },
+    viewportState: { type: 'object' },
+  },
+  required: ['id', 'sessionId', 'lastActivity', 'isTyping', 'currentModel', 'pendingMessages'],
+};
+
+/**
+ * Embedding cache - avoid recalculating embeddings for same text
+ */
+export interface EmbeddingCacheDoc {
+  id: string; // hash of text
+  text: string;
+  embedding: number[];
+  createdAt: number;
+  accessCount: number;
+}
+
+const embeddingCacheSchema: RxJsonSchema<EmbeddingCacheDoc> = {
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 64 }, // SHA-256 hash
+    text: { type: 'string' },
+    embedding: { type: 'array', items: { type: 'number' } },
+    createdAt: { type: 'number', minimum: 0, maximum: 9999999999999, multipleOf: 1 },
+    accessCount: { type: 'number', minimum: 0, maximum: 1000000, multipleOf: 1 },
+  },
+  required: ['id', 'text', 'embedding', 'createdAt', 'accessCount'],
+};
+
+/**
+ * Pending operations queue - for optimistic UI updates
+ */
+export interface PendingOperationDoc {
+  id: string;
+  type: 'message' | 'document' | 'image';
+  operation: 'create' | 'update' | 'delete';
+  data: Record<string, unknown>;
+  createdAt: number;
+  status: 'pending' | 'in-flight' | 'completed' | 'failed';
+}
+
+const pendingOperationSchema: RxJsonSchema<PendingOperationDoc> = {
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    type: { type: 'string', maxLength: 20 },
+    operation: { type: 'string', maxLength: 10 },
+    data: { type: 'object' },
+    createdAt: { type: 'number', minimum: 0, maximum: 9999999999999, multipleOf: 1 },
+    status: { type: 'string', maxLength: 20 },
+  },
+  required: ['id', 'type', 'operation', 'data', 'createdAt', 'status'],
+};
+
+// ============================================
+// Memory Database Types
+// ============================================
+
+type MemoryCollections = {
+  activeSessions: RxCollection<ActiveSessionDoc>;
+  embeddingCache: RxCollection<EmbeddingCacheDoc>;
+  pendingOperations: RxCollection<PendingOperationDoc>;
+};
+
+type MemoryDatabase = RxDatabase<MemoryCollections>;
+
+// ============================================
+// Singleton State with Thread-Safe Initialization
+// ============================================
+
+/**
+ * Singleton database instance - cached after successful initialization
+ */
+let memoryDb: MemoryDatabase | null = null;
+
+/**
+ * Promise for in-progress initialization.
+ * This is the KEY to preventing race conditions:
+ * - First caller creates and stores the promise BEFORE awaiting
+ * - All subsequent callers get the SAME promise
+ * - Promise is NEVER cleared unless database is destroyed
+ */
+let memoryDbPromise: Promise<MemoryDatabase> | null = null;
+
+// ============================================
+// Memory Database Factory
+// ============================================
+
+/**
+ * Check if a database instance is valid (exists and not destroyed)
+ */
+function isDbValid(db: MemoryDatabase | null): db is MemoryDatabase {
+  if (!db) return false;
+  // RxDB sets 'destroyed' property at runtime but TypeScript types don't include it
+  return !(db as unknown as { destroyed?: boolean }).destroyed;
+}
+
+/**
+ * Get or create the in-memory database
+ * Uses Memory RxStorage for maximum performance
+ * 
+ * THREAD-SAFE SINGLETON PATTERN:
+ * This implementation guarantees that only ONE database initialization
+ * ever runs, even with parallel calls during Fast Refresh.
+ * 
+ * Key invariants:
+ * 1. memoryDbPromise is assigned SYNCHRONOUSLY before any await
+ * 2. All concurrent calls wait on the SAME promise
+ * 3. Promise is only cleared when database needs re-initialization
+ * 
+ * This prevents RxDB errors:
+ * - DB8: Duplicate database with same name and adapter
+ * - COL23: Collection already exists
+ */
+export async function getMemoryDatabase(): Promise<MemoryDatabase> {
+  // Fast path: database already initialized and valid
+  if (isDbValid(memoryDb)) {
+    return memoryDb;
+  }
+
+  // Check if initialization is in progress
+  // If memoryDbPromise exists, wait on it (no matter what state it's in)
+  if (memoryDbPromise) {
+    try {
+      const db = await memoryDbPromise;
+      // Update cache and return if still valid
+      if (isDbValid(db)) {
+        memoryDb = db;
+        return db;
+      }
+      // Database was destroyed, need to re-initialize
+      memoryDbPromise = null;
+    } catch (error) {
+      // Previous initialization failed, clear and retry
+      console.warn('[RxDB Memory] Previous initialization failed, retrying...', error);
+      memoryDbPromise = null;
+      memoryDb = null;
+    }
+  }
+
+  // CRITICAL: Create and store promise SYNCHRONOUSLY before any await
+  // This ensures all concurrent calls get the same promise
+  const initPromise = initMemoryDatabase();
+  memoryDbPromise = initPromise;
+
+  try {
+    const db = await initPromise;
+    memoryDb = db;
+    return db;
+  } catch (error) {
+    // Clear promise so next call can retry
+    if (memoryDbPromise === initPromise) {
+      memoryDbPromise = null;
+    }
+    throw error;
+  }
+}
+
+async function initMemoryDatabase(): Promise<MemoryDatabase> {
+  console.log('[RxDB Memory] Initializing in-memory database...');
+
+  // Wrap storage with validation in development mode (required by RxDB dev-mode)
+  let storage: ReturnType<typeof getRxStorageMemory> = getRxStorageMemory();
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    storage = wrappedValidateAjvStorage({ storage }) as typeof storage;
+  }
+
+  const db = await createRxDatabase<MemoryCollections>({
+    name: 'goggamemory',
+    storage,
+    localDocuments: true, // Enable local documents for settings
+    multiInstance: false, // No cross-tab sync needed for memory
+    eventReduce: true,
+    // CRITICAL: Handle duplicate database scenarios during React Fast Refresh
+    // - ignoreDuplicate: Returns existing db instead of throwing DB8 error
+    // - closeDuplicates: Closes old db if duplicate is created (safer for hot reload)
+    ignoreDuplicate: true,
+  });
+
+  // Check if collections already exist before adding (prevents COL23 error)
+  // Cast to get collection names - collections is typed as the generic but is an object at runtime
+  const existingCollections = Object.keys(db.collections || {}) as string[];
+  
+  // Build collections to add based on what's missing
+  const collectionsToAdd: Partial<{
+    activeSessions: { schema: typeof activeSessionSchema };
+    embeddingCache: { schema: typeof embeddingCacheSchema };
+    pendingOperations: { schema: typeof pendingOperationSchema };
+  }> = {};
+
+  if (!existingCollections.includes('activeSessions')) {
+    collectionsToAdd.activeSessions = { schema: activeSessionSchema };
+  }
+  if (!existingCollections.includes('embeddingCache')) {
+    collectionsToAdd.embeddingCache = { schema: embeddingCacheSchema };
+  }
+  if (!existingCollections.includes('pendingOperations')) {
+    collectionsToAdd.pendingOperations = { schema: pendingOperationSchema };
+  }
+
+  if (Object.keys(collectionsToAdd).length > 0) {
+    try {
+      // Type assertion needed because addCollections expects all or none
+      await db.addCollections(collectionsToAdd as Parameters<typeof db.addCollections>[0]);
+      console.log('[RxDB Memory] Collections added:', Object.keys(collectionsToAdd).join(', '));
+    } catch (error: unknown) {
+      // Handle COL23 error gracefully - collection might have been added by another call
+      const rxError = error as { code?: string };
+      if (rxError.code === 'COL23') {
+        console.log('[RxDB Memory] Collections already exist (COL23), continuing...');
+      } else {
+        throw error;
+      }
+    }
+  } else {
+    console.log('[RxDB Memory] All collections already exist, skipping add');
+  }
+
+  console.log('[RxDB Memory] In-memory database ready');
+  return db;
+}
+
+// ============================================
+// Active Session Management
+// ============================================
+
+const CURRENT_SESSION_KEY = 'current';
+
+/**
+ * Update the current active session state
+ */
+export async function updateActiveSession(
+  sessionId: string,
+  updates: Partial<Omit<ActiveSessionDoc, 'id' | 'sessionId'>>
+): Promise<void> {
+  const db = await getMemoryDatabase();
+  
+  const existing = await db.activeSessions.findOne(CURRENT_SESSION_KEY).exec();
+  
+  if (existing) {
+    await existing.patch({
+      sessionId,
+      lastActivity: Date.now(),
+      ...updates,
+    });
+  } else {
+    await db.activeSessions.insert({
+      id: CURRENT_SESSION_KEY,
+      sessionId,
+      lastActivity: Date.now(),
+      isTyping: false,
+      currentModel: 'default',
+      pendingMessages: 0,
+      ...updates,
+    });
+  }
+}
+
+/**
+ * Get the current active session state
+ */
+export async function getActiveSession(): Promise<ActiveSessionDoc | null> {
+  const db = await getMemoryDatabase();
+  const doc = await db.activeSessions.findOne(CURRENT_SESSION_KEY).exec();
+  return doc ? doc.toJSON() : null;
+}
+
+/**
+ * Subscribe to active session changes
+ */
+export function subscribeToActiveSession(): Observable<ActiveSessionDoc | null> {
+  const subject = new Subject<ActiveSessionDoc | null>();
+  
+  getMemoryDatabase().then(db => {
+    db.activeSessions.findOne(CURRENT_SESSION_KEY).$.subscribe(doc => {
+      subject.next(doc ? doc.toJSON() : null);
+    });
+  });
+  
+  return subject.asObservable();
+}
+
+/**
+ * Set typing indicator
+ */
+export async function setTypingIndicator(isTyping: boolean): Promise<void> {
+  const session = await getActiveSession();
+  if (session) {
+    await updateActiveSession(session.sessionId, { isTyping });
+  }
+}
+
+// ============================================
+// Embedding Cache
+// ============================================
+
+const MAX_CACHE_SIZE = 500; // Max embeddings to cache
+
+/**
+ * Hash text for cache key using Web Crypto API
+ */
+async function hashText(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Get cached embedding for text
+ */
+export async function getCachedEmbedding(text: string): Promise<number[] | null> {
+  const db = await getMemoryDatabase();
+  const id = await hashText(text);
+  
+  const cached = await db.embeddingCache.findOne(id).exec();
+  if (cached) {
+    // Update access count
+    await cached.patch({ accessCount: cached.accessCount + 1 });
+    return [...cached.embedding]; // Return copy
+  }
+  
+  return null;
+}
+
+/**
+ * Cache an embedding for text
+ */
+export async function cacheEmbedding(text: string, embedding: number[]): Promise<void> {
+  const db = await getMemoryDatabase();
+  const id = await hashText(text);
+  
+  // Check cache size and evict if needed
+  const count = await db.embeddingCache.count().exec();
+  if (count >= MAX_CACHE_SIZE) {
+    // Evict least accessed entries using bulkRemove to avoid conflicts
+    const toEvict = await db.embeddingCache
+      .find()
+      .sort({ accessCount: 'asc' })
+      .limit(Math.floor(MAX_CACHE_SIZE * 0.2)) // Evict 20%
+      .exec();
+    
+    // Use bulkRemove with IDs to handle concurrent modifications gracefully
+    const idsToRemove = toEvict.map(doc => doc.id);
+    if (idsToRemove.length > 0) {
+      try {
+        await db.embeddingCache.bulkRemove(idsToRemove);
+      } catch (err) {
+        // Ignore conflicts - another operation may have already removed them
+        if (!(err instanceof Error && err.message.includes('CONFLICT'))) {
+          console.warn('[EmbeddingCache] Eviction warning:', err);
+        }
+      }
+    }
+  }
+  
+  // Insert or update cache entry
+  await db.embeddingCache.upsert({
+    id,
+    text,
+    embedding,
+    createdAt: Date.now(),
+    accessCount: 1,
+  });
+}
+
+/**
+ * Get cache statistics
+ */
+export async function getEmbeddingCacheStats(): Promise<{
+  size: number;
+  totalAccesses: number;
+  oldestEntry: number | null;
+}> {
+  const db = await getMemoryDatabase();
+  const all = await db.embeddingCache.find().exec();
+  
+  if (all.length === 0) {
+    return { size: 0, totalAccesses: 0, oldestEntry: null };
+  }
+  
+  const totalAccesses = all.reduce((sum, doc) => sum + doc.accessCount, 0);
+  const oldestEntry = Math.min(...all.map(doc => doc.createdAt));
+  
+  return {
+    size: all.length,
+    totalAccesses,
+    oldestEntry,
+  };
+}
+
+/**
+ * Clear the embedding cache
+ */
+export async function clearEmbeddingCache(): Promise<number> {
+  const db = await getMemoryDatabase();
+  const count = await db.embeddingCache.count().exec();
+  await db.embeddingCache.find().remove();
+  return count;
+}
+
+// ============================================
+// Pending Operations (Optimistic UI)
+// ============================================
+
+/**
+ * Add a pending operation for optimistic UI
+ */
+export async function addPendingOperation(
+  type: PendingOperationDoc['type'],
+  operation: PendingOperationDoc['operation'],
+  data: Record<string, unknown>
+): Promise<string> {
+  const db = await getMemoryDatabase();
+  const id = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  await db.pendingOperations.insert({
+    id,
+    type,
+    operation,
+    data,
+    createdAt: Date.now(),
+    status: 'pending',
+  });
+  
+  return id;
+}
+
+/**
+ * Update pending operation status
+ */
+export async function updatePendingOperation(
+  id: string,
+  status: PendingOperationDoc['status']
+): Promise<void> {
+  const db = await getMemoryDatabase();
+  const doc = await db.pendingOperations.findOne(id).exec();
+  if (doc) {
+    await doc.patch({ status });
+  }
+}
+
+/**
+ * Get all pending operations
+ */
+export async function getPendingOperations(): Promise<PendingOperationDoc[]> {
+  const db = await getMemoryDatabase();
+  const docs = await db.pendingOperations
+    .find({ selector: { status: { $in: ['pending', 'in-flight'] } } })
+    .exec();
+  return docs.map(d => d.toJSON());
+}
+
+/**
+ * Remove completed/failed operations
+ */
+export async function cleanupPendingOperations(): Promise<number> {
+  const db = await getMemoryDatabase();
+  const docs = await db.pendingOperations
+    .find({ selector: { status: { $in: ['completed', 'failed'] } } })
+    .exec();
+  
+  for (const doc of docs) {
+    await doc.remove();
+  }
+  
+  return docs.length;
+}
+
+// ============================================
+// Local Documents for Settings
+// ============================================
+
+interface AppSettings {
+  theme: 'light' | 'dark' | 'system';
+  fontSize: number;
+  enableAnimations: boolean;
+  enableSoundEffects: boolean;
+  ragMode: 'basic' | 'semantic';
+  lastTier: string;
+  onboardingComplete: boolean;
+  sendOnEnter: boolean;
+  enableVoice: boolean;
+  enableThinking: boolean;
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  theme: 'system',
+  fontSize: 16,
+  enableAnimations: true,
+  enableSoundEffects: false,
+  ragMode: 'basic',
+  lastTier: 'free',
+  onboardingComplete: false,
+  sendOnEnter: true,
+  enableVoice: true,
+  enableThinking: true,
+};
+
+/**
+ * Get app settings from local document
+ */
+export async function getAppSettings(): Promise<AppSettings> {
+  const db = await getMemoryDatabase();
+  
+  try {
+    const localDoc = await db.getLocal<AppSettings>('settings');
+    if (localDoc) {
+      return { ...DEFAULT_SETTINGS, ...localDoc.toJSON().data };
+    }
+  } catch {
+    // Local doc doesn't exist yet
+  }
+  
+  return DEFAULT_SETTINGS;
+}
+
+/**
+ * Update app settings
+ */
+export async function updateAppSettings(
+  updates: Partial<AppSettings>
+): Promise<AppSettings> {
+  const db = await getMemoryDatabase();
+  const current = await getAppSettings();
+  const newSettings = { ...current, ...updates };
+  
+  await db.upsertLocal('settings', newSettings);
+  
+  return newSettings;
+}
+
+/**
+ * Subscribe to settings changes
+ */
+export function subscribeToAppSettings(): Observable<AppSettings> {
+  const subject = new Subject<AppSettings>();
+  
+  getMemoryDatabase().then(db => {
+    db.getLocal$<AppSettings>('settings').subscribe(localDoc => {
+      if (localDoc) {
+        subject.next({ ...DEFAULT_SETTINGS, ...localDoc.toJSON().data });
+      } else {
+        subject.next(DEFAULT_SETTINGS);
+      }
+    });
+  });
+  
+  return subject.asObservable();
+}
+
+// ============================================
+// Cleanup
+// ============================================
+
+/**
+ * Destroy the memory database
+ * Properly resets all singleton state for clean re-initialization
+ */
+export async function destroyMemoryDatabase(): Promise<void> {
+  if (memoryDb) {
+    try {
+      await memoryDb.remove();
+      console.log('[RxDB Memory] Database destroyed');
+    } catch (error) {
+      console.warn('[RxDB Memory] Error during destroy:', error);
+    }
+  }
+  // Reset all singleton state
+  memoryDb = null;
+  memoryDbPromise = null;
+}

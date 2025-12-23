@@ -8,7 +8,7 @@ import PromptManager from '@/components/PromptManager';
 import DocumentList from '@/components/DocumentList';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
-import { GoggaLogo, GoggaIcon, GoggaCricket } from '@/components/GoggaLogo';
+import { GoggaLogo, GoggaIcon, GoggaCricket, GoggaPngIcon, GoggaPngIconAnimated } from '@/components/GoggaLogo';
 import { GoggaSpinner } from '@/components/GoggaSpinner';
 import IconGeneratorModal from '@/components/IconGeneratorModal';
 import {
@@ -2202,14 +2202,14 @@ ${comment}
 
   return (
     <div className="flex flex-col h-screen bg-primary-50">
-      {/* Header */}
-      <header className="bg-primary-800 text-white px-4 py-3 shadow-lg flex justify-between items-center">
+      {/* Header - Transparent with dark text */}
+      <header className="bg-transparent text-primary-800 px-4 py-3 flex justify-between items-center border-b border-primary-200">
         <div className="flex items-center gap-4">
-          <GoggaLogo size="xl" variant="animated" />
+          <GoggaPngIconAnimated size="xxl" className="-my-2" />
           <div>
             <h1 className="text-2xl font-bold tracking-tight">GOGGA</h1>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-primary-300 font-medium">
+              <span className="text-xs text-primary-500 font-medium">
                 South African AI
               </span>
               {/* Beta v3 with smile tooth icon */}
@@ -2326,14 +2326,14 @@ ${comment}
             {/* Token Count - Prominent display badge */}
             <div className="relative group">
               <div
-                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 rounded-lg transition-all cursor-default shadow-sm hover:shadow-md"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 border border-amber-300 rounded-lg transition-all cursor-default shadow-sm hover:shadow-md"
               >
                 <div className="flex items-center justify-center w-5 h-5 bg-amber-500 rounded-md shadow-inner">
                   <Hash size={12} className="text-white" />
                 </div>
                 <div className="flex flex-col items-start leading-none">
-                  <span className="text-[10px] text-amber-300/80 font-medium uppercase tracking-wider">Tokens</span>
-                  <span className="text-sm font-bold text-amber-100">
+                  <span className="text-[10px] text-amber-600 font-medium uppercase tracking-wider">Tokens</span>
+                  <span className="text-sm font-bold text-amber-800">
                     {tokenStats.isLoading ? '...' : formatTokenCount(tokenStats.allTime.totalTokens)}
                   </span>
                 </div>
@@ -2410,7 +2410,7 @@ ${comment}
             {tier === 'free' && userEmail && (
               <a
                 href="/upgrade"
-                className="header-btn bg-linear-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 border border-primary-400/30"
+                className="header-btn bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white border-0"
                 title="Upgrade to JIVE or JIGGA for more features"
               >
                 <ArrowUpCircle size={14} />
@@ -2436,7 +2436,7 @@ ${comment}
           {isTester && (
             <button
               onClick={() => setShowReportIssue(true)}
-              className="header-btn bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
+              className="header-btn bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300"
               title="Report an issue (Tester)"
             >
               <Bug size={14} />
@@ -2640,7 +2640,7 @@ ${comment}
             {displayMessages.length === 0 && (
               <div className="text-center text-primary-400 mt-12 animate-fadeIn max-w-2xl mx-auto">
                 <div className="mb-6">
-                  <GoggaLogo size="xl" variant="animated" className="mx-auto" />
+                  <GoggaPngIconAnimated size="xl" className="mx-auto" />
                 </div>
                 <h2 className="text-2xl font-bold text-primary-700 mb-2">
                   Sawubona!
@@ -2757,7 +2757,7 @@ ${comment}
                     {m.role === 'user' ? (
                       <User size={16} className="text-white" />
                     ) : (
-                      <GoggaCricket size="md" />
+                      <GoggaPngIcon size="md" />
                     )}
                   </div>
 
@@ -2954,7 +2954,7 @@ ${comment}
                 <div className="flex justify-start chat-bubble">
                   <div className="flex gap-3 w-full max-w-2xl">
                     <div className="shrink-0 w-10 h-10 flex items-center justify-center">
-                      <GoggaCricket size="md" />
+                      <GoggaPngIcon size="md" />
                     </div>
                     <div className="flex-1 space-y-3">
                       <div className="message-bubble message-bubble-assistant">
@@ -2995,7 +2995,7 @@ ${comment}
                 <div className="flex justify-start chat-bubble">
                   <div className="flex gap-3 w-full max-w-2xl">
                     <div className="shrink-0 w-10 h-10 flex items-center justify-center">
-                      <GoggaCricket size="md" />
+                      <GoggaPngIcon size="md" />
                     </div>
                     <div className="flex-1 space-y-3">
                       <div className="message-bubble message-bubble-assistant">

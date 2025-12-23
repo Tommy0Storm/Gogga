@@ -4,8 +4,7 @@
  * 
  * Features:
  * - Real-time metrics subscription
- * - Dexie storage stats
- * cSpell:ignore Dexie
+ * - RxDB storage stats
  * - Embedding engine status
  * - Auto-refresh with configurable interval
  */
@@ -36,7 +35,7 @@ import {
 import { ragManager } from '@/lib/ragManager';
 // Note: EmbeddingEngine is dynamically imported to avoid SSR issues with transformers.js
 import type {
-  DexieStorageStats,
+  StorageStats,
   ModelStatus,
   EmbeddingStats,
   RetrievalStats,
@@ -86,7 +85,7 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
   });
 
   // Data states
-  const [storageStats, setStorageStats] = useState<DexieStorageStats | null>(
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(
     null
   );
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
@@ -120,7 +119,7 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
   // ============================================================================
 
   const fetchStorageStats =
-    useCallback(async (): Promise<DexieStorageStats> => {
+    useCallback(async (): Promise<StorageStats> => {
       const [basic, breakdown] = await Promise.all([
         getStorageStats(),
         getStorageUsageBreakdown(),
@@ -225,7 +224,7 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
   }, []);
 
   const fetchEmbeddingStats = useCallback(async (): Promise<EmbeddingStats> => {
-    // Use async version to get full history from Dexie
+    // Use async version to get full history from RxDB
     const allEmbeddingMetrics = await getRecentMetricsAsync({
       type: 'embedding_generated',
     });
@@ -298,7 +297,7 @@ export function useRagDashboard(initialFilters?: Partial<DashboardFilters>) {
 
   const fetchDocuments = useCallback(async (): Promise<ContextDocument[]> => {
     const docs = await getAllDocuments();
-    console.log('[Dashboard] Fetched documents from Dexie:', docs.length);
+    console.log('[Dashboard] Fetched documents from RxDB:', docs.length);
 
     // Get cached embedding info from RagManager
     const cachedVectors = ragManager.getCachedVectors();
@@ -669,7 +668,7 @@ export function useContextMemory() {
       const doc = documents.find(d => d.id === docId);
       const sessionId = doc?.sessionId || 'default-session';
       
-      // Use proper rag removal which handles FlexSearch, Dexie, and metrics
+      // Use proper rag removal which handles FlexSearch, RxDB, and metrics
       await ragRemoveDocument(sessionId, docId);
       
       setDocuments((prev) => prev.filter((d) => d.id !== docId));

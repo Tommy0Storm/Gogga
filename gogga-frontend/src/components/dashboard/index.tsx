@@ -134,7 +134,7 @@ export { VectorHeatmap, VectorPreview, VectorStats, SimilarityScore } from './Ve
 export { DocumentManager, DocumentPreview, QuickDocList } from './DocumentManager';
 export { MemoryManager } from './MemoryManager';
 export { BuddyPanel } from './BuddyPanel';
-export { DexieMaintenance } from './DexieMaintenance';
+export { DatabaseMaintenance } from './DatabaseMaintenance';
 export { LLMMonitor } from './LLMMonitor';
 export { EmbeddingMonitor } from './EmbeddingMonitor';
 export { MobileDashboard } from './MobileDashboard';

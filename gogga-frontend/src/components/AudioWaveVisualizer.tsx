@@ -35,6 +35,7 @@ interface AudioWaveVisualizerProps {
 
 /**
  * Generate smooth sine wave path for SVG
+ * IMPROVED: Better audio level response for more visible wave movement
  */
 function generateSinePath(
   width: number,
@@ -48,8 +49,10 @@ function generateSinePath(
   const points: string[] = [];
   const step = 2; // Higher resolution for smoother curves
 
-  // Apply audio level as amplitude multiplier
-  const effectiveAmplitude = amplitude * Math.max(0.1, audioLevel);
+  // IMPROVED: Apply audio level with minimum 0.2 (was 0.1) for baseline wave visibility
+  // and apply a boost factor (1.3x) to make audio level changes more dramatic
+  const boostedAudioLevel = Math.min(1, audioLevel * 1.3);
+  const effectiveAmplitude = amplitude * Math.max(0.2, boostedAudioLevel);
 
   for (let x = 0; x <= width; x += step) {
     const normalizedX = x / width;
@@ -61,13 +64,28 @@ function generateSinePath(
 }
 
 // Voice activity indicator component
+// IMPROVED: Shows contextual status based on visualizer state
 function VoiceActivityIndicator({ 
   isActive, 
-  color 
+  color,
+  state 
 }: { 
   isActive: boolean; 
   color: string;
+  state: VisualizerState;
 }) {
+  // Determine status text based on state and activity
+  const getStatusText = () => {
+    switch (state) {
+      case 'gogga-speaking':
+        return isActive ? 'Gogga speaking...' : 'Gogga';
+      case 'user-speaking':
+        return isActive ? 'Listening...' : 'Ready';
+      default:
+        return 'Muted';
+    }
+  };
+
   return (
     <div className="flex items-center gap-1.5">
       <div 
@@ -87,7 +105,7 @@ function VoiceActivityIndicator({
           opacity: isActive ? 1 : 0.5 
         }}
       >
-        {isActive ? 'Speaking' : 'Silent'}
+        {getStatusText()}
       </span>
     </div>
   );
@@ -114,10 +132,11 @@ export function AudioWaveVisualizer({
   
   useEffect(() => {
     if (audioLevel !== undefined) {
-      // More responsive smoothing - faster rise and faster fall for better wave movement
-      // Rise: 0.6 (quick response), Fall: 0.25 (smooth but not sluggish)
+      // IMPROVED: Even more responsive smoothing for visible wave movement
+      // Rise: 0.75 (very quick response to voice), Fall: 0.35 (smooth but faster decay)
+      // This makes the wave react more dynamically to speech patterns
       const isRising = audioLevel > smoothingRef.current;
-      const smoothingFactor = isRising ? 0.6 : 0.25;
+      const smoothingFactor = isRising ? 0.75 : 0.35;
       smoothingRef.current = smoothingRef.current * (1 - smoothingFactor) + audioLevel * smoothingFactor;
       setSmoothedLevel(smoothingRef.current);
       
@@ -180,8 +199,9 @@ export function AudioWaveVisualizer({
   const isActive = state !== 'idle';
 
   // Generate multiple wave paths for layered effect
-  // Increased amplitude multiplier for more visible wave movement
-  const baseAmplitude = isActive ? height * 0.45 : height * 0.12;
+  // IMPROVED: Higher amplitude multiplier (0.55) for more dramatic wave movement
+  // This makes the wave visually respond more to voice input
+  const baseAmplitude = isActive ? height * 0.55 : height * 0.15;
 
   return (
     <div 
@@ -193,7 +213,8 @@ export function AudioWaveVisualizer({
         <div className="absolute top-0 left-1/2 -translate-x-1/2">
           <VoiceActivityIndicator 
             isActive={isActive && isVoiceActive} 
-            color={colors.primary} 
+            color={colors.primary}
+            state={state}
           />
         </div>
       )}
