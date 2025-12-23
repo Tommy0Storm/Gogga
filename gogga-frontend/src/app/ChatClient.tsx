@@ -75,6 +75,8 @@ import {
   MoreHorizontal,
   Settings,
   ChevronRight,
+  RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
 import axios from 'axios';
 import { useBuddySystem } from '@/hooks/useBuddySystem';
@@ -178,6 +180,14 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const [showAIPowerDropdown, setShowAIPowerDropdown] = useState(false);
   // Chat Options modal state (New/History/Export grouped)
   const [showChatOptionsModal, setShowChatOptionsModal] = useState(false);
+  // Failed request retry state - stores last failed request for retry
+  const [failedRequest, setFailedRequest] = useState<{ message: string; timestamp: number } | null>(null);
+  // Long operation progress state - shows elapsed time for slow requests
+  const [operationStartTime, setOperationStartTime] = useState<number | null>(null);
+  const [operationProgressMessage, setOperationProgressMessage] = useState<string | null>(null);
+  // Backend health status - tracks consecutive failures
+  const [backendHealthy, setBackendHealthy] = useState(true);
+  const healthCheckFailures = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // AbortController for streaming - cancels API calls on navigation/unmount
@@ -450,6 +460,63 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
     });
   }, [displayMessages, isPersistenceEnabled]);
 
+  // Long-running operation progress tracking
+  // Shows progressive messages: 15s, 30s, 60s
+  useEffect(() => {
+    if (!operationStartTime || !isLoading) return;
+    
+    const progressMessages = [
+      { delay: 15000, message: '⏳ Still working on your request...' },
+      { delay: 30000, message: '⏳ This is taking a bit longer than usual. Hang tight!' },
+      { delay: 60000, message: '⏳ Complex request in progress. Almost there...' },
+      { delay: 90000, message: '⚠️ This is taking quite long. You can wait or try a simpler request.' },
+    ];
+    
+    const timers = progressMessages.map(({ delay, message }) =>
+      setTimeout(() => {
+        if (isLoading) {
+          setOperationProgressMessage(message);
+          console.log(`[GOGGA] Progress update (${delay/1000}s):`, message);
+        }
+      }, delay)
+    );
+    
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
+  }, [operationStartTime, isLoading]);
+
+  // Backend health monitoring - check every 30s, show indicator after 2 consecutive failures
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/health', { 
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5s timeout
+        });
+        if (res.ok) {
+          healthCheckFailures.current = 0;
+          setBackendHealthy(true);
+        } else {
+          healthCheckFailures.current++;
+          if (healthCheckFailures.current >= 2) {
+            setBackendHealthy(false);
+          }
+        }
+      } catch {
+        healthCheckFailures.current++;
+        if (healthCheckFailures.current >= 2) {
+          setBackendHealthy(false);
+        }
+      }
+    };
+    
+    // Check immediately and then every 30 seconds
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Load tier from localStorage, with session tier as fallback
   // localStorage is trusted because it can be updated via PayFast flow
   // before the session is refreshed
@@ -672,9 +739,9 @@ ${comment}
       );
     }
 
-    // Get RAG context if enabled and has documents (current session OR selected from other sessions)
+    // Get RAG context if enabled and has documents (current session, selected, OR RAG Store)
     let ragContext: string | null = null;
-    const hasDocuments = documents.length > 0 || selectedDocIds.length > 0;
+    const hasDocuments = documents.length > 0 || selectedDocIds.length > 0 || ragStoreDocuments.length > 0;
 
     if (isRAGEnabled && hasDocuments && useRAGContext) {
       // Pass authoritative mode to getContext - formatting is handled in ragManager
@@ -713,74 +780,71 @@ ${comment}
       textareaRef.current.style.height = '48px';
     }
     setIsLoading(true);
+    
+    // Start progress tracking for long operations
+    setOperationStartTime(Date.now());
+    setOperationProgressMessage(null);
+    setFailedRequest(null); // Clear any previous failed request
 
     // Note: No optimistic bot placeholder - we use isLoading state instead
     // This prevents the stuck "thinking" indicators that were appearing
 
     try {
       // Build the full message with all context
-      let messageToSend = text;
-
-      // Add BuddySystem context first (user identity, relationship, preferences)
+      // Prompt Chaining Order (most general to most specific):
+      // 1. BuddySystem - Who the user is (identity)
+      // 2. GoggaSmart - What Gogga has learned (skills/preferences)
+      // 3. Long-Term Memory - Persistent facts about user
+      // 4. Location - Where the user is now
+      // 5. RAG Documents - Relevant document excerpts
+      // 6. User Message - The actual question
+      
+      const contextParts: string[] = [];
+      
+      // 1. BuddySystem context (user identity, relationship, preferences)
       if (buddyContext) {
-        console.log(
-          '[GOGGA] BuddySystem context found:',
-          buddyContext.slice(0, 200) + '...'
-        );
-        messageToSend = `USER CONTEXT:\n${buddyContext}\n\n---\n\n${messageToSend}`;
+        console.log('[GOGGA] BuddySystem context found:', buddyContext.slice(0, 200) + '...');
+        contextParts.push(`[USER IDENTITY]\n${buddyContext}\n[END USER IDENTITY]`);
       }
 
-      // Add GoggaSmart context (learned skills and preferences)
+      // 2. GoggaSmart context (learned skills and preferences)
       if (goggaSmartPrompt) {
-        console.log(
-          '[GOGGA] GoggaSmart context found:',
-          goggaSmartPrompt.slice(0, 200) + '...'
-        );
-        messageToSend = `${goggaSmartPrompt}\n\n---\n\n${messageToSend}`;
+        console.log('[GOGGA] GoggaSmart context found:', goggaSmartPrompt.slice(0, 200) + '...');
+        contextParts.push(`[LEARNED SKILLS]\n${goggaSmartPrompt}\n[END LEARNED SKILLS]`);
       }
 
-      // Add Long-Term Memory context (persistent user info)
+      // 3. Long-Term Memory context (persistent user info)
       if (memoryContext) {
-        console.log(
-          '[GOGGA] Long-Term Memory context found:',
-          memoryContext.slice(0, 200) + '...'
-        );
-        messageToSend = `${memoryContext}\n\n---\n\n${messageToSend}`;
+        console.log('[GOGGA] Long-Term Memory context found:', memoryContext.slice(0, 200) + '...');
+        contextParts.push(`[LONG-TERM MEMORY]\n${memoryContext}\n[END LONG-TERM MEMORY]`);
       } else {
         console.log('[GOGGA] No Long-Term Memory context (tier:', tier, ')');
       }
 
-      // Add RAG context (session documents)
-      if (ragContext) {
-        console.log(
-          '[GOGGA] RAG context found:',
-          ragContext.slice(0, 200) + '...'
-        );
-        messageToSend = `${ragContext}\n\n---\n\nUser Question: ${messageToSend}`;
-      } else {
-        console.log(
-          '[GOGGA] No RAG context (RAG enabled:',
-          isRAGEnabled,
-          ', docs:',
-          documents.length,
-          ', useRAG:',
-          useRAGContext,
-          ')'
-        );
-      }
-
-      // Add Location context (if user consented and location is available)
+      // 4. Location context (if user consented)
       const locationContext = getLocationContext();
       if (locationContext) {
         console.log('[GOGGA] Location context found:', locationContext);
-        messageToSend = `${locationContext}\n\n---\n\n${messageToSend}`;
+        contextParts.push(`[LOCATION]\n${locationContext}\n[END LOCATION]`);
       }
 
-      console.log(
-        '[GOGGA] Final message length:',
-        messageToSend.length,
-        'chars'
-      );
+      // 5. RAG context (document excerpts - already has [DOCUMENT CONTEXT] delimiters)
+      if (ragContext) {
+        console.log('[GOGGA] RAG context found:', ragContext.slice(0, 200) + '...');
+        contextParts.push(ragContext); // Already formatted with delimiters
+      } else {
+        console.log('[GOGGA] No RAG context (RAG enabled:', isRAGEnabled, ', docs:', documents.length, ', useRAG:', useRAGContext, ')');
+      }
+
+      // 6. Build final message with all context + user question
+      let messageToSend: string;
+      if (contextParts.length > 0) {
+        messageToSend = contextParts.join('\n\n---\n\n') + '\n\n---\n\nUser Question: ' + text;
+      } else {
+        messageToSend = text;
+      }
+
+      console.log('[GOGGA] Final message length:', messageToSend.length, 'chars, context sections:', contextParts.length);
 
       // Build conversation history for context (last 10 messages max to avoid token limits)
       const historyForAPI = displayMessages.slice(-10).map((msg) => ({
@@ -802,7 +866,12 @@ ${comment}
         force_tool: forcedTool?.tool.name || undefined, // ToolShed: Force specific tool
         // GOGGA Voice: Personality and language for authentic SA experience
         personality_mode: profile?.personalityMode || 'goody',
+        // Language detection - run on RAW user input only (not context-augmented)
+        // This prevents SA location/context from influencing detection
         detected_language: langDetection.language,
+        detected_language_confidence: langDetection.confidence,
+        // Raw user message for backend's own detection (without context pollution)
+        raw_user_message: text,
       };
       console.log('[GOGGA] Request payload:', JSON.stringify(requestPayload));
       console.log('[GOGGA] History messages:', historyForAPI.length);
@@ -1362,12 +1431,37 @@ ${comment}
       }
       
       const { response, message } = error;
-      const errorMessage = `Eish! Something went wrong: ${response?.data?.detail || message}`;
+      const errorDetail = response?.data?.detail || message || 'Unknown error';
+      
+      // Store failed request for retry functionality
+      setFailedRequest({ message: text, timestamp: Date.now() });
+      
+      // Provide user-friendly messages for common errors with retry guidance
+      let errorMessage: string;
+      let showRetryHint = true;
+      
+      if (errorDetail.includes('429') || errorDetail.includes('Too Many Requests') || errorDetail.includes('rate')) {
+        errorMessage = "Eish! The servers are busy right now. Give it a moment and try again, or upgrade to JIVE/JIGGA for faster, dedicated access. 🚀";
+      } else if (errorDetail.includes('timeout') || errorDetail.includes('timed out')) {
+        errorMessage = "Eish! That took too long. Try a shorter question or break it into parts.";
+      } else if (errorDetail.includes('network') || errorDetail.includes('fetch')) {
+        errorMessage = "Eish! Network hiccup. Check your internet connection and try again.";
+      } else {
+        errorMessage = `Eish! Something went wrong: ${errorDetail}`;
+      }
+      
+      // Add retry hint with preserved request preview
+      if (showRetryHint && text.length > 0) {
+        const preview = text.length > 50 ? text.substring(0, 50) + '...' : text;
+        errorMessage += `\n\n💡 **Your request was saved.** Click the retry button below or type again:\n> "${preview}"`;
+      }
       
       // Persist error message so user sees what happened
       const errorMsg: ChatMessage = {
         role: 'assistant',
         content: errorMessage,
+        // Mark as error for special rendering
+        meta: { isError: true, failedRequest: text },
       };
       
       try {
@@ -1383,6 +1477,9 @@ ${comment}
       console.log('[GOGGA] Error response saved:', errorMessage);
     } finally {
       setIsLoading(false);
+      // Clear progress tracking
+      setOperationStartTime(null);
+      setOperationProgressMessage(null);
     }
   };
 
@@ -1403,9 +1500,17 @@ ${comment}
 
       if (response.data.success && response.data.enhanced_prompt) {
         setInput(response.data.enhanced_prompt);
+      } else {
+        // Enhancement returned but failed - show subtle feedback
+        console.warn('[GOGGA] Prompt enhancement returned without enhanced_prompt');
       }
-    } catch (error) {
-      console.error('Enhance error:', error);
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status?: number }; message?: string };
+      console.error('[GOGGA] Enhance error:', axiosError.message);
+      
+      // Show brief toast-like feedback (using textarea placeholder as subtle indicator)
+      // For now just log - the user will see the prompt unchanged which is acceptable
+      // A future improvement could add toast notifications
     } finally {
       setIsEnhancing(false);
     }
@@ -1484,7 +1589,8 @@ ${comment}
 
       const botMsg: ChatMessage = {
         role: 'assistant',
-        content: data.response,
+        content: botContent, // FIXED: Use botContent instead of data.response
+        ...(imageId ? { imageId } : {}), // FIXED: Include imageId for rendering
         ...(data.thinking ? { thinking: data.thinking } : {}), // JIGGA thinking block
         meta: {
           ...(data.meta?.cost_zar !== undefined
@@ -1534,6 +1640,58 @@ ${comment}
           timestamp: new Date().toISOString(), // Response timestamp
         },
       };
+
+      // FIXED: Persist bot message to chat history
+      try {
+        if (isPersistenceEnabled) {
+          await addMessage(botMsg);
+        } else {
+          setFreeMessages((prev) => [...prev, botMsg]);
+        }
+      } catch (persistError) {
+        console.error('[GOGGA] Failed to persist image response:', persistError);
+      }
+    } catch (error: unknown) {
+      // FIXED: Proper error handling for image generation failures
+      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string };
+      const errorDetail = axiosError.response?.data?.detail || axiosError.message || 'Unknown error';
+      
+      console.error('[GOGGA] Image generation error:', errorDetail);
+      
+      // Store failed request for retry
+      setFailedRequest({ message: `🖼️ ${originalPrompt}`, timestamp: Date.now() });
+      
+      // Create user-friendly error message
+      let errorMessage: string;
+      if (errorDetail.includes('429') || errorDetail.includes('rate')) {
+        errorMessage = "Eish! The image servers are busy. Give it a moment and try again, or simplify your description. 🖼️";
+      } else if (errorDetail.includes('timeout') || errorDetail.includes('timed out')) {
+        errorMessage = "Eish! Image generation took too long. Try a simpler description or fewer details.";
+      } else if (errorDetail.includes('quota') || errorDetail.includes('limit')) {
+        errorMessage = "You've reached your image generation limit for this month. Upgrade your tier for more! 🚀";
+      } else {
+        errorMessage = `Eish! Something went wrong with image generation: ${errorDetail}`;
+      }
+      
+      // Add retry hint
+      const preview = originalPrompt.length > 50 ? originalPrompt.substring(0, 50) + '...' : originalPrompt;
+      errorMessage += `\n\n💡 **Your image request was saved.** Click retry below:\n> "${preview}"`;
+      
+      const errorMsg: ChatMessage = {
+        role: 'assistant',
+        content: errorMessage,
+        meta: { isError: true, failedRequest: `🖼️ ${originalPrompt}` },
+      };
+      
+      try {
+        if (isPersistenceEnabled) {
+          await addMessage(errorMsg);
+        } else {
+          setFreeMessages((prev) => [...prev, errorMsg]);
+        }
+      } catch (persistError) {
+        console.error('[GOGGA] Failed to persist image error message:', persistError);
+      }
     } finally {
       setIsGeneratingImage(false);
     }
@@ -2004,6 +2162,40 @@ ${comment}
           content={mainContent}
           variant={isUser ? 'user' : 'assistant'}
         />
+        
+        {/* Retry Button for Error Messages */}
+        {msg.meta?.isError && msg.meta?.failedRequest && (
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => {
+                const failedMessage = msg.meta?.failedRequest as string;
+                if (failedMessage) {
+                  setInput(failedMessage);
+                  setFailedRequest(null);
+                  // Focus the input
+                  textareaRef.current?.focus();
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              <RotateCcw size={14} />
+              Load message to retry
+            </button>
+            <button
+              onClick={() => {
+                const failedMessage = msg.meta?.failedRequest as string;
+                if (failedMessage) {
+                  sendMessage(failedMessage);
+                }
+              }}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={14} />
+              Retry now
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -2025,6 +2217,16 @@ ${comment}
                 <Smile size={12} className="text-primary-400" />
                 Beta v3
               </span>
+              {/* Backend Health Indicator - shows when degraded */}
+              {!backendHealthy && (
+                <span 
+                  className="flex items-center gap-1 text-[10px] text-amber-400 animate-pulse"
+                  title="Backend may be experiencing issues. Requests might take longer."
+                >
+                  <span className="w-2 h-2 bg-amber-400 rounded-full" />
+                  Degraded
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -2188,6 +2390,15 @@ ${comment}
                 <div className="absolute -top-1.5 right-6 w-3 h-3 bg-gray-900 border-l border-t border-gray-700 rotate-45" />
               </div>
             </div>
+
+            {/* GoggaSmart Button (JIVE/JIGGA only) - Shows AI learning status */}
+            {isGoggaSmartEnabled && (
+              <GoggaSmartButton
+                isEnabled={isGoggaSmartEnabled}
+                stats={goggaSmartStats}
+                onClick={() => setShowGoggaSmartModal(true)}
+              />
+            )}
           </div>
 
           {/* ═══ Separator ═══ */}
@@ -2747,8 +2958,15 @@ ${comment}
                     </div>
                     <div className="flex-1 space-y-3">
                       <div className="message-bubble message-bubble-assistant">
-                        <div className="flex items-center justify-center py-2">
-                          <span className="text-sm text-primary-400">Processing...</span>
+                        <div className="flex flex-col items-center justify-center py-2 gap-1">
+                          <span className="text-sm text-primary-400">
+                            {operationProgressMessage || 'Processing...'}
+                          </span>
+                          {operationStartTime && (
+                            <span className="text-xs text-primary-300">
+                              {Math.floor((Date.now() - operationStartTime) / 1000)}s elapsed
+                            </span>
+                          )}
                         </div>
                       </div>
                       {/* GoggaSolve Terminal (JIVE/JIGGA only) - shows for math tools OR AI thinking */}
@@ -2767,6 +2985,35 @@ ${comment}
                   </div>
                 </div>
                 {/* Pinned center overlay spinner */}
+                <GoggaSpinner overlay size="md" />
+              </>
+            )}
+
+            {/* Image Generation Loading Indicator */}
+            {isGeneratingImage && (
+              <>
+                <div className="flex justify-start chat-bubble">
+                  <div className="flex gap-3 w-full max-w-2xl">
+                    <div className="shrink-0 w-10 h-10 flex items-center justify-center">
+                      <GoggaCricket size="md" />
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <div className="message-bubble message-bubble-assistant">
+                        <div className="flex flex-col items-center justify-center py-4 gap-2">
+                          <div className="text-2xl animate-pulse">🎨</div>
+                          <span className="text-sm text-primary-600 font-medium">
+                            Creating your image...
+                          </span>
+                          <span className="text-xs text-primary-400">
+                            {tier === 'free' 
+                              ? 'Using Pollinations AI (may take 10-30 seconds)' 
+                              : 'Using Imagen 3.0 (may take 15-60 seconds)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <GoggaSpinner overlay size="md" />
               </>
             )}
@@ -2871,8 +3118,8 @@ ${comment}
             )}
 
             <div className="max-w-4xl mx-auto flex items-center gap-2">
-              {/* Left buttons - aligned center with 48px height */}
-              <div className="flex items-center gap-2 h-12">
+              {/* Left buttons - with labels */}
+              <div className="flex items-center gap-2">
                 {/* GoggaTalk - SA Flag Speech Button for voice chat with label */}
                 <div className="flex flex-col items-center gap-0.5">
                   <GoggaTalkButton
@@ -2901,6 +3148,27 @@ ${comment}
                       <Paperclip size={18} />
                     </button>
                     <span className="text-[9px] text-primary-500 font-medium">Docs</span>
+                  </div>
+                )}
+
+                {/* Tools - Opens ToolShed Panel for forcing tools */}
+                {tier !== 'free' && (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button
+                      onClick={() => {
+                        setRightPanelTab('tools');
+                      }}
+                      disabled={isLoading}
+                      className={`h-9 w-9 flex items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
+                        forcedTool 
+                          ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 ring-2 ring-amber-300' 
+                          : 'bg-primary-100 hover:bg-primary-200 text-primary-700'
+                      }`}
+                      title={forcedTool ? `Tool forced: ${forcedTool.tool.name}` : "Browse tools (ToolShed)"}
+                    >
+                      <Wrench size={18} />
+                    </button>
+                    <span className="text-[9px] text-primary-500 font-medium">Tools</span>
                   </div>
                 )}
               </div>
@@ -2971,46 +3239,54 @@ ${comment}
                 </button>
               </div>
 
-              {/* Right buttons - aligned center with 48px height */}
-              <div className="flex items-center gap-2 h-12">
-                {/* Image Generation Button */}
-                <button
-                  onClick={generateImage}
-                  disabled={!input.trim() || isGeneratingImage || isLoading}
-                  className="action-btn h-12 w-12 bg-primary-200 text-primary-800 hover:bg-primary-300"
-                  aria-label="Generate image"
-                  title={`Generate image (${tier === 'free' ? 'LongCat FREE' : 'FLUX 1.1 Pro'
-                    })`}
-                >
-                  {isGeneratingImage ? (
-                    <div className="animate-spin h-5 w-5 border-2 border-primary-800 border-t-transparent rounded-full" />
-                  ) : (
-                    <ImageGenerateIcon size={20} />
-                  )}
-                </button>
-
-                {/* Icon Studio Button - Premium Feature */}
-                {(tier === 'jive' || tier === 'jigga') && (
+              {/* Right buttons - aligned center with labels */}
+              <div className="flex items-center gap-2">
+                {/* Image Generation Button with label */}
+                <div className="flex flex-col items-center gap-0.5">
                   <button
-                    onClick={() => setShowIconStudio(true)}
-                    className="action-btn h-12 w-12 bg-gradient-to-br from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
-                    aria-label="Icon Studio"
-                    title="Icon Studio - Generate SA-themed icons"
+                    onClick={generateImage}
+                    disabled={!input.trim() || isGeneratingImage || isLoading}
+                    className="action-btn h-9 w-9 bg-primary-200 text-primary-800 hover:bg-primary-300"
+                    aria-label="Generate image"
+                    title={`Generate image (${tier === 'free' ? 'Pollinations' : 'Imagen 3.0'})`}
                   >
-                    <MagicWandIcon size={20} />
+                    {isGeneratingImage ? (
+                      <div className="animate-spin h-4 w-4 border-2 border-primary-800 border-t-transparent rounded-full" />
+                    ) : (
+                      <ImageGenerateIcon size={18} />
+                    )}
                   </button>
+                  <span className="text-[9px] text-primary-500 font-medium">Image</span>
+                </div>
+
+                {/* Icon Studio Button - Premium Feature with label */}
+                {(tier === 'jive' || tier === 'jigga') && (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button
+                      onClick={() => setShowIconStudio(true)}
+                      className="action-btn h-9 w-9 bg-gradient-to-br from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
+                      aria-label="Icon Studio"
+                      title="Icon Studio - Generate SA-themed icons"
+                    >
+                      <Sparkles size={18} />
+                    </button>
+                    <span className="text-[9px] text-purple-500 font-medium">Icons</span>
+                  </div>
                 )}
 
-                {/* Send Button */}
-                <button
-                  onClick={() => sendMessage(input)}
-                  disabled={!input.trim() || isLoading || isGeneratingImage}
-                  className="action-btn h-12 w-12 bg-primary-800 text-white hover:bg-primary-700 disabled:bg-primary-300"
-                  aria-label="Send message"
-                  title="Send message (Enter)"
-                >
-                  <SendArrowIcon size={20} />
-                </button>
+                {/* Send Button with label */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <button
+                    onClick={() => sendMessage(input)}
+                    disabled={!input.trim() || isLoading || isGeneratingImage}
+                    className="action-btn h-9 w-9 bg-primary-800 text-white hover:bg-primary-700 disabled:bg-primary-300"
+                    aria-label="Send message"
+                    title="Send message (Enter)"
+                  >
+                    <SendArrowIcon size={18} />
+                  </button>
+                  <span className="text-[9px] text-primary-500 font-medium">Send</span>
+                </div>
               </div>
             </div>
           </div>

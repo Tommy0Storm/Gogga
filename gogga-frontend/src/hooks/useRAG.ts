@@ -247,6 +247,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
   });
 
   // Load RAG Store documents (persistent, cross-session)
+  // RAG Store docs are ALWAYS included in retrieval for JIVE/JIGGA tiers
   const loadRAGStoreDocuments = useCallback(async () => {
     if (!canUploadToRAGStore) return;
     
@@ -258,6 +259,13 @@ export function useRAG(tier: Tier): UseRAGReturn {
       // Calculate storage used
       const totalBytes = docs.reduce((sum, doc) => sum + (doc.size || 0), 0);
       setRagStorageMB(totalBytes / (1024 * 1024));
+      
+      // AUTO-SYNC: Add RAG Store docs to RagManager for retrieval
+      // This ensures persistent docs are always searchable without manual selection
+      if (docs.length > 0) {
+        console.log(`[RAG Store] Auto-syncing ${docs.length} persistent docs to RagManager`);
+        ragManagerInstance.addExternalDocuments(sessionIdRef.current, docs);
+      }
     } catch (err) {
       console.error('[RAG Store] Failed to load documents:', err);
     }
@@ -489,17 +497,21 @@ export function useRAG(tier: Tier): UseRAGReturn {
 
       const hasSessionDocs = state.documents.length > 0;
       const hasSelectedDocs = state.selectedDocIds.length > 0;
+      const hasRAGStoreDocs = ragStoreDocuments.length > 0;
 
       console.log(
         '[RAG] getContext: sessionDocs=',
         hasSessionDocs,
         'selectedDocs=',
         hasSelectedDocs,
+        'ragStoreDocs=',
+        hasRAGStoreDocs,
         'mode=',
         ragMode
       );
 
-      if (!hasSessionDocs && !hasSelectedDocs) {
+      // Check all document sources: session docs, selected docs, AND RAG Store docs
+      if (!hasSessionDocs && !hasSelectedDocs && !hasRAGStoreDocs) {
         console.log('[RAG] getContext: No documents available');
         return null;
       }
@@ -576,6 +588,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
       isRAGEnabled,
       state.documents.length,
       state.selectedDocIds,
+      ragStoreDocuments.length,
       ragMode,
       canUseSemanticRAG,
     ]
@@ -593,8 +606,10 @@ export function useRAG(tier: Tier): UseRAGReturn {
 
       const hasSessionDocs = state.documents.length > 0;
       const hasSelectedDocs = state.selectedDocIds.length > 0;
+      const hasRAGStoreDocs = ragStoreDocuments.length > 0;
 
-      if (!hasSessionDocs && !hasSelectedDocs) {
+      // Check all document sources
+      if (!hasSessionDocs && !hasSelectedDocs && !hasRAGStoreDocs) {
         return [];
       }
 
@@ -625,7 +640,7 @@ export function useRAG(tier: Tier): UseRAGReturn {
         return [];
       }
     },
-    [canUseSemanticRAG, state.documents.length, state.selectedDocIds]
+    [canUseSemanticRAG, state.documents.length, state.selectedDocIds, ragStoreDocuments.length]
   );
 
   /**
