@@ -1,0 +1,69 @@
+Subject: Trial Request for Xneelo Cloud - SA AI Startup (GOGGA Platform)
+
+Dear Xneelo Team,
+
+I hope this email finds you well.
+
+My name is Tommy, and I'm the founder of GOGGA - an AI-powered platform designed specifically for South African users. We're building a contextually aware AI assistant that understands local languages (Zulu, Xhosa, Sotho, etc.), South African regulations (POPIA, CCMA, CPA), and real-world challenges like load shedding.
+
+As a proudly South African startup, we're committed to keeping our infrastructure local. After extensive research comparing AWS, Azure, GCP, and various international providers, Xneelo Cloud stands out as the ideal partner for several reasons:
+
+1. **Johannesburg data center** - Critical for our target market (2-5ms latency vs 180-220ms from EU/US providers)
+2. **Transparent ZAR pricing** - No forex risk or surprise billing
+3. **POPIA compliance** - Data stays in SA
+4. **Local support** - Your 24/7 SA-based team aligns with our ethos
+5. **Pay-as-you-go model** - Perfect for our bootstrapped startup phase
+
+**Our Technical Requirements:**
+- Instance: s-g-2cpu-4gb (2 vCPU, 4GB RAM) - estimated R198/month
+- OS: Ubuntu 24.04 LTS
+- Use case: Staging environment for tester access and production readiness validation
+- Stack: FastAPI (Python 3.14), Next.js 16, Docker containers
+
+**Why We're Reaching Out:**
+Before committing to a monthly subscription, we'd like to request a **trial period** (14-30 days) to:
+- Validate performance for our AI workloads
+- Test latency from various SA regions (JHB, CPT, PE, DBN)
+- Ensure compatibility with our Docker-based architecture
+- Train our small team on the Xneelo Cloud dashboard
+
+We're a self-funded startup at the MVP stage, currently preparing for our first round of beta testers. If Xneelo Cloud performs as expected (which we're confident it will), we're planning to:
+
+1. **Staging environment**: s-g-2cpu-4gb instance (immediate)
+2. **Production migration**: Scale to multiple instances within 3-6 months
+3. **Case study partnership**: Feature Xneelo in our "Built in SA, Hosted in SA" marketing
+4. **Community advocacy**: Recommend Xneelo to other SA tech startups we mentor
+
+**Our Ask:**
+Would Xneelo be willing to support a local startup with:
+- A complimentary 30-day trial of the s-g-2cpu-4gb instance?
+- Or a 50% discount for the first 3 months while we validate and onboard beta users?
+
+We understand Xneelo's commitment to supporting South African innovation (we've read about your partnerships with Nomia, FirstAlert, and Terra Firma). As a fellow SA tech company building for Africa, we believe this could be a mutually beneficial partnership.
+
+**About GOGGA:**
+- Platform: AI assistant with tier-based pricing (FREE, JIVE R49/mo, JIGGA R149/mo)
+- Target Market: 60 million South Africans, expanding to SADC region
+- Revenue Model: SaaS subscriptions + API access for enterprises
+- Differentiator: First AI to truly understand SA context (languages, compliance, culture)
+- Website: gogga.co.za (currently in staging)
+- GitHub: github.com/Tommy0Storm/Gogga
+
+I'm available for a call to discuss how GOGGA and Xneelo can grow together as proudly South African tech companies. Whether it's a trial, discounted onboarding, or startup partnership program, we're eager to explore how we can work together.
+
+Thank you for considering our request. Looking forward to keeping SA innovation local!
+
+Warm regards,
+
+Tommy Storm
+Founder & Lead Developer
+GOGGA AI Platform
+
+Email: tommy@gogga.co.za (or your email)
+Phone: +27 XX XXX XXXX (if you want to add)
+LinkedIn: [your profile] (optional)
+GitHub: github.com/Tommy0Storm
+
+---
+
+P.S. We're also exploring Ubuntu Pro integration (free for small teams) - would love to discuss best practices for securing our Xneelo Cloud instances with your team!

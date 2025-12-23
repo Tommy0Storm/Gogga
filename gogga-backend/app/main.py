@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.v1.endpoints import chat, payments, images, prompts, tools, gogga_talk, media, admin, icons
+from app.api.v1 import tts
 from app.services.posthog_service import posthog_service
 from app.services.scheduler_service import scheduler_service
 from app.core.exceptions import (
@@ -170,6 +171,7 @@ app.include_router(gogga_talk.router, prefix=f"{settings.API_V1_STR}/voice")
 app.include_router(media.router, prefix=settings.API_V1_STR)
 app.include_router(icons.router, prefix=f"{settings.API_V1_STR}/icons", tags=["icons"])
 app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["admin"])
+app.include_router(tts.router, prefix=settings.API_V1_STR)
 
 
 # Root endpoint

@@ -788,8 +788,14 @@ class AIService:
 
                 except Exception as e:
                     error_str = str(e)
-                    # Check for rate limit (429)
-                    if "429" not in error_str and "too_many_requests" not in error_str.lower():
+                    # Check for rate limit errors (429, quota exceeded, etc.)
+                    is_rate_limit = (
+                        "429" in error_str or 
+                        "too_many_requests" in error_str.lower() or
+                        "token_quota" in error_str.lower() or
+                        "rate" in error_str.lower()
+                    )
+                    if not is_rate_limit:
                         # Non-rate-limit error - raise immediately
                         raise
                     # Mark key as rate-limited and try next key immediately
@@ -1113,31 +1119,69 @@ class AIService:
             top_p = DEFAULT_TOP_P
 
         try:
-            client, api_key = get_client()
             rotator = get_key_rotator()
             
             # Send initial metadata
             yield f"data: {json.dumps({'type': 'meta', 'tier': tier, 'layer': layer.value, 'model': model_id, 'thinking_mode': thinking_mode})}\n\n"
 
-            # Create streaming response
+            # Create streaming response with key rotation for rate limits
             input_tokens = 0
             output_tokens = 0
             full_content = ""
             in_thinking = False
             thinking_buffer = ""
+            stream = None
             
-            # Use async iteration over sync stream via to_thread wrapper
-            def create_stream():
-                return client.chat.completions.create(
-                    messages=messages,
-                    model=model_id,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    top_p=top_p,
-                    stream=True
-                )
+            # Retry loop with key rotation for rate limits
+            for attempt in range(MAX_RETRIES):
+                client, api_key = get_client()  # Get next key via rotation
+                key_name = api_key[:8] + "..." + api_key[-4:]
+                logger.debug(f"🔑 Stream attempt {attempt+1}/{MAX_RETRIES} using key {key_name}")
+                
+                try:
+                    def create_stream():
+                        return client.chat.completions.create(
+                            messages=messages,
+                            model=model_id,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            top_p=top_p,
+                            stream=True
+                        )
+                    
+                    stream = await asyncio.to_thread(create_stream)
+                    rotator.mark_success(api_key)
+                    break  # Success - exit retry loop
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    # Check for rate limit errors (429, quota exceeded, etc.)
+                    is_rate_limit = (
+                        "429" in error_str or 
+                        "too_many_requests" in error_str.lower() or
+                        "token_quota" in error_str.lower() or
+                        "rate" in error_str.lower()
+                    )
+                    if not is_rate_limit:
+                        raise  # Non-rate-limit error - raise immediately
+                    
+                    rotator.mark_rate_limited(api_key)
+                    logger.warning(f"🚫 Key {key_name} rate-limited (stream attempt {attempt+1}/{MAX_RETRIES}), trying next...")
+                    
+                    if attempt < MAX_RETRIES - 1:
+                        await asyncio.sleep(INITIAL_BACKOFF_SECONDS)
+                        continue
+                    
+                    # All retries exhausted - fallback to OpenRouter streaming
+                    logger.warning("🔄 All Cerebras keys rate-limited, falling back to OpenRouter stream...")
+                    async for chunk in AIService._fallback_stream_to_openrouter(
+                        user_id, actual_message, history, layer, tier, None
+                    ):
+                        yield chunk
+                    return
             
-            stream = await asyncio.to_thread(create_stream)
+            if stream is None:
+                raise Exception("Failed to create stream after all retries")
             
             # Process stream chunks
             for chunk in stream:
@@ -1352,7 +1396,14 @@ class AIService:
                     
                 except Exception as e:
                     error_str = str(e)
-                    if "429" not in error_str and "too_many_requests" not in error_str.lower() and "token_quota" not in error_str.lower():
+                    # Check for rate limit errors (429, quota exceeded, etc.)
+                    is_rate_limit = (
+                        "429" in error_str or 
+                        "too_many_requests" in error_str.lower() or
+                        "token_quota" in error_str.lower() or
+                        "rate" in error_str.lower()
+                    )
+                    if not is_rate_limit:
                         raise  # Non-rate-limit error
                     rotator.mark_rate_limited(api_key)
                     logger.warning(f"🚫 Key {key_name} rate-limited (streaming attempt {attempt+1}/{MAX_RETRIES}), trying next...")

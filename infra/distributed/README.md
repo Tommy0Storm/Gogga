@@ -2,39 +2,61 @@
 
 ## Overview
 
-This directory contains scripts and configuration for running GOGGA across two servers:
+GOGGA runs across **two Mac Minis (8GB RAM each)** running Ubuntu with fast NVMe storage:
 
-| Server | IP | Role | Hostname |
-|--------|-----|------|----------|
-| **Primary** | 192.168.0.130 | Frontend, Backend, Admin, VS Code host | gogga-primary |
-| **Worker** | 192.168.0.198 | CePO, AI-intensive containers, DEV-Drive | gogga-worker |
+| Server | IP | Hardware | Disk Performance | Role |
+|--------|-----|----------|------------------|------|
+| **Primary** | 192.168.0.130 | Mac (Ubuntu) | NVMe 430/200+ MB/s | Frontend, Backend, Admin |
+| **Worker** | 192.168.0.198 | Mac (Ubuntu) | NVMe 430/200+ MB/s | CePO, ChromaDB, Redis, Doc Processing |
+
+**Development Machine**: Dell Latitude 5520 on 192.168.0.x network with VS Code (SSH to both servers)
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Windows Host (10.0.0.1)                              │
-│                         VS Code → SSH to Primary                             │
+│              Dell Latitude 5520 (VS Code, 192.168.0.x)                       │
+│                    SSH to both Primary & Worker                              │
 └───────────────────────────────────┬─────────────────────────────────────────┘
-                                    │
+                                    │ SSH
                      ┌──────────────┴──────────────┐
                      ▼                              ▼
     ┌────────────────────────────────┐    ┌─────────────────────────────────┐
-    │   PRIMARY (192.168.0.130)       │    │   WORKER (192.168.0.198)        │
-    │   gogga-primary                 │    │   gogga-worker                  │
+    │   MAC-1 PRIMARY (192.168.0.130) │    │   MAC-2 WORKER (192.168.0.198)  │
+    │   NVMe: 430/200+ MB/s           │    │   NVMe: 430/200+ MB/s           │
     ├─────────────────────────────────┤    ├─────────────────────────────────┤
-    │ • Frontend (3000)               │◄───│ • NFS Server: DEV-Drive         │
-    │ • Backend API (8000)            │    │ • CePO sidecar (8080)           │
-    │ • Admin Panel (3100)            │    │ • Heavy AI workloads            │
-    │ • Proxy (3001)                  │    │ • More RAM/CPU for inference    │
-    │ • Docker control (VS Code)      │    │ • Docker remote API (2376)      │
-    │ • NFS Client: /mnt/dev-drive    │    │                                 │
+    │ • Frontend (3000)               │◄───│ • CePO/OptiLLM (8080)           │
+    │ • Backend API (8000)            │    │ • ChromaDB (8001)               │
+    │ • Admin Panel (3100)            │    │ • Redis (6379)                  │
+    │ • Nginx Proxy (443/80)          │    │ • Document Processor (8004)     │
+    │ • NFS Client: /mnt/dev-drive    │    │ • NFS Server: DEV-Drive         │
+    │ • Docker control (VS Code)      │    │ • cAdvisor (8081)               │
     └────────────────────────────────┘    └─────────────────────────────────┘
                      │                              │
                      └──────────── NFS ─────────────┘
 ```
 
-## Quick Setup
+## Quick Start
+
+```bash
+# From primary (192.168.0.130) or Dell via SSH
+cd /home/ubuntu/Dev-Projects/Gogga/infra/distributed
+
+# Deploy all nodes
+./deploy.sh all
+
+# Or deploy individually
+./deploy.sh primary
+./deploy.sh worker
+
+# Check status
+./deploy.sh status
+
+# Run benchmark
+./deploy.sh benchmark
+```
+
+## Quick Setup (First Time)
 
 Run the master setup script from the primary server:
 

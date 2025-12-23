@@ -88,6 +88,7 @@ import type { SALanguage } from '@/lib/buddySystem';
 import { ForcedToolBadge } from '@/components/toolshed';
 import { useToolShed } from '@/lib/toolshedStore';
 import { useDocumentStore } from '@/lib/documentStore';
+import { ReadAloudButtonWrapper } from '@/components/ReadAloudButton';
 import { RightSidePanel } from '@/components/RightSidePanel';
 import { ExportModal, ExportButton } from '@/components/ExportModal';
 import { useGoggaSmart } from '@/hooks/useGoggaSmart';
@@ -2694,6 +2695,10 @@ ${comment}
                               <Copy size={12} />
                             )}
                           </button>
+                        )}
+                        {/* Read aloud button - JIGGA only */}
+                        {m.role === 'assistant' && (
+                          <ReadAloudButtonWrapper tier={tier} text={m.content} />
                         )}
                       </div>
                     )}

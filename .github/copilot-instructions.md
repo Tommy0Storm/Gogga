@@ -9,15 +9,17 @@
 
 ### Distributed Infrastructure
 ```
-Windows VS Code (10.0.0.1)
+Dell Latitude 5520 (VS Code, 192.168.0.x)
      │ SSH
-     ▼
-PRIMARY (192.168.0.130)              WORKER (192.168.0.198)
+     ├──────────────────────────────────┐
+     ▼                                  ▼
+MAC-1 PRIMARY (192.168.0.130)        MAC-2 WORKER (192.168.0.198)
 ├─ Frontend (:3000)                  ├─ CePO (:8080)
 ├─ Backend (:8000)    ◄─── NFS ────► ├─ DEV-Drive (NFS)
 ├─ Admin (:3100)       Docker ctx    └─ cAdvisor (:8081)
 └─ Proxy (:3001)       ──────────►
 ```
+**Hardware**: 2x Mac Mini (8GB RAM, Ubuntu) with fast NVMe (430MB/s read, 200+MB/s write)
 **CePO Sidecar**: OptiLLM with `re2&cot_reflection` approach (Cerebras-compatible)
 **Worker Control**: `docker --context gogga-worker ps` from primary
 **Shared Storage**: `/mnt/dev-drive` ↔ `/home/hybridwolvin/DEV-Drive`

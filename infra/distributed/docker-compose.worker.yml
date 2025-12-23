@@ -1,20 +1,42 @@
 # =============================================================================
 # GOGGA Worker Node - Docker Compose Configuration
 # =============================================================================
-# Runs on 192.168.0.198 (gogga-worker) for AI-intensive workloads
+# Runs on MAC-2 (192.168.0.198) for AI-intensive workloads
+# Fast NVMe: 430MB/s read, 200+MB/s write - use /opt/gogga-cache
+# RAM: 8GB - CePO + ChromaDB + Redis + Doc Processor
 # Controlled from primary (192.168.0.130) via Docker context
 # =============================================================================
 
-# Resource anchors for worker node (has more resources)
+# Resource anchors for worker node (memory-conscious for 8GB)
 x-ai-heavy-resources: &ai-heavy-resources
   deploy:
     resources:
       limits:
-        cpus: '3.0'
-        memory: 4G
+        cpus: '2.0'
+        memory: 2500M
       reservations:
+        cpus: '0.5'
+        memory: 1G
+
+x-vector-db-resources: &vector-db-resources
+  deploy:
+    resources:
+      limits:
         cpus: '1.0'
-        memory: 2G
+        memory: 1500M
+      reservations:
+        cpus: '0.25'
+        memory: 512M
+
+x-cache-resources: &cache-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 512M
+      reservations:
+        cpus: '0.1'
+        memory: 256M
 
 x-standard-resources: &standard-resources
   deploy:
@@ -23,22 +45,32 @@ x-standard-resources: &standard-resources
         cpus: '1.0'
         memory: 1G
       reservations:
-        cpus: '0.5'
-        memory: 512M
+        cpus: '0.25'
+        memory: 256M
+
+x-minimal-resources: &minimal-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.3'
+        memory: 256M
+      reservations:
+        cpus: '0.1'
+        memory: 64M
 
 # ============================================================
-# SERVICES - Worker Node (AI/Heavy Processing)
+# SERVICES - Worker Node (AI/Heavy Processing/NVMe-backed)
 # ============================================================
 services:
   # CePO Sidecar - OptiLLM Enhanced Reasoning
-  # Moved to worker for better performance (more RAM/CPU available)
+  # Provides enhanced LLM processing with re2&cot_reflection approach
   cepo:
     image: ghcr.io/algorithmicsuperintelligence/optillm:latest-proxy
     container_name: gogga_cepo_worker
     ports:
       - "8080:8000"
     env_file:
-      - /mnt/dev-drive/gogga-config/.env
+      - ~/DEV-Drive/gogga-config/.env
     environment:
       # Use re2&cot_reflection - ReRead + CoT with Reflection
       # Cerebras-compatible: no reasoning_effort, no n>1
@@ -48,7 +80,7 @@ services:
       OPTILLM_LOG_LEVEL: "INFO"
       PYTHONUNBUFFERED: "1"
     volumes:
-      - /home/hybridwolvin/DEV-Drive/docker/logs/cepo:/app/logs
+      - ~/gogga-cache/cepo:/app/logs
     networks:
       - gogga_worker_network
     restart: unless-stopped
@@ -60,19 +92,84 @@ services:
       start_period: 45s
     <<: *ai-heavy-resources
 
-  # RAG Vector Search Service (future - for heavy embedding workloads)
-  # Uncomment when implementing server-side RAG
-  # rag-server:
-  #   image: qdrant/qdrant:latest
-  #   container_name: gogga_rag_worker
+  # ChromaDB - Vector Database for RAG/Embeddings
+  # NVMe-backed for fast similarity search
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: gogga_chromadb
+    ports:
+      - "8001:8000"
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+      - ALLOW_RESET=false
+      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_AUTH_TOKEN:-gogga-chroma-secret}
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+    volumes:
+      - ~/gogga-cache/chroma:/chroma/chroma
+    networks:
+      - gogga_worker_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    <<: *vector-db-resources
+
+  # Redis - Caching and Job Queue
+  # Used for document processing queue and response caching
+  redis:
+    image: redis:7-alpine
+    container_name: gogga_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 400mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ~/gogga-cache/redis:/data
+    networks:
+      - gogga_worker_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    <<: *cache-resources
+
+  # Document Processor - Handles document pollination
+  # Routes simple docs to fast path, complex to CePO/OptiLLM
+  # DISABLED: Requires gogga-backend image - build and push first, then enable
+  # document_processor:
+  #   image: gogga/backend:latest  # Use pre-built image instead of local build
+  #   container_name: gogga_doc_processor
   #   ports:
-  #     - "6333:6333"
-  #     - "6334:6334"
+  #     - "8004:8004"
+  #   command: ["python", "-m", "app.workers.document_worker"]
+  #   environment:
+  #     WORKER_MODE: "document"
+  #     CEPO_URL: http://cepo:8000
+  #     CHROMA_URL: http://chromadb:8000
+  #     REDIS_URL: redis://redis:6379
+  #     OPTILLM_APPROACH: "re2&cot_reflection"
+  #     COMPLEX_DOC_SIZE_BYTES: "2000000"
+  #     COMPLEX_KEYWORDS: "contract,legal,medical,compliance,constitutional"
   #   volumes:
-  #     - /home/hybridwolvin/DEV-Drive/docker/data/qdrant:/qdrant/storage
+  #     - ~/gogga-cache/processed:/cache
+  #     - /mnt/dev-drive:/mnt/dev-drive:ro
   #   networks:
   #     - gogga_worker_network
+  #   depends_on:
+  #     - cepo
+  #     - chromadb
+  #     - redis
   #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-sf", "http://localhost:8004/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
   #   <<: *standard-resources
 
   # Monitoring - Resource usage for worker node
@@ -89,22 +186,49 @@ services:
     networks:
       - gogga_worker_network
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.3'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 64M
+    <<: *minimal-resources
+
+  # Gogga Monitor - Real-time infrastructure dashboard
+  # SSH-based monitoring for both MAC-1 and MAC-2
+  gogga-monitor:
+    build:
+      context: ./gogga-monitor
+      dockerfile: Dockerfile
+    container_name: gogga_monitor
+    ports:
+      - "7080:7080"  # WebSocket bridge
+      - "7081:7081"  # Control server / Dashboard
+    volumes:
+      # Mount SSH keys for passwordless auth to both nodes
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      BRIDGE_CONTROL_HOST: "0.0.0.0"
+      BRIDGE_CONTROL_PORT: "7081"
+      BRIDGE_PROBE_HOST: "127.0.0.1"
+      BRIDGE_PROBE_PORT: "7080"
+    networks:
+      - gogga_worker_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7081/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    <<: *minimal-resources
 
 networks:
   gogga_worker_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.21.0.0/16
+        - subnet: 172.25.0.0/16
 
 volumes:
-  cepo_logs:
+  cepo_data:
+    driver: local
+  chroma_data:
+    driver: local
+  redis_data:
+    driver: local
+  processed_docs:
     driver: local

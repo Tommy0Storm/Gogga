@@ -1,0 +1,181 @@
+# =============================================================================
+# GOGGA Primary Node - Docker Compose Configuration
+# =============================================================================
+# Runs on MAC-1 (192.168.0.130) - Main services
+# Fast NVMe: 430MB/s read, 200+MB/s write
+# RAM: 8GB - keep memory usage tight
+# =============================================================================
+
+# Resource anchors for primary node (memory-conscious)
+x-frontend-resources: &frontend-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 512M
+      reservations:
+        cpus: '0.25'
+        memory: 256M
+
+x-backend-resources: &backend-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 1536M
+      reservations:
+        cpus: '0.5'
+        memory: 768M
+
+x-admin-resources: &admin-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 384M
+      reservations:
+        cpus: '0.1'
+        memory: 192M
+
+x-proxy-resources: &proxy-resources
+  deploy:
+    resources:
+      limits:
+        cpus: '0.25'
+        memory: 128M
+      reservations:
+        cpus: '0.05'
+        memory: 64M
+
+# ============================================================
+# SERVICES - Primary Node (Frontend, Backend, Admin)
+# ============================================================
+services:
+  # GOGGA Frontend - Next.js 16
+  frontend:
+    build:
+      context: ../../gogga-frontend
+      dockerfile: Dockerfile
+    container_name: gogga_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_OPTIONS: --max-old-space-size=384
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: file:/app/prisma/dev.db
+      NEXTAUTH_URL: https://192.168.0.130:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-in-production}
+      BACKEND_URL: http://localhost:8000
+      # Worker services on MAC-2
+      CEPO_URL: http://192.168.0.198:8080
+      CHROMA_URL: http://192.168.0.198:8001
+      REDIS_URL: redis://192.168.0.198:6379
+      NODE_ENV: production
+    volumes:
+      - /opt/gogga-cache/frontend-data:/app/data
+      - ../../gogga-frontend/certs:/app/certs:ro
+    networks:
+      - gogga_primary_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    <<: *frontend-resources
+
+  # GOGGA Backend - FastAPI
+  backend:
+    build:
+      context: ../../gogga-backend
+      dockerfile: Dockerfile
+    container_name: gogga_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../../gogga-backend/.env
+    environment:
+      # Worker services on MAC-2 (192.168.0.198)
+      CEPO_URL: http://192.168.0.198:8080
+      CHROMA_URL: http://192.168.0.198:8001
+      REDIS_URL: redis://192.168.0.198:6379
+      DOC_PROCESSOR_URL: http://192.168.0.198:8004
+      # NFS shared storage
+      SHARED_STORAGE_PATH: /mnt/dev-drive
+      # OptiLLM approach for complex docs
+      OPTILLM_APPROACH: "re2&cot_reflection"
+    volumes:
+      - /opt/gogga-cache/backend-logs:/app/logs
+      - /mnt/dev-drive:/mnt/dev-drive:ro
+    networks:
+      - gogga_primary_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    <<: *backend-resources
+
+  # GOGGA Admin Dashboard
+  admin:
+    build:
+      context: ../../gogga-admin
+      dockerfile: Dockerfile
+    container_name: gogga_admin
+    ports:
+      - "3100:3000"
+    environment:
+      NODE_OPTIONS: --max-old-space-size=256
+      NEXT_TELEMETRY_DISABLED: "1"
+      BACKEND_URL: http://backend:8000
+      NODE_ENV: production
+    networks:
+      - gogga_primary_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    <<: *admin-resources
+
+  # Nginx Proxy (optional - for SSL termination)
+  proxy:
+    image: nginx:alpine
+    container_name: gogga_proxy
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ../../gogga-frontend/certs:/etc/nginx/certs:ro
+      - ./nginx-primary.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - gogga_primary_network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    <<: *proxy-resources
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  gogga_primary_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================================
+# VOLUMES
+# ============================================================
+volumes:
+  frontend_data:
+    driver: local
+  backend_logs:
+    driver: local
