@@ -3,12 +3,15 @@
  * 
  * Shows video generation progress with polling.
  * Includes "Run in Background" option.
+ * 
+ * FIXED: Added proper cleanup, retry mechanism, timeout handling,
+ * and mounted state tracking to prevent crashes.
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Clock, CheckCircle2, XCircle, Minimize2, Maximize2 } from 'lucide-react';
+import { Loader2, Clock, CheckCircle2, XCircle, Minimize2, Maximize2, RefreshCw, AlertTriangle } from 'lucide-react';
 import {
   type VideoResponse,
   type VideoJobStatus,
@@ -26,7 +29,14 @@ interface VideoProgressProps {
   onRunInBackground?: () => void;
   /** Polling interval in ms */
   pollInterval?: number;
+  /** Maximum time to wait before showing timeout warning (default: 10 minutes) */
+  maxWaitTime?: number;
 }
+
+// Constants for retry logic
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+const DEFAULT_MAX_WAIT_TIME = 10 * 60; // 10 minutes in seconds
 
 const STATUS_CONFIG: Record<VideoJobStatus, {
   icon: typeof Loader2;
@@ -45,22 +55,56 @@ export function VideoProgress({
   onError,
   onRunInBackground,
   pollInterval = 3000,
+  maxWaitTime = DEFAULT_MAX_WAIT_TIME,
 }: VideoProgressProps) {
   const [response, setResponse] = useState(initialResponse);
   const [isMinimized, setIsMinimized] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [isTimedOut, setIsTimedOut] = useState(false);
+  
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef(Date.now());
+  const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   const { status, job_id, meta } = response;
   const progress = meta?.progress_percent || 0;
   
-  // Poll for status updates
-  const pollStatus = useCallback(async () => {
-    if (!job_id) return;
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Poll for status updates with retry logic
+  const pollStatus = useCallback(async (retry = 0) => {
+    if (!job_id || !isMountedRef.current) return;
+    
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
     
     try {
       const newResponse = await getVideoStatus(job_id);
+      
+      // Check if still mounted before updating state
+      if (!isMountedRef.current) return;
+      
+      // Clear any previous error on successful poll
+      setPollError(null);
+      setRetryCount(0);
       setResponse(newResponse);
       
       if (newResponse.status === 'completed') {
@@ -73,37 +117,74 @@ export function VideoProgress({
         return;
       }
       
-      // Continue polling
-      pollTimeoutRef.current = setTimeout(pollStatus, pollInterval);
+      // Continue polling if still mounted
+      if (isMountedRef.current) {
+        pollTimeoutRef.current = setTimeout(() => pollStatus(0), pollInterval);
+      }
       
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to check status');
+      // Don't handle errors if unmounted
+      if (!isMountedRef.current) return;
+      
+      const errorMessage = err instanceof Error ? err.message : 'Failed to check status';
+      
+      // Retry logic for transient errors
+      if (retry < MAX_RETRIES) {
+        console.warn(`[VideoProgress] Poll failed, retrying (${retry + 1}/${MAX_RETRIES}):`, errorMessage);
+        setRetryCount(retry + 1);
+        setPollError(`Connection issue, retrying... (${retry + 1}/${MAX_RETRIES})`);
+        
+        if (isMountedRef.current) {
+          pollTimeoutRef.current = setTimeout(() => pollStatus(retry + 1), RETRY_DELAY_MS);
+        }
+      } else {
+        // Max retries reached - show error but allow manual retry
+        setPollError(`Unable to check status: ${errorMessage}`);
+        setRetryCount(MAX_RETRIES);
+        console.error('[VideoProgress] Max retries reached:', errorMessage);
+      }
     }
   }, [job_id, onComplete, onError, pollInterval]);
+  
+  // Manual retry function
+  const handleManualRetry = useCallback(() => {
+    setPollError(null);
+    setRetryCount(0);
+    pollStatus(0);
+  }, [pollStatus]);
   
   // Start polling
   useEffect(() => {
     if (status === 'pending' || status === 'running') {
-      pollTimeoutRef.current = setTimeout(pollStatus, pollInterval);
+      pollTimeoutRef.current = setTimeout(() => pollStatus(0), pollInterval);
     }
     
     return () => {
       if (pollTimeoutRef.current) {
         clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
       }
     };
   }, [status, pollStatus, pollInterval]);
   
-  // Track elapsed time
+  // Track elapsed time and check for timeout
   useEffect(() => {
     if (status === 'completed' || status === 'failed') return;
     
     const interval = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      if (!isMountedRef.current) return;
+      
+      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      setElapsedSeconds(elapsed);
+      
+      // Check for timeout
+      if (elapsed >= maxWaitTime && !isTimedOut) {
+        setIsTimedOut(true);
+      }
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [status]);
+  }, [status, maxWaitTime, isTimedOut]);
   
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -111,9 +192,9 @@ export function VideoProgress({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
-  const StatusIcon = STATUS_CONFIG[status].icon;
-  const statusLabel = STATUS_CONFIG[status].label;
-  const statusColor = STATUS_CONFIG[status].color;
+  const StatusIcon = STATUS_CONFIG[status]?.icon || Loader2;
+  const statusLabel = STATUS_CONFIG[status]?.label || 'Processing';
+  const statusColor = STATUS_CONFIG[status]?.color || 'text-blue-500';
   
   // Minimized view
   if (isMinimized) {
@@ -123,6 +204,7 @@ export function VideoProgress({
         <StatusIcon className={`w-4 h-4 ${status === 'running' ? 'animate-spin' : ''} ${statusColor}`} />
         <span className="text-sm">{statusLabel}</span>
         {progress > 0 && <span className="text-xs text-neutral-400">{progress}%</span>}
+        {pollError && <AlertTriangle className="w-4 h-4 text-yellow-500" />}
         <button
           onClick={() => setIsMinimized(false)}
           className="p-1 hover:bg-neutral-800 rounded"
@@ -147,7 +229,7 @@ export function VideoProgress({
               {statusLabel}
             </h3>
             <p className="text-xs text-neutral-500">
-              {response.prompt.slice(0, 50)}...
+              {response.prompt?.slice(0, 50) || 'Generating video'}...
             </p>
           </div>
         </div>
@@ -161,6 +243,56 @@ export function VideoProgress({
           </button>
         )}
       </div>
+      
+      {/* Poll error / retry UI */}
+      {pollError && (
+        <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 
+                      dark:border-yellow-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">{pollError}</p>
+              {retryCount >= MAX_RETRIES && (
+                <button
+                  onClick={handleManualRetry}
+                  className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 
+                           text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Retry Connection
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Timeout warning */}
+      {isTimedOut && status !== 'completed' && status !== 'failed' && (
+        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 
+                      dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Taking longer than expected
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Video generation is still in progress. This occasionally happens with complex prompts.
+                You can continue waiting or try again later.
+              </p>
+              <button
+                onClick={() => onError('Generation cancelled by user - taking too long')}
+                className="mt-2 px-3 py-1.5 border border-amber-300 dark:border-amber-700 
+                         text-amber-700 dark:text-amber-300 text-sm rounded-lg 
+                         hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+              >
+                Cancel & Start Over
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Progress bar */}
       <div className="space-y-2 mb-4">
@@ -184,7 +316,7 @@ export function VideoProgress({
         <div>
           <div className="text-neutral-500">Duration</div>
           <div className="font-medium text-neutral-900 dark:text-white">
-            {response.duration_seconds}s
+            {response.duration_seconds || 5}s
           </div>
         </div>
         <div>
@@ -208,7 +340,7 @@ export function VideoProgress({
       )}
       
       {/* Tips while waiting */}
-      {status === 'running' && (
+      {status === 'running' && !isTimedOut && !pollError && (
         <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
           <p className="text-xs text-neutral-500">
             💡 Video generation typically takes 2-5 minutes depending on complexity and duration.

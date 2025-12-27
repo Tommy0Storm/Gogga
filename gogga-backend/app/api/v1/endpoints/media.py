@@ -80,7 +80,7 @@ class VideoGenerateRequest(BaseModel):
     source_video: str | None = Field(default=None, description="Base64 video for extension")
     storage_uri: str | None = Field(default=None, description="GCS URI for output")
     aspect_ratio: Literal["16:9", "9:16"] = Field(default="16:9")
-    duration_seconds: Literal[5, 6, 7, 8] = Field(default=5)
+    duration_seconds: Literal[4, 6, 8] = Field(default=6)
     generate_audio: bool = Field(default=False)
     negative_prompt: str | None = None
     person_generation: Literal["allow_adult", "dont_allow"] = Field(default="allow_adult")
@@ -266,7 +266,7 @@ async def generate_video(
 ) -> VeoResponse:
     """
     Start video generation using Veo 3.1. Returns immediately with job_id.
-    Poll /videos/{job_id}/status for progress.
+    Poll /videos/{job_id}/status for progress (job_id is a Vertex AI operation name with slashes).
     
     Features:
     - Idempotency: Pass idempotency_key to prevent duplicate costs
@@ -322,10 +322,13 @@ async def generate_video(
     return response
 
 
-@router.get("/videos/{job_id}/status", response_model=VeoResponse)
+@router.get("/videos/{job_id:path}/status", response_model=VeoResponse)
 async def get_video_status(job_id: str) -> VeoResponse:
     """
     Check status of a video generation job.
+    
+    The job_id is a Vertex AI operation name which contains slashes, e.g.:
+    projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{uuid}
     
     Returns:
     - status: pending, running, completed, failed
@@ -336,7 +339,7 @@ async def get_video_status(job_id: str) -> VeoResponse:
     return response
 
 
-@router.get("/videos/{job_id}/result", response_model=VeoResponse)
+@router.get("/videos/{job_id:path}/result", response_model=VeoResponse)
 async def get_video_result(
     job_id: str,
     wait: bool = Query(default=False, description="Wait for completion"),
@@ -345,8 +348,11 @@ async def get_video_result(
     """
     Get video generation result.
     
+    The job_id is a Vertex AI operation name which contains slashes, e.g.:
+    projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{uuid}
+    
     Args:
-        job_id: Job ID from generate response
+        job_id: Operation name from generate response
         wait: If true, wait for completion (up to timeout)
         timeout: Max wait time in seconds
     """

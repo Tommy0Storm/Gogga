@@ -148,7 +148,22 @@ class Settings(BaseSettings):
     IMAGEN_V4_UPSCALE_MODEL: str = "imagen-4.0-upscale-preview"  # Upscale to 2K/3K/4K
     VEO_MODEL: str = "veo-3.1-generate-001"  # Video generation
     VEO_FAST_MODEL: str = "veo-3.1-fast-generate-001"  # Faster video generation
-    GEMINI_FLASH_MODEL: str = "gemini-3-flash-preview"  # Icon generation (latest)
+    
+    # Gemini Models (via google-genai SDK with Vertex AI)
+    GEMINI_FLASH_MODEL: str = "gemini-2.5-flash"  # Fast, cost-effective
+    GEMINI_PRO_MODEL: str = "gemini-2.5-pro"  # Advanced reasoning
+    
+    # Gemini Thinking Configuration (token budgets per tier)
+    # Higher budget = more reasoning tokens = better quality but slower
+    GEMINI_THINKING_BUDGET_FREE: int = 0  # Disabled for free tier
+    GEMINI_THINKING_BUDGET_JIVE: int = 4096  # Balanced reasoning
+    GEMINI_THINKING_BUDGET_JIGGA: int = 8192  # Deep reasoning
+    
+    # Gemini Pricing (USD per Million Tokens) - Dec 2025
+    COST_GEMINI_FLASH_INPUT: float = 0.075  # $0.075 per M input tokens
+    COST_GEMINI_FLASH_OUTPUT: float = 0.30  # $0.30 per M output tokens
+    COST_GEMINI_PRO_INPUT: float = 1.25  # $1.25 per M input tokens
+    COST_GEMINI_PRO_OUTPUT: float = 10.0  # $10.00 per M output tokens
     
     # Exchange Rate (ZAR/USD) - December 2025
     ZAR_USD_RATE: float = Field(default=19.0, ge=1.0, le=100.0)  # R19 per $1 USD

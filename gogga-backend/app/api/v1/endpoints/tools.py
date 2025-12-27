@@ -83,7 +83,7 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             veo_request = VeoRequest(
                 prompt=request.arguments.get("prompt", ""),
                 generate_audio=request.arguments.get("generate_audio", True),
-                duration_seconds=request.arguments.get("duration_seconds", 5),
+                duration_seconds=request.arguments.get("duration_seconds", 6),
                 aspect_ratio=request.arguments.get("aspect_ratio", "16:9"),
             )
             

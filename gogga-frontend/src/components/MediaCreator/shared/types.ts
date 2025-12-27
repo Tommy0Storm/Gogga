@@ -18,7 +18,7 @@ export type UpscaleFactor = 'x2' | 'x3' | 'x4';
 
 export type VideoResolution = '720p' | '1080p';
 
-export type VideoDuration = 5 | 6 | 7 | 8;
+export type VideoDuration = 4 | 6 | 8;
 
 // ============================================================================
 // Image Types

@@ -29,9 +29,8 @@ interface VideoFormProps {
 }
 
 const DURATION_OPTIONS: { value: VideoDuration; label: string }[] = [
-  { value: 5, label: '5 seconds' },
+  { value: 4, label: '4 seconds' },
   { value: 6, label: '6 seconds' },
-  { value: 7, label: '7 seconds' },
   { value: 8, label: '8 seconds' },
 ];
 
@@ -49,7 +48,7 @@ export function VideoForm({
   // Form state
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
-  const [duration, setDuration] = useState<VideoDuration>(5);
+  const [duration, setDuration] = useState<VideoDuration>(6);
   const [resolution, setResolution] = useState<VideoResolution>('720p');
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [generateAudio, setGenerateAudio] = useState(false);

@@ -256,6 +256,15 @@ class GeminiTTSService:
                 }
             )
             
+            # Log 400 errors with response body for debugging
+            if response.status_code == 400:
+                error_body = response.text[:500]
+                logger.error(f"Vertex TTS 400 Bad Request - text_len={len(text)}, voice={voice_name}, response={error_body}")
+                return TTSResponse(
+                    success=False,
+                    error=f"TTS request failed: {response.status_code}"
+                )
+            
             # Handle rate limiting and server errors with retry
             if response.status_code == 429 or response.status_code >= 500:
                 retry_delay = 1.0 if response.status_code == 429 else 0.5

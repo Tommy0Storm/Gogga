@@ -3,12 +3,14 @@
  * 
  * Main video creation interface with form, progress tracking,
  * and sample gallery for FREE tier users.
+ * 
+ * Wrapped in ErrorBoundary for crash protection.
  */
 
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Video, Film, Sparkles, Clock, AlertCircle } from 'lucide-react';
+import { useState, useCallback, Component, type ReactNode } from 'react';
+import { Video, Film, Sparkles, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 import { VideoForm } from './VideoForm';
 import { type VideoGenerateRequest } from '../shared/types';
 import { VideoProgress } from './VideoProgress';
@@ -21,6 +23,80 @@ import {
   TierGate 
 } from '../shared';
 import { generateVideo, getVideoStatus } from '../shared/api';
+
+// ============================================================================
+// Local Error Boundary for VideoStudio
+// ============================================================================
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  onReset?: () => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class VideoStudioErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[VideoStudio] Error caught:', error, errorInfo);
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-medium text-red-800 dark:text-red-200">
+                Video Studio encountered an error
+              </h4>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                Something went wrong while processing your video request. 
+                Please try again.
+              </p>
+              {process.env.NODE_ENV === 'development' && this.state.error && (
+                <pre className="mt-2 p-2 bg-red-100 dark:bg-red-900/50 rounded text-xs text-red-800 dark:text-red-300 overflow-auto">
+                  {this.state.error.message}
+                </pre>
+              )}
+              <button
+                onClick={this.handleReset}
+                className="mt-3 flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 
+                         text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// ============================================================================
+// VideoStudio Props & State Types
+// ============================================================================
 
 interface VideoStudioProps {
   /** User's subscription tier */
@@ -39,7 +115,11 @@ type VideoState =
   | { status: 'completed'; response: VideoResponse }
   | { status: 'error'; message: string };
 
-export function VideoStudio({
+// ============================================================================
+// VideoStudio Inner Component
+// ============================================================================
+
+function VideoStudioInner({
   tier,
   quota,
   initialPrompt = '',
@@ -334,6 +414,24 @@ export function VideoStudio({
       {/* Main content */}
       {renderContent()}
     </div>
+  );
+}
+
+// ============================================================================
+// Wrapped VideoStudio with ErrorBoundary
+// ============================================================================
+
+export function VideoStudio(props: VideoStudioProps) {
+  const [resetKey, setResetKey] = useState(0);
+  
+  const handleReset = useCallback(() => {
+    setResetKey(prev => prev + 1);
+  }, []);
+  
+  return (
+    <VideoStudioErrorBoundary onReset={handleReset}>
+      <VideoStudioInner key={resetKey} {...props} />
+    </VideoStudioErrorBoundary>
   );
 }
 

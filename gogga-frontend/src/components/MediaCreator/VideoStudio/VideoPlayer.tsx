@@ -37,11 +37,33 @@ export function VideoPlayer({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   
-  // Construct video source
-  const videoSrc = response.video_data
-    ? `data:video/mp4;base64,${response.video_data}`
-    : response.video_url || '';
+  // Convert base64 to Blob URL to avoid large data URLs in memory
+  useEffect(() => {
+    if (response.video_data) {
+      try {
+        const byteCharacters = atob(response.video_data);
+        const byteNumbers = new Uint8Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const blob = new Blob([byteNumbers], { type: 'video/mp4' });
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+        
+        // Cleanup on unmount or when video data changes
+        return () => {
+          URL.revokeObjectURL(url);
+        };
+      } catch (err) {
+        console.error('Failed to convert video data to blob:', err);
+      }
+    }
+  }, [response.video_data]);
+  
+  // Use blob URL if available, otherwise fall back to video_url
+  const videoSrc = blobUrl || response.video_url || '';
   
   // Play/pause
   const togglePlay = () => {
@@ -86,33 +108,33 @@ export function VideoPlayer({
   // Download video
   const handleDownload = async () => {
     try {
-      let blob: Blob;
+      let downloadUrl: string;
+      let shouldRevoke = false;
       
-      if (response.video_data) {
-        // Convert base64 to blob
-        const byteCharacters = atob(response.video_data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        blob = new Blob([byteArray], { type: 'video/mp4' });
+      if (blobUrl) {
+        // Already have a blob URL - use it directly
+        downloadUrl = blobUrl;
       } else if (response.video_url) {
-        // Fetch from URL
+        // Fetch from URL and create blob
         const res = await fetch(response.video_url);
-        blob = await res.blob();
+        const blob = await res.blob();
+        downloadUrl = URL.createObjectURL(blob);
+        shouldRevoke = true;
       } else {
         return;
       }
       
-      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = downloadUrl;
       a.download = `gogga-video-${Date.now()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      
+      // Only revoke if we created a new URL for the download
+      if (shouldRevoke) {
+        URL.revokeObjectURL(downloadUrl);
+      }
       
     } catch (err) {
       console.error('Download failed:', err);

@@ -12,8 +12,8 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, FileText, Upload, Trash2, Lock, Shield, BookOpen, Paperclip, AlertTriangle, Info, FileSearch, Wrench, Brain, Zap, Target, TrendingUp, RotateCcw, ChevronRight, Calculator, Code, Image, Search, Video, Wand2, Crown, Sparkles, Film, Edit, ArrowUpCircle } from 'lucide-react';
+import React, { useState, useEffect, Component, type ReactNode } from 'react';
+import { X, FileText, Upload, Trash2, Lock, Shield, BookOpen, Paperclip, AlertTriangle, Info, FileSearch, Wrench, Brain, Zap, Target, TrendingUp, RotateCcw, ChevronRight, Calculator, Code, Image, Search, Video, Wand2, Crown, Sparkles, Film, Edit, ArrowUpCircle, RefreshCw } from 'lucide-react';
 import { useDocumentStore } from '@/lib/documentStore';
 import { useRightPanel } from '@/hooks/useRightPanel';
 import { RAGUploadButton } from '@/components/rag/RAGUploadButton';
@@ -23,6 +23,70 @@ import { getToolIcon } from '@/lib/iconMapping';
 import { ImageStudio } from '@/components/MediaCreator/ImageStudio';
 import { VideoStudio } from '@/components/MediaCreator/VideoStudio';
 import type { UserTier } from '@/components/MediaCreator/shared/types';
+
+// ============================================================================
+// Media Tab Error Boundary - Catches crashes in ImageStudio/VideoStudio
+// ============================================================================
+
+interface MediaErrorBoundaryProps {
+  children: ReactNode;
+  onReset?: () => void;
+}
+
+interface MediaErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class MediaErrorBoundary extends Component<MediaErrorBoundaryProps, MediaErrorBoundaryState> {
+  constructor(props: MediaErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): MediaErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[MediaTabContent] Error caught:', error, errorInfo);
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 m-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-medium text-red-800 text-sm">
+                Media Studio encountered an error
+              </h4>
+              <p className="text-xs text-red-700 mt-1">
+                Something went wrong. Please try again.
+              </p>
+              <button
+                onClick={this.handleReset}
+                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 
+                         text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Documents Tab Content
 interface DocumentsTabContentProps {
@@ -1144,9 +1208,11 @@ function MediaTabContent({ tier }: MediaTabContentProps) {
           Back to Media
         </button>
         
-        {/* ImageStudio component */}
+        {/* ImageStudio component - wrapped in ErrorBoundary */}
         <div className="flex-1 overflow-y-auto">
-          <ImageStudio tier={tier} />
+          <MediaErrorBoundary onReset={() => setView('home')}>
+            <ImageStudio tier={tier} />
+          </MediaErrorBoundary>
         </div>
       </div>
     );
@@ -1166,9 +1232,11 @@ function MediaTabContent({ tier }: MediaTabContentProps) {
           Back to Media
         </button>
         
-        {/* VideoStudio component */}
+        {/* VideoStudio component - wrapped in ErrorBoundary */}
         <div className="flex-1 overflow-y-auto p-4">
-          <VideoStudio tier={tier} quota={quota.videos} />
+          <MediaErrorBoundary onReset={() => setView('home')}>
+            <VideoStudio tier={tier} quota={quota.videos} />
+          </MediaErrorBoundary>
         </div>
       </div>
     );
