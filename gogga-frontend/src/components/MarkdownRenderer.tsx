@@ -312,6 +312,31 @@ export const MarkdownRenderer = memo(({ content, variant = 'assistant', classNam
       // Strip standalone opening tags
       .replace(/<think(?:ing)?>/gi, '')
       .trim();
+    
+    // Escape unknown HTML-like tags that would cause React warnings
+    // Keep only safe HTML tags that we explicitly support
+    const safeTags = new Set([
+      'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'del', 'div', 'em',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol',
+      'p', 'pre', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td',
+      'th', 'thead', 'tr', 'ul', 'input', 'label', 's', 'u', 'mark', 'kbd',
+      'small', 'big', 'q', 'cite', 'ins', 'caption', 'colgroup', 'col',
+      'tfoot', 'summary', 'details', 'figure', 'figcaption', 'section',
+      'article', 'aside', 'header', 'footer', 'nav', 'main', 'address'
+    ]);
+    
+    // Replace unknown HTML tags with escaped versions
+    // Match opening tags like <tagname> or <tagname attr="value">
+    // and closing tags like </tagname>
+    cleaned = cleaned.replace(/<\/?([a-zA-Z][a-zA-Z0-9_-]*)[^>]*>/g, (match, tagName) => {
+      const normalizedTag = tagName.toLowerCase();
+      if (safeTags.has(normalizedTag)) {
+        return match; // Keep safe tags
+      }
+      // Escape unknown tags by replacing < with &lt;
+      return match.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    });
+    
     return processIconSyntax(cleaned, variant === 'user');
   }, [content, variant]);
 

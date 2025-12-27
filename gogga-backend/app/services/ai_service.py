@@ -170,6 +170,83 @@ def get_client() -> tuple[Cerebras, str]:
     return _clients[api_key], api_key
 
 
+async def call_llm_with_retry(
+    model: str,
+    messages: list[MessageDict],
+    tools: list[dict] | None = None,
+    temperature: float = 0.6,
+    top_p: float = 0.95,
+    max_tokens: int = 4096,
+    context: str = "LLM call",
+) -> Any:
+    """
+    Make an LLM call with automatic key rotation on rate limits.
+    
+    This is the canonical way to call Cerebras - all LLM calls should use this.
+    On 429/rate limit, it rotates through available keys before failing.
+    
+    Args:
+        model: Model ID to use
+        messages: Chat messages
+        tools: Optional tool definitions
+        temperature: Sampling temperature
+        top_p: Top-p sampling
+        max_tokens: Max completion tokens
+        context: Description for logging
+        
+    Returns:
+        ChatCompletion response
+        
+    Raises:
+        Exception: If all keys are rate-limited
+    """
+    rotator = get_key_rotator()
+    last_error = None
+    
+    for attempt in range(MAX_RETRIES):
+        client, api_key = get_client()
+        key_name = api_key[:8] + "..." + api_key[-4:]
+        logger.debug(f"🔑 {context} attempt {attempt+1}/{MAX_RETRIES} using key {key_name}")
+        
+        try:
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=model,
+                messages=messages,
+                tools=tools if tools else None,
+                temperature=temperature,
+                top_p=top_p,
+                max_completion_tokens=max_tokens,
+            )
+            rotator.mark_success(api_key)
+            return response
+            
+        except Exception as e:
+            error_str = str(e)
+            # Check for rate limit errors (429, quota exceeded, etc.)
+            is_rate_limit = (
+                "429" in error_str or 
+                "too_many_requests" in error_str.lower() or
+                "token_quota" in error_str.lower() or
+                "rate" in error_str.lower()
+            )
+            
+            if not is_rate_limit:
+                raise  # Non-rate-limit error, don't retry
+            
+            rotator.mark_rate_limited(api_key)
+            last_error = e
+            logger.warning(f"🚫 Key {key_name} rate-limited ({context} attempt {attempt+1}/{MAX_RETRIES})")
+            
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(INITIAL_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER ** attempt))
+                continue
+    
+    # All retries exhausted
+    logger.error(f"❌ All {MAX_RETRIES} keys rate-limited for {context}")
+    raise last_error or Exception(f"All keys rate-limited for {context}")
+
+
 def get_plugins() -> list[Plugin]:
     """
     Get or create the plugin instances.
@@ -1540,15 +1617,15 @@ class AIService:
                 
                 yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Processing search results...', 'icon': 'ai'})}\n\n"
                 
-                # Second LLM call with search context
-                second_response = await asyncio.to_thread(
-                    client.chat.completions.create,
+                # Second LLM call with search context (with rate limit protection)
+                second_response = await call_llm_with_retry(
                     model=model_id,
                     messages=extended_messages,
                     tools=tools if tools else None,
                     temperature=config.get("temperature", 0.6),
                     top_p=config.get("top_p", 0.95),
-                    max_completion_tokens=config.get("max_tokens", 4096)
+                    max_tokens=config.get("max_tokens", 4096),
+                    context="post-search synthesis",
                 )
                 
                 # Update for next phase
@@ -1583,18 +1660,18 @@ class AIService:
                     logger.warning("Post-search LLM call returned no content. Making retry without search tools.")
                     yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Generating summary...', 'icon': 'ai'})}\n\n"
                     
-                    # Retry without search tools to force synthesis
+                    # Retry without search tools to force synthesis (with rate limit protection)
                     non_search_tools = [t for t in (tools or []) if t.get("function", {}).get("name", "") not in ALL_SEARCH_TOOL_NAMES]
                     retry_messages = extended_messages + [{"role": "assistant", "content": "I have the search results. Let me synthesize the information now."}]
                     
-                    retry_response = await asyncio.to_thread(
-                        client.chat.completions.create,
+                    retry_response = await call_llm_with_retry(
                         model=model_id,
                         messages=retry_messages,
                         tools=non_search_tools if non_search_tools else None,
                         temperature=config.get("temperature", 0.6),
                         top_p=config.get("top_p", 0.95),
-                        max_completion_tokens=config.get("max_tokens", 4096)
+                        max_tokens=config.get("max_tokens", 4096),
+                        context="search synthesis retry",
                     )
                     
                     assistant_content = retry_response.choices[0].message.content or ""
@@ -1611,14 +1688,15 @@ class AIService:
                     logger.warning("First LLM call returned no content and no tools. Making retry without tools.")
                     yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[>] Generating response...', 'icon': 'ai'})}\n\n"
                     
-                    # Retry without tools to force a direct response
-                    retry_response = await asyncio.to_thread(
-                        client.chat.completions.create,
+                    # Retry without tools to force a direct response (with rate limit protection)
+                    retry_response = await call_llm_with_retry(
                         model=model_id,
                         messages=messages,  # Use original messages, not extended
+                        tools=None,
                         temperature=config.get("temperature", 0.6),
                         top_p=config.get("top_p", 0.95),
-                        max_completion_tokens=config.get("max_tokens", 4096)
+                        max_tokens=config.get("max_tokens", 4096),
+                        context="empty response retry",
                     )
                     
                     assistant_content = retry_response.choices[0].message.content or ""
@@ -1751,39 +1829,22 @@ class AIService:
             non_math_tools = [t for t in (tools or []) if t.get("function", {}).get("name", "") not in ALL_MATH_TOOL_NAMES]
             final_messages = [{"role": "system", "content": system_prompt}] + extended_history
             
-            def create_stream():
-                api_kwargs = {
-                    "model": model_id,
-                    "messages": final_messages,
-                    "temperature": config.get("temperature", 0.6),
-                    "top_p": config.get("top_p", 0.95),
-                    "max_completion_tokens": config.get("max_tokens", 4096),
-                    "stream": True
-                }
-                # Include chart/image tools for second pass
-                if non_math_tools:
-                    api_kwargs["tools"] = non_math_tools
-                return client.chat.completions.create(**api_kwargs)
-            
             # Use non-streaming for second call to capture tool calls properly
-            final_api_kwargs = {
-                "model": model_id,
-                "messages": final_messages,
-                "temperature": config.get("temperature", 0.6),
-                "top_p": config.get("top_p", 0.95),
-                "max_completion_tokens": config.get("max_tokens", 4096)
-            }
-            # Include chart/image tools for second pass
-            if non_math_tools:
-                final_api_kwargs["tools"] = non_math_tools
-                logger.info(f"Second LLM call with {len(non_math_tools)} non-math tools")
-            
+            # Wrapped with rate limit protection
             llm2_start = _time.time()
-            final_response = await asyncio.to_thread(
-                client.chat.completions.create,
-                **final_api_kwargs
+            final_response = await call_llm_with_retry(
+                model=model_id,
+                messages=final_messages,
+                tools=non_math_tools if non_math_tools else None,
+                temperature=config.get("temperature", 0.6),
+                top_p=config.get("top_p", 0.95),
+                max_tokens=config.get("max_tokens", 4096),
+                context="post-math synthesis",
             )
             llm2_elapsed = _time.time() - llm2_start
+            
+            if non_math_tools:
+                logger.info(f"Second LLM call with {len(non_math_tools)} non-math tools")
             
             final_choice = final_response.choices[0].message
             final_content = final_choice.content or ""
@@ -1803,23 +1864,19 @@ class AIService:
                 logger.warning(f"Second pass returned {filtered_tool_count} server-side tools with no content. Making third call without search tools.")
                 yield f"data: {json.dumps({'type': 'tool_log', 'level': 'info', 'message': '[~] Refining response...', 'icon': 'ai'})}\n\n"
                 
-                # Third call: Remove search tools entirely to force text response
+                # Third call: Remove search tools entirely to force text response (with rate limit protection)
                 frontend_only_tools = [t for t in (non_math_tools or []) if t.get("function", {}).get("name", "") not in ALL_SEARCH_TOOL_NAMES]
-                
-                third_api_kwargs = {
-                    "model": model_id,
-                    "messages": final_messages + [{"role": "assistant", "content": "I'll provide the summary directly without additional searches."}],
-                    "temperature": config.get("temperature", 0.6),
-                    "top_p": config.get("top_p", 0.95),
-                    "max_completion_tokens": config.get("max_tokens", 4096)
-                }
-                if frontend_only_tools:
-                    third_api_kwargs["tools"] = frontend_only_tools
+                third_messages = final_messages + [{"role": "assistant", "content": "I'll provide the summary directly without additional searches."}]
                 
                 llm3_start = _time.time()
-                third_response = await asyncio.to_thread(
-                    client.chat.completions.create,
-                    **third_api_kwargs
+                third_response = await call_llm_with_retry(
+                    model=model_id,
+                    messages=third_messages,
+                    tools=frontend_only_tools if frontend_only_tools else None,
+                    temperature=config.get("temperature", 0.6),
+                    top_p=config.get("top_p", 0.95),
+                    max_tokens=config.get("max_tokens", 4096),
+                    context="third pass synthesis",
                 )
                 llm3_elapsed = _time.time() - llm3_start
                 
@@ -1932,8 +1989,18 @@ class AIService:
             yield f"data: {json.dumps(done_data)}\n\n"
             
         except Exception as e:
+            error_str = str(e)
             logger.error(f"Streaming with tools failed: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            
+            # Provide user-friendly error messages for common issues
+            if "429" in error_str or "token_quota" in error_str.lower() or "rate" in error_str.lower():
+                user_message = "GOGGA AI servers are experiencing high demand. Please wait a moment and try again."
+            elif "timeout" in error_str.lower():
+                user_message = "Request timed out. Please try again with a shorter message."
+            else:
+                user_message = "An error occurred while processing your request. Please try again."
+            
+            yield f"data: {json.dumps({'type': 'error', 'message': user_message})}\n\n"
 
     @staticmethod
     async def health_check() -> ResponseDict:

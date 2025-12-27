@@ -56,8 +56,8 @@ function ImageModalContent({
 
     // For base64 data, convert to blob and create object URL
     try {
-      const base64Data = imageData.startsWith('data:') 
-        ? imageData.split(',')[1] 
+      const base64Data = imageData.startsWith('data:')
+        ? imageData.split(',')[1] || imageData
         : imageData;
       
       const byteCharacters = atob(base64Data);

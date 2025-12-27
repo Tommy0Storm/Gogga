@@ -241,8 +241,10 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
     if (!cleanText) return;
 
     const chunks = splitIntoChunks(cleanText);
+    if (chunks.length === 0) return;
+
     const voiceName = options.voiceName || DEFAULT_VOICE;
-    
+
     setIsLoading(true);
     setError(null);
     options.onStart?.();
@@ -255,7 +257,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
 
       // Fetch first chunk immediately for quick playback start
       const firstAudio = await fetchChunkAudio(
-        chunks[0],
+        chunks[0]!, // Non-null assertion: we checked chunks.length > 0
         voiceName,
         abortControllerRef.current.signal
       );
@@ -276,7 +278,7 @@ export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
       for (let i = 1; i < chunks.length && !isCancelledRef.current; i++) {
         try {
           const audio = await fetchChunkAudio(
-            chunks[i],
+            chunks[i]!, // Non-null assertion: loop ensures i < chunks.length
             voiceName,
             abortControllerRef.current.signal
           );

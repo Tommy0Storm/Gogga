@@ -239,21 +239,25 @@ const BackendBadge: React.FC<BackendBadgeProps> = ({ backend }) => {
       label: 'WebGPU',
       icon: <Zap className="w-3 h-3" />,
       className: 'bg-sa-green/10 text-sa-green border-sa-green/30',
+      tooltip: 'GPU-accelerated embeddings (fastest)',
     },
     wasm: {
       label: 'WASM',
       icon: <Cpu className="w-3 h-3" />,
       className: 'bg-primary-100 text-primary-700 border-primary-300',
+      tooltip: 'CPU fallback - Enable WebGPU in browser flags for 10-50x faster embeddings',
     },
     loading: {
       label: 'Loading...',
       icon: <RefreshCw className="w-3 h-3 animate-spin" />,
       className: 'bg-sa-gold/10 text-sa-gold border-sa-gold/30',
+      tooltip: 'Loading embedding model...',
     },
     error: {
       label: 'Error',
       icon: <XCircle className="w-3 h-3" />,
       className: 'bg-red-100 text-red-700 border-red-300',
+      tooltip: 'Failed to load embedding model',
     },
   };
 
@@ -261,7 +265,8 @@ const BackendBadge: React.FC<BackendBadgeProps> = ({ backend }) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full border ${config.className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full border ${config.className} cursor-help`}
+      title={config.tooltip}
     >
       {config.icon}
       {config.label}
@@ -816,6 +821,27 @@ export const EmbeddingMonitor: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* WebGPU Enablement Prompt - only show when using WASM fallback */}
+      {modelInfo.backend === 'wasm' && (
+        <div className="bg-sa-gold/10 rounded-xl border border-sa-gold/30 p-4">
+          <div className="flex items-start gap-3">
+            <Zap className="w-5 h-5 text-sa-gold flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-sa-gold mb-2">⚡ Speed up embeddings 10-50x with WebGPU</p>
+              <p className="text-primary-600 text-xs mb-2">
+                Your browser is using CPU (WASM) for embeddings. Enable WebGPU for much faster RAG search:
+              </p>
+              <ol className="text-xs space-y-1 text-primary-500 list-decimal list-inside">
+                <li>Open <code className="bg-primary-100 px-1 rounded">edge://flags</code> or <code className="bg-primary-100 px-1 rounded">chrome://flags</code></li>
+                <li>Search for &quot;WebGPU&quot;</li>
+                <li>Enable &quot;Unsafe WebGPU Support&quot;</li>
+                <li>Click Relaunch and reload Gogga</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Technical Info */}
       <div className="bg-primary-50 rounded-xl border border-primary-200 p-4">

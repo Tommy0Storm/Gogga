@@ -89,12 +89,12 @@ DEFAULT_MODEL_PRICING: dict[str, ModelPricingData] = {
         allowed_tiers=["jigga"],
         is_active=True,
     ),
-    "qwen/qwen3-235b-a22b:free": ModelPricingData(
-        model_id="qwen/qwen3-235b-a22b:free",
-        display_name="Qwen 3 235B (Free)",
+    "qwen/qwen3-235b-a22b": ModelPricingData(
+        model_id="qwen/qwen3-235b-a22b",
+        display_name="Qwen 3 235B (OpenRouter)",
         provider="openrouter",
-        input_price_per_m=settings.COST_FREE_INPUT,
-        output_price_per_m=settings.COST_FREE_OUTPUT,
+        input_price_per_m=0.15,  # ~$0.15/M input
+        output_price_per_m=0.45,  # ~$0.45/M output
         image_price_per_unit=0.0,
         allowed_tiers=["free"],
         is_active=True,

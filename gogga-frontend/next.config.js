@@ -62,9 +62,9 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['react-icons', 'lucide-react'],
     // Next.js 16: Turbopack filesystem cache
-    // DISABLED for Docker - volume persistence causes cache corruption on container restarts
-    // Enable only for local (non-Docker) development: turbopackFileSystemCacheForDev: true
-    turbopackFileSystemCacheForDev: process.env.DOCKER_ENV !== 'true',
+    // DISABLED - causes corruption when .next is deleted during hot reload or by predev script
+    // The SST files get deleted while Turbopack is still writing, causing panic
+    turbopackFileSystemCacheForDev: false,
   },
   async rewrites() {
     return [

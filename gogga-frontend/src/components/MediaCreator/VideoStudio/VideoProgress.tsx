@@ -33,10 +33,15 @@ interface VideoProgressProps {
   maxWaitTime?: number;
 }
 
-// Constants for retry logic
+// Constants for retry logic - RECOMMENDATION #3: Exponential backoff
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const DEFAULT_MAX_WAIT_TIME = 10 * 60; // 10 minutes in seconds
+
+// Exponential backoff: 3s → 6s → 12s → 24s (max 30s)
+const BASE_POLL_INTERVAL = 3000;
+const MAX_POLL_INTERVAL = 30000;
+const EXPONENTIAL_BACKOFF_MULTIPLIER = 1.5;
 
 const STATUS_CONFIG: Record<VideoJobStatus, {
   icon: typeof Loader2;
@@ -63,11 +68,13 @@ export function VideoProgress({
   const [retryCount, setRetryCount] = useState(0);
   const [pollError, setPollError] = useState<string | null>(null);
   const [isTimedOut, setIsTimedOut] = useState(false);
-  
+  const [currentPollInterval, setCurrentPollInterval] = useState(pollInterval);
+
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef(Date.now());
   const isMountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pollCountRef = useRef(0);
   
   const { status, job_id, meta } = response;
   const progress = meta?.progress_percent || 0;
@@ -89,37 +96,46 @@ export function VideoProgress({
     };
   }, []);
   
-  // Poll for status updates with retry logic
+  // Poll for status updates with retry logic and exponential backoff (RECOMMENDATION #3)
   const pollStatus = useCallback(async (retry = 0) => {
     if (!job_id || !isMountedRef.current) return;
-    
+
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
-    
+
     try {
       const newResponse = await getVideoStatus(job_id);
-      
+
       // Check if still mounted before updating state
       if (!isMountedRef.current) return;
-      
+
       // Clear any previous error on successful poll
       setPollError(null);
       setRetryCount(0);
       setResponse(newResponse);
-      
+
       if (newResponse.status === 'completed') {
         onComplete(newResponse);
         return;
       }
-      
+
       if (newResponse.status === 'failed') {
         onError(newResponse.error || 'Video generation failed');
         return;
       }
-      
+
+      // EXPONENTIAL BACKOFF: Calculate next poll interval
+      // 3s → 6s → 12s → 18s → 24s → 30s (max)
+      pollCountRef.current += 1;
+      const nextInterval = Math.min(
+        BASE_POLL_INTERVAL * Math.pow(EXPONENTIAL_BACKOFF_MULTIPLIER, pollCountRef.current - 1),
+        MAX_POLL_INTERVAL
+      );
+      setCurrentPollInterval(nextInterval);
+
       // Continue polling if still mounted
       if (isMountedRef.current) {
-        pollTimeoutRef.current = setTimeout(() => pollStatus(0), pollInterval);
+        pollTimeoutRef.current = setTimeout(() => pollStatus(0), nextInterval);
       }
       
     } catch (err) {

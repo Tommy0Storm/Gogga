@@ -128,7 +128,7 @@ export const useDocumentStore = create<DocumentStore>((set) => ({
   canUpload: false,
   maxDocsPerSession: 0,
   ragMode: 'analysis',
-  useRAGForChat: true,
+  useRAGForChat: false,
   
   // Session action callbacks
   onUploadDocument: null,

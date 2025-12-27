@@ -64,10 +64,17 @@ async function LoginContent({
   return (
     <>
       {error && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50 max-w-md text-center">
           {error === 'invalid' && 'Invalid or expired magic link. Please request a new one.'}
           {error === 'expired' && 'Magic link has expired. Please request a new one.'}
           {error === 'verification_failed' && 'Verification failed. Please try again.'}
+          {error === 'network' && (
+            <>
+              <strong>Network Error:</strong> Could not connect to the authentication service. 
+              Please check that NEXTAUTH_URL is set correctly for your environment.
+            </>
+          )}
+          {error === 'auth' && 'Authentication error. Please try again.'}
         </div>
       )}
       <ModernLoginForm />

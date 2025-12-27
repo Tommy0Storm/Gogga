@@ -29,6 +29,230 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# ADDITIONAL SECURITY ENHANCEMENTS (RECOMMENDATIONS #19-21)
+# =============================================================================
+
+import hmac
+import json
+import re
+import time
+from typing import Any, Callable, Optional
+from functools import wraps
+from collections import defaultdict
+
+
+# -----------------------------------------------------------------------------
+# REQUEST SIGNING FOR TOOL RESULTS (RECOMMENDATION #19)
+# -----------------------------------------------------------------------------
+
+TOOL_SIGNING_SECRET = getattr(settings, 'TOOL_SIGNING_SECRET', 'gogga-tool-signing-secret-change-in-prod')
+
+
+def sign_tool_result(tool_name: str, arguments: dict[str, Any], result: Any) -> str:
+    """
+    Generate HMAC signature for tool result.
+
+    RECOMMENDATION #19: Prevents tool result injection attacks.
+
+    Args:
+        tool_name: Name of the tool
+        arguments: Tool arguments
+        result: Tool execution result
+
+    Returns:
+        HMAC-SHA256 signature (hex digest)
+    """
+    payload = json.dumps({
+        "tool": tool_name,
+        "arguments": arguments,
+        "result": result,
+        "timestamp": int(time.time())
+    }, sort_keys=True, default=str)
+
+    signature = hmac.new(
+        TOOL_SIGNING_SECRET.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    return signature
+
+
+def verify_tool_result(
+    tool_name: str,
+    arguments: dict[str, Any],
+    result: Any,
+    signature: str
+) -> bool:
+    """
+    Verify HMAC signature for tool result.
+
+    Args:
+        tool_name: Name of the tool
+        arguments: Tool arguments
+        result: Tool execution result
+        signature: HMAC signature to verify
+
+    Returns:
+        True if signature is valid, False otherwise
+    """
+    expected_signature = sign_tool_result(tool_name, arguments, result)
+    return hmac.compare_digest(expected_signature, signature)
+
+
+# -----------------------------------------------------------------------------
+# INPUT SANITIZATION (RECOMMENDATION #20)
+# -----------------------------------------------------------------------------
+
+class InputSanitizer:
+    """
+    Sanitize user inputs to prevent XSS, SQL injection, and command injection.
+
+    RECOMMENDATION #20: Add user input sanitization for tool arguments.
+    """
+
+    HTML_TAG_PATTERN = re.compile(r'<[^>]+>')
+    SCRIPT_PATTERN = re.compile(r'<script\b[^>]*>(.*?)</script>', re.IGNORECASE | re.DOTALL)
+    ON_EVENT_PATTERN = re.compile(r'\bon\w+\s*=', re.IGNORECASE)
+
+    SQL_INJECTION_PATTERNS = [
+        re.compile(r"(\bUNION\b|\bSELECT\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bDROP\b).*\bFROM\b", re.IGNORECASE),
+        re.compile(r";.*\b(DROP|DELETE|UPDATE|INSERT)\b", re.IGNORECASE),
+        re.compile(r"'.*OR.*'.*='.*'", re.IGNORECASE),
+    ]
+
+    COMMAND_INJECTION_PATTERNS = [
+        re.compile(r'[;&|`$]'),
+        re.compile(r'\$\([^)]*\)'),
+        re.compile(r'`[^`]*`'),
+    ]
+
+    @classmethod
+    def sanitize_string(cls, input_str: str) -> str:
+        """Sanitize a string input."""
+        if not isinstance(input_str, str):
+            return str(input_str)
+
+        sanitized = input_str
+        sanitized = cls.HTML_TAG_PATTERN.sub('', sanitized)
+        sanitized = cls.SCRIPT_PATTERN.sub('', sanitized)
+        sanitized = cls.ON_EVENT_PATTERN.sub('', sanitized)
+
+        for pattern in cls.SQL_INJECTION_PATTERNS:
+            if pattern.search(sanitized):
+                logger.warning(f"[Security] SQL injection pattern detected")
+                sanitized = re.sub(r'[\'";]', '', sanitized)
+
+        for pattern in cls.COMMAND_INJECTION_PATTERNS:
+            if pattern.search(sanitized):
+                logger.warning(f"[Security] Command injection pattern detected")
+                sanitized = pattern.sub('', sanitized)
+
+        return sanitized.strip()
+
+    @classmethod
+    def sanitize_dict(cls, input_dict: dict[str, Any]) -> dict[str, Any]:
+        """Recursively sanitize dictionary values."""
+        sanitized = {}
+        for key, value in input_dict.items():
+            safe_key = cls.sanitize_string(key)
+            if isinstance(value, str):
+                sanitized[safe_key] = cls.sanitize_string(value)
+            elif isinstance(value, dict):
+                sanitized[safe_key] = cls.sanitize_dict(value)
+            elif isinstance(value, list):
+                sanitized[safe_key] = [
+                    cls.sanitize_string(v) if isinstance(v, str) else v
+                    for v in value
+                ]
+            else:
+                sanitized[safe_key] = value
+        return sanitized
+
+    @classmethod
+    def sanitize_tool_arguments(cls, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Sanitize tool arguments before execution."""
+        logger.debug(f"[Security] Sanitizing arguments for tool: {tool_name}")
+        return cls.sanitize_dict(arguments)
+
+
+# -----------------------------------------------------------------------------
+# PER-TOOL RATE LIMITING (RECOMMENDATION #21)
+# -----------------------------------------------------------------------------
+
+class PerToolRateLimiter:
+    """
+    Rate limiter with per-tool limits.
+
+    RECOMMENDATION #21: Separate limits per tool type.
+    """
+
+    DEFAULT_LIMITS = {
+        "web_search": (10, 60),
+        "legal_search": (10, 60),
+        "shopping_search": (10, 60),
+        "places_search": (10, 60),
+        "generate_video": (3, 3600),
+        "generate_image": (20, 3600),
+        "upscale_image": (10, 3600),
+        "edit_image": (10, 3600),
+        "python_execute": (30, 60),
+    }
+
+    def __init__(self):
+        self._requests: dict[str, dict[str, list[tuple[float, int]]]] = defaultdict(lambda: defaultdict(list))
+
+    def check_rate_limit(
+        self,
+        tool_name: str,
+        user_id: str,
+        count: int = 1
+    ) -> tuple[bool, Optional[int]]:
+        """
+        Check if request is within rate limit.
+
+        Returns:
+            (allowed, retry_after_seconds)
+        """
+        limit = self.DEFAULT_LIMITS.get(tool_name, (60, 60))
+        max_requests, window_seconds = limit
+
+        now = time.time()
+        window_start = now - window_seconds
+
+        user_requests = self._requests[tool_name][user_id]
+        user_requests[:] = [(ts, cnt) for ts, cnt in user_requests if ts > window_start]
+
+        total_requests = sum(cnt for _, cnt in user_requests)
+
+        if total_requests + count > max_requests:
+            oldest_request = min(user_requests, key=lambda x: x[0]) if user_requests else (now, 0)
+            retry_after = int(window_seconds - (now - oldest_request[0]))
+            logger.warning(f"[RateLimit] {tool_name} for user {user_id}: {total_requests + count}/{max_requests}")
+            return False, retry_after
+
+        self._requests[tool_name][user_id].append((now, count))
+        return True, None
+
+
+_rate_limiter: Optional[PerToolRateLimiter] = None
+
+
+def get_tool_rate_limiter() -> PerToolRateLimiter:
+    """Get the global rate limiter instance."""
+    global _rate_limiter
+    if _rate_limiter is None:
+        _rate_limiter = PerToolRateLimiter()
+    return _rate_limiter
+
+
+class RateLimitError(Exception):
+    """Raised when rate limit is exceeded."""
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
+
 # API Key header definition
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 

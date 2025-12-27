@@ -224,9 +224,13 @@ export interface ChatMessageMeta {
   // Math tool execution (GoggaSolve)
   math_tool_count?: number;
   math_tools_executed?: string[];
-  
+
   // Response timestamp (ISO string)
   timestamp?: string;
+
+  // Error handling
+  isError?: boolean;
+  failedRequest?: string;
 }
 
 // ============================================================================

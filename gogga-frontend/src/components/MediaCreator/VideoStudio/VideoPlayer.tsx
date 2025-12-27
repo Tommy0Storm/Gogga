@@ -65,16 +65,37 @@ export function VideoPlayer({
   // Use blob URL if available, otherwise fall back to video_url
   const videoSrc = blobUrl || response.video_url || '';
   
-  // Play/pause
-  const togglePlay = () => {
+  // Track play promise to avoid race condition
+  const playPromiseRef = useRef<Promise<void> | null>(null);
+  
+  // Play/pause - handle async play() to avoid AbortError
+  const togglePlay = async () => {
     if (!videoRef.current) return;
     
     if (isPlaying) {
+      // Wait for any pending play() to complete before pausing
+      if (playPromiseRef.current) {
+        try {
+          await playPromiseRef.current;
+        } catch {
+          // Ignore - play was already interrupted
+        }
+        playPromiseRef.current = null;
+      }
       videoRef.current.pause();
+      setIsPlaying(false);
     } else {
-      videoRef.current.play();
+      // Store the play promise to handle race conditions
+      playPromiseRef.current = videoRef.current.play();
+      try {
+        await playPromiseRef.current;
+        setIsPlaying(true);
+      } catch (err) {
+        // Play was interrupted (e.g., user paused quickly) - ignore
+        console.debug('[VideoPlayer] Play interrupted:', err);
+      }
+      playPromiseRef.current = null;
     }
-    setIsPlaying(!isPlaying);
   };
   
   // Mute toggle

@@ -1,6 +1,12 @@
 #!/bin/bash
 # Script to update .env.local with current LAN IP
 # Run this before starting the dev server if your IP changes
+#
+# MODES:
+#   LOCAL DEV (pnpm dev):   Port 3000 - this script updates .env.local
+#   DOCKER (docker compose): Port 3002 - manually set in .env.local
+#
+# If using Docker, don't run this script - it will override to port 3000
 
 set -e
 
@@ -29,20 +35,34 @@ fi
 
 echo "Detected LAN IP: $LAN_IP"
 
-# Update .env.local
+# Local dev port (distinct from Docker port 3002)
+LOCAL_PORT=3000
+
+# Update .env.local (only if IP changed to avoid triggering watchers)
 if [ -f "$ENV_FILE" ]; then
-    # Replace any IP in NEXT_PUBLIC_BASE_URL and NEXTAUTH_URL
-    sed -i -E "s|NEXT_PUBLIC_BASE_URL=https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:|NEXT_PUBLIC_BASE_URL=https://${LAN_IP}:|g" "$ENV_FILE"
-    sed -i -E "s|NEXTAUTH_URL=https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:|NEXTAUTH_URL=https://${LAN_IP}:|g" "$ENV_FILE"
-    echo "Updated .env.local with IP: $LAN_IP"
+    CURRENT_ENV_IP=$(grep -oE 'NEXT_PUBLIC_BASE_URL=https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$ENV_FILE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [ "$CURRENT_ENV_IP" != "$LAN_IP" ]; then
+        # Replace IP and PORT in NEXT_PUBLIC_BASE_URL and NEXTAUTH_URL
+        # This ensures local dev (port 3000) works correctly with NextAuth
+        sed -i -E "s|NEXT_PUBLIC_BASE_URL=https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+|NEXT_PUBLIC_BASE_URL=https://${LAN_IP}:${LOCAL_PORT}|g" "$ENV_FILE"
+        sed -i -E "s|NEXTAUTH_URL=https://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+|NEXTAUTH_URL=https://${LAN_IP}:${LOCAL_PORT}|g" "$ENV_FILE"
+        echo "Updated .env.local with IP: $LAN_IP, port: $LOCAL_PORT"
+    else
+        echo ".env.local already has correct IP: $LAN_IP"
+    fi
 else
     echo "WARNING: $ENV_FILE not found"
 fi
 
-# Update package.json dev script
+# Update package.json dev script (only if IP changed to avoid triggering watchers)
 if [ -f "$PACKAGE_JSON" ]; then
-    sed -i -E "s|next dev -H [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|next dev -H ${LAN_IP}|g" "$PACKAGE_JSON"
-    echo "Updated package.json dev script with IP: $LAN_IP"
+    CURRENT_IP=$(grep -oE 'next dev -H [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$PACKAGE_JSON" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [ "$CURRENT_IP" != "$LAN_IP" ]; then
+        sed -i -E "s|next dev -H [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|next dev -H ${LAN_IP}|g" "$PACKAGE_JSON"
+        echo "Updated package.json dev script with IP: $LAN_IP"
+    else
+        echo "package.json already has correct IP: $LAN_IP"
+    fi
 else
     echo "WARNING: $PACKAGE_JSON not found"
 fi

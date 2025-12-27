@@ -257,27 +257,27 @@ class DocumentService:
         """
         tier_lower = user_tier.lower() if user_tier else "free"
         
-        # 235B required cases (African languages, complex, expert)
-        if profile.requires_235b:
-            return {
-                "model": settings.MODEL_JIGGA_235B if hasattr(settings, 'MODEL_JIGGA_235B') else "qwen/qwen3-235b-a22b-instruct-2507",
-                "provider": "openrouter",
-                "thinking_mode": False,  # Non-thinking for max output
-                "max_tokens": min(profile.estimated_tokens, 30000),
-                "temperature": 0.7,
-            }
-        
         # FREE tier always uses 235B via OpenRouter
         if tier_lower == "free":
             return {
-                "model": settings.MODEL_FREE if hasattr(settings, 'MODEL_FREE') else "qwen/qwen3-235b-a22b-instruct-2507",
+                "model": settings.MODEL_FREE if hasattr(settings, 'MODEL_FREE') else "qwen/qwen3-235b-a22b",
                 "provider": "openrouter",
                 "thinking_mode": False,
                 "max_tokens": min(profile.estimated_tokens, 8000),
                 "temperature": 0.7,
             }
         
-        # JIVE/JIGGA use 32B via Cerebras
+        # JIVE/JIGGA: 235B required cases (African languages, complex, expert) via Cerebras
+        if profile.requires_235b:
+            return {
+                "model": settings.MODEL_JIGGA_235B if hasattr(settings, 'MODEL_JIGGA_235B') else "qwen-3-235b-a22b-instruct-2507",
+                "provider": "cerebras",  # Paid tiers use Cerebras for 235B
+                "thinking_mode": False,  # Non-thinking for max output
+                "max_tokens": min(profile.estimated_tokens, 30000),
+                "temperature": 0.7,
+            }
+        
+        # JIVE/JIGGA: Reasoning required uses 32B with thinking mode via Cerebras
         if profile.reasoning_required:
             return {
                 "model": settings.MODEL_JIVE if hasattr(settings, 'MODEL_JIVE') else "qwen-3-32b",

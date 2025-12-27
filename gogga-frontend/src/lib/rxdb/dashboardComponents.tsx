@@ -286,7 +286,7 @@ export function useMigrationStatus() {
 
   const startMigration = useCallback(async () => {
     setRunning(true);
-    const result = await runMigration((table, count) => {
+    const result = await runMigration((table: string, count: number) => {
       console.log(`Migrated ${table}: ${count} records`);
     });
     setState(result);
@@ -629,13 +629,13 @@ export function MigrationBanner() {
         <div className="mt-4 space-y-1">
           {Object.entries(state.tables).map(([table, info]) => (
             <div key={table} className="flex items-center gap-2 text-sm">
-              {info.migrated ? (
+              {(info as any)?.migrated ? (
                 <CheckCircle2 className="w-4 h-4 text-green-400" />
               ) : (
                 <Clock className="w-4 h-4 text-gray-400" />
               )}
-              <span className={info.migrated ? 'text-green-300' : 'text-gray-400'}>
-                {table}: {info.count} records
+              <span className={(info as any)?.migrated ? 'text-green-300' : 'text-gray-400'}>
+                {table}: {(info as any)?.count} records
               </span>
             </div>
           ))}

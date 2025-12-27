@@ -77,6 +77,7 @@ import {
   ChevronRight,
   RotateCcw,
   RefreshCw,
+  Lock,
 } from 'lucide-react';
 import axios from 'axios';
 import { useBuddySystem } from '@/hooks/useBuddySystem';
@@ -136,7 +137,7 @@ export function ChatClient({ userEmail, userTier, isTester = false }: ChatClient
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tier, setTier] = useState<Tier>('free');
-  const [useRAGContext, setUseRAGContext] = useState(true);
+  const [useRAGContext, setUseRAGContext] = useState(false);
   const [ragMode, setRagMode] = useState<'analysis' | 'authoritative'>(
     'analysis'
   );
@@ -1085,9 +1086,13 @@ ${comment}
                   break;
 
                 case 'error':
-                  // Log the full error for debugging
-                  console.error('[GOGGA] SSE stream error event:', eventData);
-                  throw new Error(eventData.message || eventData.error || 'Stream error');
+                  // Log the full error for debugging (only if there's actual content)
+                  if (Object.keys(eventData).length > 1) {
+                    console.error('[GOGGA] SSE stream error event:', eventData);
+                  }
+                  // Handle empty error objects gracefully - use a marker prefix so catch block can identify
+                  const errorMsg = eventData.message || eventData.error || eventData.details || 'Connection interrupted - please try again';
+                  throw new Error(`[SSE_ERROR] ${errorMsg}`);
                   
                 default:
                   // Log unknown event types for debugging but don't crash
@@ -1097,12 +1102,12 @@ ${comment}
             } catch (parseError) {
               // Distinguish between JSON parse errors and thrown errors
               const error = parseError as Error;
-              const isStreamError = error.message === 'Stream error' || 
-                                    error.message?.includes('Stream error');
+              // Check for our SSE_ERROR marker prefix (from 'error' event case)
+              const isStreamError = error.message?.startsWith('[SSE_ERROR]');
               
               if (isStreamError) {
-                // This was a deliberate error from the 'error' case above
-                throw parseError;
+                // Strip the marker and re-throw with clean message
+                throw new Error(error.message.replace('[SSE_ERROR] ', ''));
               }
               
               // JSON parse error or other issue - log and continue
@@ -2665,13 +2670,13 @@ ${comment}
                     </div>
                   </button>
                   <button
-                    onClick={() => setInput('Write a Python function to validate SA ID numbers')}
+                    onClick={() => setInput('Write a Python function to validate SA ID numbers using the correct SA Luhn algorithm (left-to-right, double positions 2,4,6,8,10,12). Test with MY ID.')}
                     className="flex items-start gap-3 p-3 bg-white rounded-xl border border-primary-200 hover:border-primary-400 hover:shadow-md transition-all text-left group"
                   >
                     <Code size={18} className="text-primary-500 mt-0.5 shrink-0" />
                     <div>
                       <span className="text-sm font-medium text-primary-700 group-hover:text-primary-800">SA ID Validator</span>
-                      <p className="text-xs text-primary-400 mt-0.5">Python code for ID validation</p>
+                      <p className="text-xs text-primary-400 mt-0.5">Python code with SA-specific Luhn</p>
                     </div>
                   </button>
                   <button
@@ -2703,7 +2708,7 @@ ${comment}
                       <Zap size={18} className="text-primary-600" />
                     </div>
                     <span className="text-xs font-bold text-primary-700">FREE</span>
-                    <span className="text-[10px] text-primary-500">Llama 3.3</span>
+                    <span className="text-[10px] text-primary-500">Qwen 235B</span>
                   </div>
                   <div className={`flex flex-col items-center gap-2 p-3 bg-white rounded-xl shadow-sm border min-w-28 hover-lift ${tier === 'jive' ? 'border-primary-400 ring-2 ring-primary-200' : 'border-primary-200'}`}>
                     <div className="p-2 bg-primary-100 rounded-lg">
@@ -2717,7 +2722,7 @@ ${comment}
                       <Sparkles size={18} className="text-primary-600" />
                     </div>
                     <span className="text-xs font-bold text-primary-700">JIGGA</span>
-                    <span className="text-[10px] text-primary-500">Qwen 32B + RAG</span>
+                    <span className="text-[10px] text-primary-500">Cerebras + CePO</span>
                   </div>
                 </div>
 
@@ -3135,7 +3140,7 @@ ${comment}
                 </div>
 
                 {/* Paperclip - Opens Documents Panel for RAG uploads */}
-                {tier !== 'free' && (
+                {tier !== 'free' ? (
                   <div className="flex flex-col items-center gap-0.5">
                     <button
                       onClick={() => {
@@ -3149,10 +3154,28 @@ ${comment}
                     </button>
                     <span className="text-[9px] text-primary-500 font-medium">Docs</span>
                   </div>
+                ) : (
+                  /* Locked Docs button for FREE users - shows upgrade path */
+                  <div className="flex flex-col items-center gap-0.5 group">
+                    <button
+                      onClick={() => window.location.href = '/upgrade'}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-gray-200 transition-colors cursor-pointer relative"
+                      title="Upgrade to JIVE to upload documents"
+                      aria-label="Docs - Premium feature, click to upgrade"
+                    >
+                      <Paperclip size={18} />
+                      <Lock size={10} className="absolute -top-0.5 -right-0.5 text-gray-500" />
+                    </button>
+                    <span className="text-[9px] text-gray-400 font-medium">Docs</span>
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity delay-150 pointer-events-none z-10">
+                      Upgrade to JIVE ↗
+                    </div>
+                  </div>
                 )}
 
                 {/* Tools - Opens ToolShed Panel for forcing tools */}
-                {tier !== 'free' && (
+                {tier !== 'free' ? (
                   <div className="flex flex-col items-center gap-0.5">
                     <button
                       onClick={() => {
@@ -3169,6 +3192,24 @@ ${comment}
                       <Wrench size={18} />
                     </button>
                     <span className="text-[9px] text-primary-500 font-medium">Tools</span>
+                  </div>
+                ) : (
+                  /* Locked Tools button for FREE users - shows upgrade path */
+                  <div className="flex flex-col items-center gap-0.5 group">
+                    <button
+                      onClick={() => window.location.href = '/upgrade'}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 hover:bg-gray-200 transition-colors cursor-pointer relative"
+                      title="Upgrade to JIVE to use advanced tools"
+                      aria-label="Tools - Premium feature, click to upgrade"
+                    >
+                      <Wrench size={18} />
+                      <Lock size={10} className="absolute -top-0.5 -right-0.5 text-gray-500" />
+                    </button>
+                    <span className="text-[9px] text-gray-400 font-medium">Tools</span>
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity delay-150 pointer-events-none z-10">
+                      Upgrade to JIVE ↗
+                    </div>
                   </div>
                 )}
               </div>

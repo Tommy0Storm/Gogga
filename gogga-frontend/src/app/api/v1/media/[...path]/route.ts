@@ -67,8 +67,11 @@ async function getUserTier(request: NextRequest): Promise<string> {
 async function proxyToBackend(
   request: NextRequest,
   method: string,
-  pathSegments: string[]
+  pathSegments: string[],
+  retryCount = 0
 ): Promise<NextResponse> {
+  const MAX_RETRIES = 2;
+  
   try {
     const userTier = await getUserTier(request);
     const path = pathSegments.join('/');
@@ -164,12 +167,26 @@ async function proxyToBackend(
     
     return NextResponse.json(response.data, { status: response.status });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isRetryable = errorMessage.includes('socket hang up') || 
+                       errorMessage.includes('ECONNRESET') ||
+                       errorMessage.includes('ECONNREFUSED') ||
+                       errorMessage.includes('Request timeout');
+    
+    // Retry on transient connection errors (only for GET requests to avoid duplicates)
+    if (isRetryable && retryCount < MAX_RETRIES && method === 'GET') {
+      console.warn(`[Media Proxy] Retrying after error (attempt ${retryCount + 1}/${MAX_RETRIES}):`, errorMessage);
+      // Small delay before retry
+      await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
+      return proxyToBackend(request, method, pathSegments, retryCount + 1);
+    }
+    
     console.error('Media proxy error:', error);
     return NextResponse.json(
       { 
         success: false,
         error: 'Failed to proxy media request', 
-        details: error instanceof Error ? error.message : String(error) 
+        details: errorMessage
       },
       { status: 500 }
     );

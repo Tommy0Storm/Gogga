@@ -54,12 +54,12 @@ class Settings(BaseSettings):
     
     # SIMPLIFIED MODEL ARCHITECTURE (2025-01):
     # - All tiers use Qwen models (removed Llama)
-    # - FREE tier: Qwen 3 235B via OpenRouter (free)
-    # - JIVE/JIGGA: Qwen 3 32B (default) + Qwen 3 235B (complex queries)
+    # - FREE tier: Qwen 3 235B via OpenRouter (pay-per-token, ~$0.15/M in + $0.45/M out)
+    # - JIVE/JIGGA: Qwen 3 32B (default) + Qwen 3 235B (complex queries) via Cerebras
     # - Only difference between tiers: token limits (subscription)
     
-    # FREE tier: Qwen 3 235B via OpenRouter (free tier)
-    MODEL_FREE: str = "qwen/qwen3-235b-a22b:free"
+    # FREE tier: Qwen 3 235B via OpenRouter (no :free variant exists)
+    MODEL_FREE: str = "qwen/qwen3-235b-a22b"
     
     # JIVE tier: Qwen 3 32B (general chat, thinking mode)
     MODEL_JIVE: str = "qwen-3-32b"

@@ -32,13 +32,27 @@ async function HomeContent() {
   // Opt into dynamic rendering for Next.js 16 with cacheComponents
   await connection();
   
-  // Server-side session check
+  // Server-side session check with robust error handling
+  // Network errors during auth should redirect to login, not crash the app
   let session = null;
   try {
     session = await auth();
   } catch (error) {
-    // Log but don't crash - treat as not logged in
-    console.error('[HomePage] Auth error (treating as no session):', error);
+    // Log the error for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[HomePage] Auth error (redirecting to login):', errorMessage);
+    
+    // Check for network-related errors and handle gracefully
+    if (errorMessage.includes('network') || 
+        errorMessage.includes('ECONNREFUSED') ||
+        errorMessage.includes('fetch failed')) {
+      console.warn('[HomePage] Network error during auth - likely env misconfiguration');
+      // Redirect to login instead of crashing
+      redirect('/login?error=network');
+    }
+    
+    // For other errors, also redirect to login to prevent crash loop
+    redirect('/login?error=auth');
   }
 
   if (!session?.user) {
